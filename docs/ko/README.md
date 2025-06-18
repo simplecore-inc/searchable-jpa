@@ -46,7 +46,6 @@ Searchable JPA에 대한 상세한 사용법과 가이드를 제공합니다.
 
 - [GitHub 저장소](https://github.com/simplecore-inc/searchable-jpa)
 - [이슈 트래커](https://github.com/simplecore-inc/searchable-jpa/issues)
-- [예제 프로젝트](../../searchable-jpa-example/)
 
 ---
 

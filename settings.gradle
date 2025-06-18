@@ -9,7 +9,6 @@ rootProject.name = 'searchable-jpa'
 include 'searchable-jpa-core'
 include 'searchable-jpa-openapi'
 include 'spring-boot-starter-searchable-jpa'
-include 'searchable-jpa-example'
 
 def props = new Properties()
 def propertiesFile = file("gradle.properties")

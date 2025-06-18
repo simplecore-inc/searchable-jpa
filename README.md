@@ -94,16 +94,6 @@ GET /api/posts/search?title.contains=Spring&sort=createdAt,desc&page=0&size=10
 - [API Reference](docs/en/api-reference.md) - Complete API documentation
 - [FAQ](docs/en/faq.md) - Frequently asked questions and troubleshooting
 
-## 예제 프로젝트
-
-```bash
-# 예제 애플리케이션 실행
-./gradlew :searchable-jpa-example:bootRun
-
-# Swagger UI 접속
-http://localhost:8080/swagger-ui.html
-```
-
 ## 시스템 요구사항
 
 - **Java**: 8 이상
@@ -129,7 +119,6 @@ http://localhost:8080/swagger-ui.html
 
 - **이슈**: [GitHub Issues](https://github.com/simplecore-inc/searchable-jpa/issues)
 - **문서**: [Documentation](docs/ko/README.md)
-- **예제**: [Example Application](searchable-jpa-example/)
 
 ---
 
