@@ -1,0 +1,114 @@
+plugins {
+    id 'org.springframework.boot' version '2.7.18' apply false
+    id 'io.spring.dependency-management' version '1.0.15.RELEASE' apply false
+    id 'java'
+    id 'maven-publish'
+}
+
+ext {
+    springBootVersion = '2.7.18'
+}
+
+allprojects {
+    group = 'dev.simplecore.searchable'
+    version = '0.0.4-SNAPSHOT'
+    
+    System.setProperty("spring.boot.version.check.enabled", "false")
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'java-library'
+    apply plugin: 'io.spring.dependency-management'
+    
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        }
+    }
+
+    if (project.name != 'searchable-jpa-example') {
+        apply plugin: 'maven-publish'
+        
+        publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    from components.java
+
+                    pom {
+                        def metadata = [
+                            'searchable-jpa-core': [
+                                name: 'Searchable JPA Core',
+                                description: 'Core library for Searchable JPA'
+                            ],
+                            'searchable-jpa-openapi': [
+                                name: 'Searchable JPA OpenAPI',
+                                description: 'OpenAPI/Swagger support for Searchable JPA'
+                            ],
+                            'spring-boot-starter-searchable-jpa': [
+                                name: 'Spring Boot Starter for Searchable JPA',
+                                description: 'Spring Boot Starter for Searchable JPA'
+                            ]
+                        ]
+                        if (metadata.containsKey(project.name)) {
+                            def projectMetadata = metadata[project.name]
+                            setName(projectMetadata['name'])
+                            setDescription(projectMetadata['description'])
+                        } else {
+                            throw new GradleException("No metadata found for project: ${project.name}")
+                        }
+                        url = 'https://github.com/simplecore-inc/searchable-jpa'
+                        
+                        licenses {
+                            license {
+                                name = 'The Apache License, Version 2.0'
+                                url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                            }
+                        }
+                        developers {
+                            developer {
+                                id = 'thkwag'
+                                name = 'Taehwan Kwag'
+                            }
+                        }
+                        scm {
+                            connection = 'scm:git:git://github.com/simplecore-inc/searchable-jpa.git'
+                            developerConnection = 'scm:git:ssh://github.com:simplecore-inc/searchable-jpa.git'
+                            url = 'https://github.com/simplecore-inc/searchable-jpa'
+                        }
+                    }
+                }
+            }
+            
+            repositories {
+                maven {
+                    name = "GitHubPackages"
+                    url = uri("https://maven.pkg.github.com/simplecore-inc/searchable-jpa")
+                    credentials {
+                        username = project.findProperty("gpr.user") ?: System.getenv("USERNAME")
+                        password = project.findProperty("gpr.token") ?: System.getenv("TOKEN")
+                    }
+                }
+            }
+        }
+    }
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.compilerArgs.addAll(['-parameters', "-Xlint:-deprecation", "-Xlint:-options"])
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+wrapper {
+    gradleVersion = '8.5'
+    distributionType = Wrapper.DistributionType.BIN
+}

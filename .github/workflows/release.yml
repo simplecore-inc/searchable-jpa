@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Release branch'
+        required: true
+        default: 'master'
+      version:
+        description: 'Release version (e.g. 1.0.0)'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+          fetch-depth: 0
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+
+      - name: Setup Gradle Cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Update version in build.gradle
+        run: |
+          sed -i "s/version = '.*'/version = '${{ github.event.inputs.version }}'/" build.gradle
+          git config --global user.email "thk@simplecore.kr"
+          git config --global user.name "Taehwan Kwag"
+          git add build.gradle
+          git commit -m "release: v${{ github.event.inputs.version }}"
+
+      - name: Build and Publish
+        run: |
+          gradle wrapper
+          chmod +x ./gradlew
+          ./gradlew clean publish --info --stacktrace
+        env:
+          USERNAME: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release Tag
+        run: |
+          git tag -a "v${{ github.event.inputs.version }}" -m "v${{ github.event.inputs.version }}"
+          git push origin "v${{ github.event.inputs.version }}"
+
+      - name: Update to Next Development Version
+        run: |
+          NEXT_VERSION=$(echo ${{ github.event.inputs.version }} | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')-SNAPSHOT
+          sed -i "s/version = '.*'/version = '$NEXT_VERSION'/" build.gradle
+          git add build.gradle
+          git commit -m "chore: prepare for next development version $NEXT_VERSION"
+          git push origin ${{ github.event.inputs.branch }}
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 "v${{ github.event.inputs.version }}^" 2>/dev/null || echo "")
+          if [ -z "$PREVIOUS_TAG" ]; then
+            NOTES=$(git log --pretty=format:"* %s" --no-merges --perl-regexp --author='^((?!github-actions).*)$' "v${{ github.event.inputs.version }}")
+          else
+            NOTES=$(git log --pretty=format:"* %s" --no-merges --perl-regexp --author='^((?!github-actions).*)$' "$PREVIOUS_TAG..v${{ github.event.inputs.version }}")
+          fi
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: Release v${{ github.event.inputs.version }}
+          body: ${{ steps.release_notes.outputs.notes }}
+          draft: false
+          prerelease: false 

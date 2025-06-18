@@ -1,0 +1,50 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'searchable-jpa'
+include 'searchable-jpa-core'
+include 'searchable-jpa-openapi'
+include 'spring-boot-starter-searchable-jpa'
+include 'searchable-jpa-example'
+
+def props = new Properties()
+def propertiesFile = file("gradle.properties")
+if (propertiesFile.exists()) {
+    propertiesFile.withInputStream { props.load(it) }
+} else {
+    logger.warn("gradle.properties file not found. Using environment variables for GitHub credentials.")
+}
+
+// How to configure gradle.properties:
+//   gpr.user=your_github_username
+//   gpr.token=your_github_personal_access_token
+// 
+// How to generate GitHub Personal Access Token:
+//   1. GitHub -> Settings -> Developer settings -> Personal access tokens -> Tokens (classic)
+//   2. Generate new token
+//   3. Required permission: read:packages
+//   4. Set the generated token in gradle.properties as gpr.token
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+        maven {
+            url = uri("https://repo.eclipse.org/content/groups/releases")
+        }
+        maven {
+            url = uri("https://repo.eclipse.org/content/repositories/releases")
+        }
+        maven {
+            url = uri("https://maven.pkg.github.com/simplecore-inc/searchable-jpa")
+            credentials {
+                username = props.getProperty("gpr.user") ?: System.getenv("GITHUB_USERNAME")
+                password = props.getProperty("gpr.token") ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}

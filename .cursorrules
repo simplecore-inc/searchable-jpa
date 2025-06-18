@@ -1,0 +1,21 @@
+# Cursor Rules for searchable-jpa Project
+
+## Git Commit Messages
+- ALL commit messages MUST be written in English
+- Never use Korean or any other language for commit messages
+- Use conventional commit format: feat:, fix:, docs:, refactor:, test:, etc.
+- Be clear and descriptive about what was changed and why
+
+## Code Style
+- Do not use emojis in code or documentation
+- Remove emojis if found during modifications
+- Do not add comments indicating changes from previous versions
+- Find and solve actual issues instead of adding defensive logic
+- Do not generate debug logs unless specifically requested
+
+## Examples of Good Commit Messages
+- "feat: add SearchOperator static import to TestPostDTOs"
+- "fix: resolve Lombok compatibility issue with Java 24"
+- "refactor: update Gradle version to 8.5 for consistency"
+- "test: fix compilation errors in test classes"
+- "docs: update README with installation instructions" 
