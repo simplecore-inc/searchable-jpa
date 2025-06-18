@@ -59,3 +59,4 @@ bin/
 ### Mac OS ###
 .DS_Store
 *.hprof
+.cursorrules
