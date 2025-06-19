@@ -310,7 +310,7 @@ public class ToOneRelationshipOptimizationTest {
         });
         
         log.info("🎉 N+1 problem test completed successfully!");
-        log.info("✅ Expected behavior: Only 2 SQL queries should be executed");
+        log.info("Expected behavior: Only 2 SQL queries should be executed");
         log.info("   - 1 query: SELECT posts with LEFT JOIN FETCH author");
         log.info("   - 1 query: SELECT COUNT for pagination");
         log.info("❌ N+1 behavior would show: 12 SQL queries");

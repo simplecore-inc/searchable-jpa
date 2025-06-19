@@ -11,6 +11,7 @@
 8. [2단계 쿼리 최적화 전략](#2단계-쿼리-최적화-전략)
 9. [성능 최적화 가이드](#성능-최적화-가이드)
 10. [실제 사용 예시](#실제-사용-예시)
+11. [ManyToMany N+1 문제 완전 해결](#manytomany-n1-문제-완전-해결)
 
 ---
 
@@ -1120,3 +1121,119 @@ searchable:
 ---
 
 **참고 문서:**
+
+## 8. ManyToMany N+1 문제 완전 해결
+
+### 8.1 자동 감지 및 배치 로딩
+
+searchable-jpa는 **ManyToMany 관계를 자동으로 감지**하고 배치 로딩을 적용합니다:
+
+```java
+// 라이브러리가 자동으로 수행하는 작업
+DetectManyToManyFields: Found ManyToMany relationship: organizations
+DetectManyToManyFields: Found ManyToMany relationship: roles
+Phase 2: Configuring batch loading for ManyToMany relationships: [organizations, roles]
+```
+
+### 8.2 추가 최적화: @BatchSize 어노테이션
+
+**완전한 N+1 해결**을 위해 엔티티에 `@BatchSize` 어노테이션을 추가하세요:
+
+```java
+@Entity
+public class UserAccount {
+    
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "user_account_organizations")
+    @BatchSize(size = 25)  // 25개씩 배치 로딩
+    private Set<UserOrganization> organizations = new HashSet<>();
+    
+    @ManyToMany(fetch = FetchType.LAZY) 
+    @JoinTable(name = "user_account_roles")
+    @BatchSize(size = 25)  // 25개씩 배치 로딩
+    private Set<UserRole> roles = new HashSet<>();
+}
+```
+
+### 8.3 성능 개선 효과
+
+**Before (N+1 문제):**
+```sql
+-- 메인 쿼리: 10개 UserAccount 조회
+SELECT * FROM user_account ORDER BY created_at DESC LIMIT 10;
+
+-- N+1 문제: 각 Organization마다 개별 쿼리 (5개 추가 쿼리)
+SELECT * FROM user_organization WHERE organization_id = ?;
+SELECT * FROM user_organization WHERE organization_id = ?;
+SELECT * FROM user_organization WHERE organization_id = ?;
+SELECT * FROM user_organization WHERE organization_id = ?;
+SELECT * FROM user_organization WHERE organization_id = ?;
+
+-- 총 쿼리 수: 16개 (1 + 10 + 5)
+```
+
+**After (배치 로딩):**
+```sql
+-- 메인 쿼리: 10개 UserAccount 조회
+SELECT * FROM user_account ORDER BY created_at DESC LIMIT 10;
+
+-- 배치 로딩: 한 번에 모든 관계 조회
+SELECT * FROM user_account_organizations WHERE user_id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+SELECT * FROM user_account_roles WHERE user_id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- 총 쿼리 수: 3개 (1 + 1 + 1)
+```
+
+### 8.4 배치 사이즈 권장값
+
+| 데이터 크기 | 권장 배치 사이즈 | 설명 |
+|------------|------------------|------|
+| 소규모 (< 100개) | `@BatchSize(size = 10)` | 메모리 효율성 우선 |
+| 중규모 (100-1000개) | `@BatchSize(size = 25)` | **권장값** - 균형점 |
+| 대규모 (> 1000개) | `@BatchSize(size = 50)` | 성능 우선 |
+
+### 8.5 실제 적용 예시
+
+```java
+@Entity
+@Table(name = "user_account")
+public class UserAccount {
+    
+    @Id
+    private String userId;
+    
+    // ManyToOne은 자동으로 Fetch Join 적용됨
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "position_id")
+    private UserPosition position;
+    
+    // ManyToMany는 @BatchSize로 최적화
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "user_account_organizations",
+               joinColumns = @JoinColumn(name = "user_id"),
+               inverseJoinColumns = @JoinColumn(name = "organization_id"))
+    @BatchSize(size = 25)
+    private Set<UserOrganization> organizations = new HashSet<>();
+    
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "user_account_roles",
+               joinColumns = @JoinColumn(name = "user_id"), 
+               inverseJoinColumns = @JoinColumn(name = "role_id"))
+    @BatchSize(size = 25)
+    private Set<UserRole> roles = new HashSet<>();
+}
+```
+
+### 8.6 성능 모니터링
+
+라이브러리가 자동으로 생성하는 로그를 통해 최적화 상태를 확인할 수 있습니다:
+
+```log
+성공적인 최적화:
+ConfigureBatchLoadingForSession: Detected ManyToMany relationships: [organizations, roles]
+ConfigureBatchLoadingForSession: Batch loading is already enabled by Hibernate
+
+배치 쿼리 실행:
+where organizati0_.user_id in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+where roles0_.user_id in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+```

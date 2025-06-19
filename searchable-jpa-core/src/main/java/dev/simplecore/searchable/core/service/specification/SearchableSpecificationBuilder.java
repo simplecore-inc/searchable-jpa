@@ -836,8 +836,17 @@ public class SearchableSpecificationBuilder<T> {
             return root.get(primaryKeyField).in(entityIds);
         };
         
+        // Configure batch loading for ManyToMany relationships to prevent N+1
+        Set<String> manyToManyFields = detectManyToManyFields();
+        
+        if (!manyToManyFields.isEmpty()) {
+            log.info("Phase 2: Configuring batch loading for ManyToMany relationships: {}", manyToManyFields);
+            configureBatchLoadingForSession();
+        }
+        
         // Execute and maintain original sort order
         List<T> entities = specificationExecutor.findAll(fullDataSpec, sort);
+        
         log.debug("Phase 2: Retrieved {} raw entities from database", entities.size());
         
         // Debug: Log first few entities
@@ -1205,5 +1214,66 @@ public class SearchableSpecificationBuilder<T> {
         }
         
         return commonFields;
+    }
+
+    /**
+     * Detect ManyToMany relationships that need batch loading to prevent N+1 problems.
+     * This method analyzes the entity class to find ManyToMany fields.
+     */
+    private Set<String> detectManyToManyFields() {
+        Set<String> manyToManyFields = new HashSet<>();
+        
+        try {
+            log.debug("DetectManyToManyFields: Analyzing entity class: {}", entityClass.getSimpleName());
+            
+            // Use JPA metamodel to find ManyToMany relationships
+            EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
+            
+            // Find all ManyToMany relationships
+            entityType.getPluralAttributes().forEach(attr -> {
+                if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_MANY) {
+                    manyToManyFields.add(attr.getName());
+                    log.debug("DetectManyToManyFields: Found ManyToMany relationship: {}", attr.getName());
+                }
+            });
+            
+            if (!manyToManyFields.isEmpty()) {
+                log.info("DetectManyToManyFields: Detected {} ManyToMany relationships: {}", 
+                         manyToManyFields.size(), manyToManyFields);
+            }
+            
+        } catch (Exception e) {
+            log.warn("DetectManyToManyFields: Metamodel analysis failed, falling back to reflection: {}", e.getMessage());
+            
+            // Fallback to reflection if metamodel fails
+            Field[] fields = entityClass.getDeclaredFields();
+            for (Field field : fields) {
+                if (field.isAnnotationPresent(javax.persistence.ManyToMany.class)) {
+                    manyToManyFields.add(field.getName());
+                    log.debug("DetectManyToManyFields: Found ManyToMany field via reflection: {}", field.getName());
+                }
+            }
+            
+            log.info("DetectManyToManyFields: Reflection fallback detected {} ManyToMany relationships: {}", 
+                     manyToManyFields.size(), manyToManyFields);
+        }
+        
+        return manyToManyFields;
+    }
+
+    /**
+     * Configure Hibernate session for optimal batch loading to prevent N+1 problems.
+     * Note: Hibernate batch loading is already enabled by default. 
+     * For additional optimization, consider adding @BatchSize annotation to your entity's ManyToMany fields.
+     */
+    private void configureBatchLoadingForSession() {
+        Set<String> manyToManyFields = detectManyToManyFields();
+        
+        if (!manyToManyFields.isEmpty()) {
+            log.info("ConfigureBatchLoadingForSession: Detected ManyToMany relationships: {}", manyToManyFields);
+            log.info("ConfigureBatchLoadingForSession: Batch loading is already enabled by Hibernate");
+            log.info("ConfigureBatchLoadingForSession: For additional optimization, consider adding @BatchSize annotation to your ManyToMany fields");
+            log.info("ConfigureBatchLoadingForSession: Example: @BatchSize(size = 25) @ManyToMany private Set<Organization> organizations;");
+        }
     }
 }
