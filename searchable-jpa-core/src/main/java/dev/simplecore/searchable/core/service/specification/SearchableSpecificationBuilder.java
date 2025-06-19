@@ -16,6 +16,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import javax.persistence.EntityManager;
+import javax.persistence.TypedQuery;
 import javax.persistence.criteria.*;
 import javax.persistence.metamodel.Attribute;
 import javax.persistence.metamodel.EntityType;
@@ -29,7 +30,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.ArrayList;
 
 /**
  * Builds JPA Specification from SearchCondition.
@@ -443,15 +446,27 @@ public class SearchableSpecificationBuilder<T> {
 
     private Specification<T> buildSpecification() {
         return (root, query, cb) -> {
-            // Apply fetch joins only for non-count queries
-            Set<String> joinPaths = new HashSet<>();
-            if (!query.getResultType().equals(Long.class)) {
-                joinPaths = extractJoinPaths(condition.getNodes());
+            boolean isCountQuery = query.getResultType().equals(Long.class);
+            
+            // Always extract join paths from conditions (needed for filtering)
+            Set<String> conditionJoinPaths = extractJoinPaths(condition.getNodes());
+            
+            log.debug("Applying joins - condition paths: {}, query type: {}, isCountQuery: {}", 
+                     conditionJoinPaths, query.getResultType(), isCountQuery);
+            
+            // For non-count queries, add common ToOne fields to prevent N+1 problems
+            Set<String> allJoinPaths = new HashSet<>(conditionJoinPaths);
+            if (!isCountQuery) {
+                Set<String> commonToOneFields = detectCommonToOneFields();
+                log.debug("Adding common ToOne fields for non-count query: {}", commonToOneFields);
+                allJoinPaths.addAll(commonToOneFields);
             }
-
-            // Apply joins in correct order
-            if (!joinPaths.isEmpty()) {
-                applyJoins(root, joinPaths);
+            
+            // Apply joins (with different strategy for count vs select queries)
+            applyJoins(root, allJoinPaths, isCountQuery);
+            
+            // Apply distinct only if we have actual joins
+            if (!root.getJoins().isEmpty()) {
                 query.distinct(true);
             }
 
@@ -496,7 +511,7 @@ public class SearchableSpecificationBuilder<T> {
      * Apply improved join strategy for ToMany relationships.
      * Uses different strategies based on the number of ToMany relationships.
      */
-    private void applyJoins(Root<T> root, Set<String> paths) {
+    private void applyJoins(Root<T> root, Set<String> paths, boolean isCountQuery) {
         Set<Join<T, ?>> joins = (Set<Join<T, ?>>) root.getJoins();
         joins.clear();
 
@@ -511,56 +526,82 @@ public class SearchableSpecificationBuilder<T> {
                 toOnePaths.add(path);
             }
         }
-
-        // Strategy 1: Always fetch join ToOne relationships (safe and efficient)
+        
+        log.debug("Detected ToOne paths: {}", toOnePaths);
+        log.debug("Detected ToMany paths: {}", toManyPaths);
+        
+        // Apply ToOne joins
         for (String path : toOnePaths) {
-            root.fetch(path, JoinType.LEFT);
+            try {
+                if (isCountQuery) {
+                    // For count queries, use regular join to avoid fetch join errors
+                    log.debug("ApplyJoins: Using regular join for ToOne path (count query): {}", path);
+                    root.join(path, JoinType.LEFT);
+                } else {
+                    // For select queries, use fetch join to prevent N+1
+                    log.debug("ApplyJoins: Using fetch join for ToOne path (select query): {}", path);
+                    root.fetch(path, JoinType.LEFT);
+                }
+                log.debug("Successfully applied join for ToOne path: {}", path);
+            } catch (Exception e) {
+                log.warn("Join failed for ToOne path '{}', using regular join as fallback: {}", path, e.getMessage());
+                root.join(path, JoinType.LEFT);
+            }
         }
-
-        // Strategy 2: Smart ToMany handling based on count
-        if (toManyPaths.size() == 1) {
-            // Single ToMany: Safe to use fetch join
-            String toManyPath = toManyPaths.iterator().next();
-            root.fetch(toManyPath, JoinType.LEFT);
-        } else if (toManyPaths.size() > 1) {
-            // Multiple ToMany: Use different strategies
-            applyMultipleToManyStrategy(root, toManyPaths);
-        }
-    }
-
-    /**
-     * Apply strategy for multiple ToMany relationships.
-     */
-    private void applyMultipleToManyStrategy(Root<T> root, Set<String> toManyPaths) {
-        // Strategy: Use regular joins for all ToMany to avoid cartesian product
-        // This prevents HHH000104 warning but may cause N+1 for unused relationships
         
+        // Apply ToMany joins (always regular join to prevent memory pagination)
         for (String path : toManyPaths) {
-            root.join(path, JoinType.LEFT);
+            try {
+                log.debug("ApplyJoins: Using regular join for ToMany path: {}", path);
+                root.join(path, JoinType.LEFT);
+                log.debug("Successfully applied regular join for ToMany path: {}", path);
+            } catch (Exception e) {
+                log.warn("Join failed for ToMany path '{}': {}", path, e.getMessage());
+            }
         }
         
-        // Alternative: Could implement lazy loading hints or batch fetching here
-        // For now, we prioritize avoiding memory pagination over N+1 prevention
+        Set<String> finalToOneFields = detectCommonToOneFields();
+        finalToOneFields.removeAll(toOnePaths); // Remove already processed paths
+        log.debug("Final ToOne fields to add: {}", finalToOneFields);
+        
+        // Apply additional ToOne fields for N+1 prevention (only for select queries)
+        if (!isCountQuery) {
+            for (String field : finalToOneFields) {
+                try {
+                    log.debug("ApplyJoins: Attempting fetch join for common ToOne field: {}", field);
+                    root.fetch(field, JoinType.LEFT);
+                    log.debug("Successfully applied fetch join for common ToOne field: {}", field);
+                } catch (Exception e) {
+                    log.warn("Fetch join failed for common ToOne field '{}', using regular join as fallback: {}", field, e.getMessage());
+                    root.join(field, JoinType.LEFT);
+                }
+            }
+        }
     }
 
     /**
-     * Executes optimized cursor-based pagination using two-phase query strategy.
-     * This is the recommended approach for large datasets with multiple ToMany relationships.
+     * Execute query with two-phase optimization.
+     * Phase 1: Get IDs only (regular joins to avoid memory paging)
+     * Phase 2: Load complete entities with smart fetch joins
      */
     public Page<T> buildAndExecuteWithTwoPhaseOptimization() {
-        PageRequest originalPageRequest = buildPageRequest();
-        Set<String> joinPaths = extractJoinPaths(condition.getNodes());
+        log.debug("Starting two-phase optimization query");
         
-        // Analyze ToMany relationships
-        Set<String> toManyPaths = joinPaths.stream()
+        PageRequest pageRequest = buildPageRequest();
+        Set<String> allJoinPaths = extractJoinPaths(condition.getNodes());
+        Set<String> toManyPaths = allJoinPaths.stream()
                 .filter(path -> isToManyPath(createDummyRoot(), path))
                 .collect(Collectors.toSet());
+
+        log.debug("All join paths: {}", allJoinPaths);
+        log.debug("ToMany paths detected: {}", toManyPaths);
         
-        // Decide strategy based on ToMany count and estimated data size
+        // Check if two-phase optimization is needed
         if (shouldUseTwoPhaseQuery(toManyPaths)) {
-            return executeTwoPhaseQuery(originalPageRequest, joinPaths);
+            log.debug("Two-phase query optimization is NEEDED");
+            return executeTwoPhaseQuery(pageRequest, allJoinPaths);
         } else {
-            // Use standard single-phase query for simpler cases
+            log.debug("Two-phase query optimization is NOT needed, using regular query");
             return buildAndExecuteWithCursor();
         }
     }
@@ -612,19 +653,31 @@ public class SearchableSpecificationBuilder<T> {
      * Phase 2: Fetch full entities by IDs with all relationships
      */
     private Page<T> executeTwoPhaseQuery(PageRequest pageRequest, Set<String> allJoinPaths) {
+        log.debug("Starting two-phase query execution");
+        log.debug("Page request: page={}, size={}, sort={}", pageRequest.getPageNumber(), pageRequest.getPageSize(), pageRequest.getSort());
+        log.debug("All join paths: {}", allJoinPaths);
+        
         // Phase 1: Get IDs only (fast pagination with all conditions)
         List<Object> entityIds = executePhaseOneQuery(pageRequest);
+        log.debug("Phase 1 completed. Entity IDs retrieved: {} IDs", entityIds.size());
+        log.debug("Entity IDs: {}", entityIds);
         
         if (entityIds.isEmpty()) {
+            log.debug("No entity IDs found, returning empty page");
             return new PageImpl<>(Collections.emptyList(), pageRequest, 0);
         }
         
         // Phase 2: Fetch full entities with all relationships
+        log.debug("Starting Phase 2: Fetch full entities");
         List<T> fullEntities = executePhaseTwoQuery(entityIds, allJoinPaths, pageRequest.getSort());
+        log.debug("Phase 2 completed. Full entities retrieved: {} entities", fullEntities.size());
         
         // Get total count (only if needed)
+        log.debug("Getting total count for pagination metadata");
         long totalCount = getTotalCountForTwoPhase();
+        log.debug("Total count: {}", totalCount);
         
+        log.debug("Two-phase query completed successfully");
         return new PageImpl<>(fullEntities, pageRequest, totalCount);
     }
 
@@ -633,45 +686,139 @@ public class SearchableSpecificationBuilder<T> {
      * This avoids cartesian products while maintaining all filtering logic.
      */
     private List<Object> executePhaseOneQuery(PageRequest pageRequest) {
-        Specification<T> idOnlySpec = (root, query, cb) -> {
-            // Set up joins for conditions only (no fetch joins)
-            Set<String> joinPaths = extractJoinPaths(condition.getNodes());
-            applyRegularJoinsOnly(root, joinPaths);
+        log.debug("Phase 1: Starting ID-only query");
+        
+        // Only extract join paths from conditions (no additional ToOne fields)
+        Set<String> conditionJoinPaths = extractJoinPaths(condition.getNodes());
+        log.debug("Phase 1: Extracted join paths from conditions: {}", conditionJoinPaths);
+        
+        // Get primary key field and sorting fields
+        String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
+        
+        // Check if we have additional sorting fields beyond the primary key
+        Sort sort = pageRequest.getSort();
+        boolean hasAdditionalSortFields = false;
+        if (sort.isSorted()) {
+            for (Sort.Order order : sort) {
+                String property = order.getProperty();
+                if (!property.equals(primaryKeyField)) { // Don't duplicate primary key
+                    hasAdditionalSortFields = true;
+                    break;
+                }
+            }
+        }
+        
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        
+        // Decide query type based on whether we have additional fields
+        List<Object> ids;
+        if (hasAdditionalSortFields) {
+            // Multiple fields: use Object[] query
+            CriteriaQuery<Object[]> arrayQuery = cb.createQuery(Object[].class);
+            Root<T> arrayRoot = arrayQuery.from(entityClass);
             
-            // Select only the ID field
-            String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-            query.select(root.get(primaryKeyField));
-            query.distinct(true);
+            // Reapply joins and conditions to new root
+            applyRegularJoinsOnly(arrayRoot, conditionJoinPaths);
+            log.debug("Phase 1: Applied regular joins, total joins: {}", arrayRoot.getJoins().size());
             
-            // Apply all search conditions
-            JoinManager<T> joinManager = new JoinManager<>(entityManager, root);
+            // Build selections for array root
+            List<Selection<?>> arraySelections = new ArrayList<>();
+            arraySelections.add(arrayRoot.get(primaryKeyField));
+            for (Sort.Order order : sort) {
+                String property = order.getProperty();
+                if (!property.equals(primaryKeyField)) {
+                    arraySelections.add(arrayRoot.get(property));
+                }
+            }
+            arrayQuery.multiselect(arraySelections);
+            
+            // Apply distinct and conditions
+            if (!arrayRoot.getJoins().isEmpty()) {
+                arrayQuery.distinct(true);
+            }
+            
+            JoinManager<T> joinManager = new JoinManager<>(entityManager, arrayRoot);
             PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
             SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
             
-            return createPredicates(root, query, cb, specBuilder);
-        };
-        
-        // Execute with pagination
-        return specificationExecutor.findAll(idOnlySpec, pageRequest)
-                .getContent()
-                .stream()
-                .map(entity -> {
-                    // Extract ID value from entity or direct ID result
-                    if (entity instanceof Number || entity instanceof String) {
-                        return entity; // Direct ID value
+            Predicate predicate = createPredicates(arrayRoot, arrayQuery, cb, specBuilder);
+            if (predicate != null) {
+                arrayQuery.where(predicate);
+            }
+            
+            // Apply sorting
+            if (sort.isSorted()) {
+                List<Order> orders = new ArrayList<>();
+                for (Sort.Order order : sort) {
+                    Path<?> path = arrayRoot.get(order.getProperty());
+                    if (order.isAscending()) {
+                        orders.add(cb.asc(path));
                     } else {
-                        // Extract ID from entity
-                        try {
-                            String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-                            Field idField = entityClass.getDeclaredField(primaryKeyField);
-                            idField.setAccessible(true);
-                            return idField.get(entity);
-                        } catch (Exception e) {
-                            throw new RuntimeException("Failed to extract ID from entity", e);
-                        }
+                        orders.add(cb.desc(path));
                     }
-                })
-                .collect(Collectors.toList());
+                }
+                arrayQuery.orderBy(orders);
+            }
+            
+            // Execute array query
+            TypedQuery<Object[]> arrayTypedQuery = entityManager.createQuery(arrayQuery);
+            arrayTypedQuery.setFirstResult((int) pageRequest.getOffset());
+            arrayTypedQuery.setMaxResults(pageRequest.getPageSize());
+            
+            List<Object[]> arrayResults = arrayTypedQuery.getResultList();
+            ids = arrayResults.stream()
+                    .map(row -> row[0]) // ID is always the first column
+                    .collect(Collectors.toList());
+                    
+        } else {
+            // Single field: use Object query (just ID)
+            CriteriaQuery<Object> singleQuery = cb.createQuery(Object.class);
+            Root<T> singleRoot = singleQuery.from(entityClass);
+            
+            // Reapply joins and conditions to new root
+            applyRegularJoinsOnly(singleRoot, conditionJoinPaths);
+            log.debug("Phase 1: Applied regular joins, total joins: {}", singleRoot.getJoins().size());
+            
+            singleQuery.select(singleRoot.get(primaryKeyField));
+            
+            // Apply distinct and conditions
+            if (!singleRoot.getJoins().isEmpty()) {
+                singleQuery.distinct(true);
+            }
+            
+            JoinManager<T> joinManager = new JoinManager<>(entityManager, singleRoot);
+            PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
+            SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
+            
+            Predicate predicate = createPredicates(singleRoot, singleQuery, cb, specBuilder);
+            if (predicate != null) {
+                singleQuery.where(predicate);
+            }
+            
+            // Apply sorting (just by ID)
+            if (sort.isSorted()) {
+                List<Order> orders = new ArrayList<>();
+                for (Sort.Order order : sort) {
+                    Path<?> path = singleRoot.get(order.getProperty());
+                    if (order.isAscending()) {
+                        orders.add(cb.asc(path));
+                    } else {
+                        orders.add(cb.desc(path));
+                    }
+                }
+                singleQuery.orderBy(orders);
+            }
+            
+            // Execute single query
+            TypedQuery<Object> singleTypedQuery = entityManager.createQuery(singleQuery);
+            singleTypedQuery.setFirstResult((int) pageRequest.getOffset());
+            singleTypedQuery.setMaxResults(pageRequest.getPageSize());
+            
+            ids = singleTypedQuery.getResultList();
+        }
+        
+        log.debug("Phase 1: Retrieved {} IDs: {}", ids.size(), ids);
+        return ids;
     }
 
     /**
@@ -691,6 +838,22 @@ public class SearchableSpecificationBuilder<T> {
         
         // Execute and maintain original sort order
         List<T> entities = specificationExecutor.findAll(fullDataSpec, sort);
+        log.debug("Phase 2: Retrieved {} raw entities from database", entities.size());
+        
+        // Debug: Log first few entities
+        for (int i = 0; i < Math.min(3, entities.size()); i++) {
+            T entity = entities.get(i);
+            log.debug("Phase 2: Entity[{}] = {}", i, entity);
+            try {
+                String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
+                Field idField = entityClass.getDeclaredField(primaryKeyField);
+                idField.setAccessible(true);
+                Object id = idField.get(entity);
+                log.debug("Phase 2: Entity[{}] ID = {}", i, id);
+            } catch (Exception e) {
+                log.error("Phase 2: Failed to extract ID from entity[{}]: {}", i, e.getMessage());
+            }
+        }
         
         // Ensure entities are returned in the same order as the IDs
         return reorderEntitiesByIds(entities, entityIds);
@@ -702,6 +865,8 @@ public class SearchableSpecificationBuilder<T> {
      * Other ToMany relationships will be loaded lazily or via batch fetching.
      */
     private void applySmartFetchJoins(Root<T> root, Set<String> paths) {
+        log.debug("ApplySmartFetchJoins: Starting with paths: {}", paths);
+        
         Set<Join<T, ?>> joins = (Set<Join<T, ?>>) root.getJoins();
         joins.clear();
         
@@ -717,19 +882,39 @@ public class SearchableSpecificationBuilder<T> {
             }
         }
         
+        log.debug("ApplySmartFetchJoins: ToOne paths from conditions: {}", toOnePaths);
+        log.debug("ApplySmartFetchJoins: ToMany paths from conditions: {}", toManyPaths);
+        
+        // Add commonly accessed ToOne relationships even if not in search conditions
+        // This prevents N+1 problems for frequently accessed fields like 'position'
+        Set<String> commonToOneFields = detectCommonToOneFields();
+        log.debug("ApplySmartFetchJoins: Common ToOne fields detected: {}", commonToOneFields);
+        toOnePaths.addAll(commonToOneFields);
+        log.debug("ApplySmartFetchJoins: Final ToOne paths to fetch: {}", toOnePaths);
+        
         // Strategy 1: Always fetch join ToOne relationships (safe and efficient)
         for (String path : toOnePaths) {
-            root.fetch(path, JoinType.LEFT);
+            try {
+                log.debug("ApplySmartFetchJoins: Attempting fetch join for ToOne path: {}", path);
+                root.fetch(path, JoinType.LEFT);
+                log.debug("ApplySmartFetchJoins: Successfully applied fetch join for: {}", path);
+            } catch (Exception e) {
+                log.warn(" ApplySmartFetchJoins: Fetch join failed for path '{}', using regular join as fallback: {}", path, e.getMessage());
+                // If fetch join fails, use regular join as fallback
+                root.join(path, JoinType.LEFT);
+            }
         }
         
         // Strategy 2: For ToMany relationships, use selective fetching
         if (toManyPaths.size() == 1) {
             // Single ToMany: Safe to fetch join
             String toManyPath = toManyPaths.iterator().next();
+            log.debug("ApplySmartFetchJoins: Single ToMany path, applying fetch join: {}", toManyPath);
             root.fetch(toManyPath, JoinType.LEFT);
         } else if (toManyPaths.size() > 1) {
             // Multiple ToMany: Select the most important one for fetch join
             String primaryToMany = selectPrimaryToManyForFetch(toManyPaths);
+            log.debug("ApplySmartFetchJoins: Multiple ToMany paths, selected primary: {}", primaryToMany);
             if (primaryToMany != null) {
                 root.fetch(primaryToMany, JoinType.LEFT);
             }
@@ -737,10 +922,13 @@ public class SearchableSpecificationBuilder<T> {
             // Other ToMany relationships: Use regular joins to enable lazy loading
             for (String path : toManyPaths) {
                 if (!path.equals(primaryToMany)) {
+                    log.debug("ApplySmartFetchJoins: Applying regular join for secondary ToMany: {}", path);
                     root.join(path, JoinType.LEFT);
                 }
             }
         }
+        
+        log.debug("ApplySmartFetchJoins: Completed join application");
     }
     
     /**
@@ -806,32 +994,63 @@ public class SearchableSpecificationBuilder<T> {
      * Reorder entities to match the original ID order from phase 1.
      */
     private List<T> reorderEntitiesByIds(List<T> entities, List<Object> orderedIds) {
+        log.debug("Reordering entities: {} entities, {} ordered IDs", entities.size(), orderedIds.size());
+        
         if (entities.size() != orderedIds.size()) {
-            // If sizes don't match, return as-is (shouldn't happen in normal cases)
-            return entities;
+            log.warn("Entity count ({}) does not match ordered ID count ({}). This may be due to DISTINCT removing duplicates.", entities.size(), orderedIds.size());
+            // Don't return early - proceed with reordering using available entities
         }
         
         // Create a map for O(1) lookup
         Map<Object, T> entityMap = new HashMap<>();
         String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
+        log.debug("Detected primary key field: {}", primaryKeyField);
         
         for (T entity : entities) {
             try {
-                Field idField = entityClass.getDeclaredField(primaryKeyField);
-                idField.setAccessible(true);
-                Object id = idField.get(entity);
-                entityMap.put(id, entity);
+                Object id = null;
+                
+                // Try using getId() method first (handles Hibernate proxies better)
+                try {
+                    Method getIdMethod = entity.getClass().getMethod("getId");
+                    id = getIdMethod.invoke(entity);
+                    log.debug("Extracted ID via getId() method: {}", id);
+                } catch (Exception getIdException) {
+                    log.debug("getId() method not available, falling back to reflection: {}", getIdException.getMessage());
+                    // Fallback to reflection
+                    Field idField = entityClass.getDeclaredField(primaryKeyField);
+                    idField.setAccessible(true);
+                    id = idField.get(entity);
+                    log.debug("Extracted ID via reflection: {}", id);
+                }
+                
+                if (id != null) {
+                    entityMap.put(id, entity);
+                    log.debug("Added entity to map: ID={}, field={}", id, primaryKeyField);
+                } else {
+                    log.warn("Entity ID is null for entity: {}", entity);
+                }
             } catch (Exception e) {
+                log.error("Failed to extract ID from entity using field '{}': {}", primaryKeyField, entity, e);
                 // If reordering fails, return original order
                 return entities;
             }
         }
         
         // Reorder according to original ID sequence
-        return orderedIds.stream()
-                .map(entityMap::get)
+        List<T> reorderedEntities = orderedIds.stream()
+                .map(id -> {
+                    T entity = entityMap.get(id);
+                    if (entity == null) {
+                        log.warn("No entity found for ID: {}", id);
+                    }
+                    return entity;
+                })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
+        
+        log.debug("Reordering completed: {} entities after reordering", reorderedEntities.size());
+        return reorderedEntities;
     }
 
     /**
@@ -915,5 +1134,39 @@ public class SearchableSpecificationBuilder<T> {
         int size = sizeNum != null ? (sizeNum > 0 ? sizeNum : DEFAULT_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
 
         return PageRequest.of(page, size, createSort());
+    }
+
+    /**
+     * Detect commonly accessed ToOne relationships to prevent N+1 problems.
+     * This analyzes the entity class to find ManyToOne and OneToOne fields
+     * that are likely to be accessed frequently.
+     */
+    private Set<String> detectCommonToOneFields() {
+        Set<String> commonFields = new HashSet<>();
+        
+        try {
+            // Use JPA metamodel to find ToOne relationships
+            EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
+            
+            // Add all ManyToOne and OneToOne relationships
+            entityType.getSingularAttributes().forEach(attr -> {
+                if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_ONE ||
+                    attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_ONE) {
+                    commonFields.add(attr.getName());
+                }
+            });
+            
+        } catch (Exception e) {
+            // Fallback to reflection if metamodel fails
+            Field[] fields = entityClass.getDeclaredFields();
+            for (Field field : fields) {
+                if (field.isAnnotationPresent(javax.persistence.ManyToOne.class) ||
+                    field.isAnnotationPresent(javax.persistence.OneToOne.class)) {
+                    commonFields.add(field.getName());
+                }
+            }
+        }
+        
+        return commonFields;
     }
 }

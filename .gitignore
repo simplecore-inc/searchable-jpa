@@ -60,3 +60,4 @@ bin/
 .DS_Store
 *.hprof
 .cursorrules
+.cursor

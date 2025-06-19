@@ -429,7 +429,7 @@ class CursorPaginationAccuracyTest {
                 .isLessThanOrEqualTo(next.getTitle());
         }
         
-        System.out.printf("✅ Data integrity verified: %d unique posts in correct order\n", 
+        System.out.printf(" Data integrity verified: %d unique posts in correct order\n", 
             allRetrievedPosts.size());
     }
 
@@ -477,7 +477,7 @@ class CursorPaginationAccuracyTest {
                 .isLessThanOrEqualTo(next.getTitle());
         }
         
-        System.out.printf("✅ Page %d data verified successfully\n", targetPage);
+        System.out.printf(" Page %d data verified successfully\n", targetPage);
     }
 
     @Test
@@ -533,7 +533,7 @@ class CursorPaginationAccuracyTest {
             }
         }
         
-        System.out.printf("✅ Range search data accuracy verified\n");
+        System.out.printf(" Range search data accuracy verified\n");
     }
 
     private void createPredictableDataset() {

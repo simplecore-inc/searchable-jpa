@@ -20,6 +20,8 @@ spring:
           batch_versioned_data: true
         order_inserts: true
         order_updates: true
+        # N+1 problem optimization
+        default_batch_fetch_size: 100
         # Connection pool settings
         connection:
           provider_disables_autocommit: true
