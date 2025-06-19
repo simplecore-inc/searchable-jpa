@@ -11,7 +11,7 @@ ext {
 
 allprojects {
     group = 'dev.simplecore.searchable'
-    version = '0.1.3-SNAPSHOT'
+    version = '0.1.3'
     
     System.setProperty("spring.boot.version.check.enabled", "false")
 }
