@@ -885,23 +885,30 @@ public class SearchableSpecificationBuilder<T> {
         log.debug("ApplySmartFetchJoins: ToOne paths from conditions: {}", toOnePaths);
         log.debug("ApplySmartFetchJoins: ToMany paths from conditions: {}", toManyPaths);
         
-        // Add commonly accessed ToOne relationships even if not in search conditions
+        // CRITICAL: Add commonly accessed ToOne relationships even if not in search conditions
         // This prevents N+1 problems for frequently accessed fields like 'position'
         Set<String> commonToOneFields = detectCommonToOneFields();
         log.debug("ApplySmartFetchJoins: Common ToOne fields detected: {}", commonToOneFields);
+        
+        // Add all common ToOne fields to prevent N+1
         toOnePaths.addAll(commonToOneFields);
         log.debug("ApplySmartFetchJoins: Final ToOne paths to fetch: {}", toOnePaths);
         
-        // Strategy 1: Always fetch join ToOne relationships (safe and efficient)
+        // Strategy 1: Always fetch join ALL ToOne relationships (safe and efficient)
         for (String path : toOnePaths) {
             try {
                 log.debug("ApplySmartFetchJoins: Attempting fetch join for ToOne path: {}", path);
                 root.fetch(path, JoinType.LEFT);
-                log.debug("ApplySmartFetchJoins: Successfully applied fetch join for: {}", path);
+                log.info("ApplySmartFetchJoins: Successfully applied fetch join for ToOne: {}", path);
             } catch (Exception e) {
-                log.warn(" ApplySmartFetchJoins: Fetch join failed for path '{}', using regular join as fallback: {}", path, e.getMessage());
+                log.warn("ApplySmartFetchJoins: Fetch join failed for path '{}', using regular join as fallback: {}", path, e.getMessage());
                 // If fetch join fails, use regular join as fallback
-                root.join(path, JoinType.LEFT);
+                try {
+                    root.join(path, JoinType.LEFT);
+                    log.debug("ApplySmartFetchJoins: Successfully applied regular join fallback for: {}", path);
+                } catch (Exception joinException) {
+                    log.error("ApplySmartFetchJoins: Both fetch join and regular join failed for path '{}': {}", path, joinException.getMessage());
+                }
             }
         }
         
@@ -910,25 +917,42 @@ public class SearchableSpecificationBuilder<T> {
             // Single ToMany: Safe to fetch join
             String toManyPath = toManyPaths.iterator().next();
             log.debug("ApplySmartFetchJoins: Single ToMany path, applying fetch join: {}", toManyPath);
-            root.fetch(toManyPath, JoinType.LEFT);
+            try {
+                root.fetch(toManyPath, JoinType.LEFT);
+                log.info("ApplySmartFetchJoins: Successfully applied fetch join for single ToMany: {}", toManyPath);
+            } catch (Exception e) {
+                log.warn("ApplySmartFetchJoins: Fetch join failed for ToMany '{}', using regular join: {}", toManyPath, e.getMessage());
+                root.join(toManyPath, JoinType.LEFT);
+            }
         } else if (toManyPaths.size() > 1) {
             // Multiple ToMany: Select the most important one for fetch join
             String primaryToMany = selectPrimaryToManyForFetch(toManyPaths);
             log.debug("ApplySmartFetchJoins: Multiple ToMany paths, selected primary: {}", primaryToMany);
             if (primaryToMany != null) {
-                root.fetch(primaryToMany, JoinType.LEFT);
+                try {
+                    root.fetch(primaryToMany, JoinType.LEFT);
+                    log.info("ApplySmartFetchJoins: Successfully applied fetch join for primary ToMany: {}", primaryToMany);
+                } catch (Exception e) {
+                    log.warn("ApplySmartFetchJoins: Fetch join failed for primary ToMany '{}': {}", primaryToMany, e.getMessage());
+                }
             }
             
             // Other ToMany relationships: Use regular joins to enable lazy loading
             for (String path : toManyPaths) {
                 if (!path.equals(primaryToMany)) {
                     log.debug("ApplySmartFetchJoins: Applying regular join for secondary ToMany: {}", path);
-                    root.join(path, JoinType.LEFT);
+                    try {
+                        root.join(path, JoinType.LEFT);
+                        log.debug("ApplySmartFetchJoins: Successfully applied regular join for secondary ToMany: {}", path);
+                    } catch (Exception e) {
+                        log.error("ApplySmartFetchJoins: Regular join failed for secondary ToMany '{}': {}", path, e.getMessage());
+                    }
                 }
             }
         }
         
-        log.debug("ApplySmartFetchJoins: Completed join application");
+        log.info("ApplySmartFetchJoins: Completed join application - ToOne fetched: {}, ToMany fetched: {}", 
+                 toOnePaths.size(), toManyPaths.isEmpty() ? 0 : 1);
     }
     
     /**
@@ -1145,6 +1169,8 @@ public class SearchableSpecificationBuilder<T> {
         Set<String> commonFields = new HashSet<>();
         
         try {
+            log.debug("DetectCommonToOneFields: Analyzing entity class: {}", entityClass.getSimpleName());
+            
             // Use JPA metamodel to find ToOne relationships
             EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
             
@@ -1153,18 +1179,29 @@ public class SearchableSpecificationBuilder<T> {
                 if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_ONE ||
                     attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_ONE) {
                     commonFields.add(attr.getName());
+                    log.debug("DetectCommonToOneFields: Found {} relationship: {}", 
+                             attr.getPersistentAttributeType(), attr.getName());
                 }
             });
             
+            log.info("DetectCommonToOneFields: Detected {} ToOne relationships for automatic fetch joining: {}", 
+                     commonFields.size(), commonFields);
+            
         } catch (Exception e) {
+            log.warn("DetectCommonToOneFields: Metamodel analysis failed, falling back to reflection: {}", e.getMessage());
+            
             // Fallback to reflection if metamodel fails
             Field[] fields = entityClass.getDeclaredFields();
             for (Field field : fields) {
                 if (field.isAnnotationPresent(javax.persistence.ManyToOne.class) ||
                     field.isAnnotationPresent(javax.persistence.OneToOne.class)) {
                     commonFields.add(field.getName());
+                    log.debug("DetectCommonToOneFields: Found ToOne field via reflection: {}", field.getName());
                 }
             }
+            
+            log.info("DetectCommonToOneFields: Reflection fallback detected {} ToOne relationships: {}", 
+                     commonFields.size(), commonFields);
         }
         
         return commonFields;

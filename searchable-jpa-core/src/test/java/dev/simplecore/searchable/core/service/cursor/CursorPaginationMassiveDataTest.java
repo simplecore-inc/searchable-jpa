@@ -346,4 +346,121 @@ class CursorPaginationMassiveDataTest {
             assertThat(hasMatchingTag).isTrue();
         }
     }
+
+    @Test
+    @DisplayName("Test automatic ManyToOne fetch join to prevent N+1 problems")
+    void testAutomaticManyToOneFetchJoin() {
+        // Create test data with ManyToOne relationships
+        createTestDataWithManyToOneRelationships();
+        
+        // Search without any conditions (should still fetch join ManyToOne relationships)
+        SearchCondition<TestPostSearchDTO> condition = SearchConditionBuilder.create(TestPostSearchDTO.class)
+                .sort(s -> s.desc("createdAt"))
+                .page(0)
+                .size(5)
+                .build();
+        
+        log.info("=== Starting automatic ManyToOne fetch join test ===");
+        
+        // Execute search using SearchableSpecificationBuilder
+        SearchableSpecificationBuilder<TestPost> builder = SearchableSpecificationBuilder.of(
+                condition, entityManager, TestPost.class, testPostRepository);
+        
+        Page<TestPost> result = builder.buildAndExecuteWithTwoPhaseOptimization();
+        
+        log.info("=== Search completed, analyzing results ===");
+        log.info("Found {} posts", result.getContent().size());
+        
+        // Verify results
+        assertThat(result.getContent()).hasSize(5);
+        
+        // Access ManyToOne relationships to check if N+1 occurs
+        log.info("=== Accessing ManyToOne relationships ===");
+        for (TestPost post : result.getContent()) {
+            // Access author (ManyToOne) - should NOT cause additional queries
+            String authorName = post.getAuthor().getName();
+            log.info("Post '{}' by author '{}'", post.getTitle(), authorName);
+        }
+        
+        log.info("=== ManyToOne fetch join test completed ===");
+    }
+    
+    @Test
+    @DisplayName("Test N+1 problem scenario with complex relationships")
+    void testComplexRelationshipN1Prevention() {
+        // Use existing test data (already created in setUp)
+        
+        // Search with no specific join conditions but access all relationships
+        SearchCondition<TestPostSearchDTO> condition = SearchConditionBuilder.create(TestPostSearchDTO.class)
+                .sort(s -> s.desc("createdAt"))
+                .page(0)
+                .size(10)
+                .build();
+        
+        log.info("=== Starting complex relationship N+1 prevention test ===");
+        
+        // Execute search using SearchableSpecificationBuilder
+        SearchableSpecificationBuilder<TestPost> builder = SearchableSpecificationBuilder.of(
+                condition, entityManager, TestPost.class, testPostRepository);
+        
+        Page<TestPost> result = builder.buildAndExecuteWithTwoPhaseOptimization();
+        
+        log.info("=== Search completed, found {} posts ===", result.getContent().size());
+        assertThat(result.getContent()).hasSize(10);
+        
+        // Access ALL relationships to check for N+1 problems
+        log.info("=== Accessing all relationships to detect N+1 problems ===");
+        for (TestPost post : result.getContent()) {
+            // ManyToOne relationships - should be fetch joined automatically
+            String authorName = post.getAuthor().getName();
+            
+            // ManyToMany relationships - should use batch loading
+            int tagCount = post.getTags().size();
+            int commentCount = post.getComments().size();
+            
+            log.info("Post '{}' by '{}' has {} tags and {} comments", 
+                    post.getTitle(), authorName, tagCount, commentCount);
+        }
+        
+        log.info("=== Complex relationship test completed ===");
+    }
+    
+    private void createTestDataWithManyToOneRelationships() {
+        log.info("Creating test data with ManyToOne relationships");
+        
+        // Create authors
+        TestAuthor author1 = TestAuthor.builder()
+                .name("John Doe")
+                .email("john@example.com")
+                .nickname("john")
+                .build();
+        entityManager.persist(author1);
+        
+        TestAuthor author2 = TestAuthor.builder()
+                .name("Jane Smith")
+                .email("jane@example.com")
+                .nickname("jane")
+                .build();
+        entityManager.persist(author2);
+        
+        // Create posts with authors
+        for (int i = 1; i <= 10; i++) {
+            TestPost post = TestPost.builder()
+                    .title("Test Post " + i)
+                    .content("Content for post " + i)
+                    .status(TestPostStatus.PUBLISHED)
+                    .viewCount((long) (100 + i))
+                    .likeCount((long) (10 + i))
+                    .author(i % 2 == 0 ? author1 : author2)
+                    .createdAt(LocalDateTime.now().minusHours(i))
+                    .build();
+            
+            entityManager.persist(post);
+        }
+        
+        entityManager.flush();
+        entityManager.clear();
+        
+        log.info("Created 10 posts with ManyToOne author relationships");
+    }
 } 

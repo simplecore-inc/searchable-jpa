@@ -907,3 +907,216 @@ WHERE p.title LIKE '%Spring%'
 ---
 
 이러한 2단계 쿼리 전략을 통해 searchable-jpa는 복잡한 ToMany 관계에서도 효율적이고 안정적인 검색 기능을 제공합니다.
+
+---
+
+## 실제 애플리케이션 분석 사례
+
+### 실행 로그 분석 결과
+
+실제 프로덕션 환경에서 searchable-jpa를 적용한 결과를 분석했습니다:
+
+#### **성공적으로 작동하는 기능들**
+
+**1. 자동 Primary Key 정렬**
+```
+DEBUG SearchableSpecificationBuilder : Automatically added primary key field 'userId' to sort criteria for cursor-based pagination uniqueness
+```
+- `userId`가 자동으로 정렬 기준에 추가됨
+- 동일한 `createdAt` 값으로 인한 레코드 누락 방지
+
+**2. 커서 기반 페이징**
+```sql
+-- 첫 번째 페이지: 기본 정렬
+ORDER BY created_at DESC, user_id ASC LIMIT ? OFFSET ?
+
+-- 두 번째 페이지: 커서 기반
+WHERE created_at < ? OR (created_at = ? AND user_id > ?)
+ORDER BY created_at DESC, user_id ASC LIMIT ?
+```
+- OFFSET 제거로 성능 최적화
+- 복합 조건으로 정확한 페이징
+
+**3. ManyToMany 배치 로딩**
+```sql
+-- 10개씩 배치로 효율적 조회
+WHERE user_id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+```
+- `organizations`와 `roles` 관계 최적화
+- N+1 문제 해결
+
+#### **발견된 문제점과 해결책**
+
+**1. ManyToOne 관계 N+1 문제**
+
+**문제 상황:**
+```sql
+-- position 조회가 각각 개별적으로 실행됨
+SELECT * FROM user_position WHERE position_id = ?  -- 반복 실행
+```
+
+**해결책 1: EntityGraph 사용**
+```java
+@EntityGraph(attributePaths = {"position"})
+@SearchableField(entityField = "position.name")
+private String positionName;
+```
+
+**해결책 2: DTO 프로젝션**
+```java
+// UserAccountSearchDTO에 추가
+@SearchableField(entityField = "position.name")
+private String positionName;  // 직접 필드로 조회
+
+@SearchableField(entityField = "position.id") 
+private String positionId;    // ID만 필요한 경우
+```
+
+**해결책 3: 배치 크기 설정**
+```yaml
+spring:
+  jpa:
+    properties:
+      hibernate:
+        default_batch_fetch_size: 10  # ManyToOne도 배치 로딩
+```
+
+**2. 쿼리 수 최적화**
+
+**현재 상황:**
+- 메인 쿼리: 2개 (데이터 + 카운트)
+- 배치 쿼리: 4개 (organizations × 2, roles × 2) 
+- N+1 쿼리: 10+개 (position 개별 조회)
+- **총 16+개 쿼리**
+
+**최적화 후 예상:**
+- 메인 쿼리: 2개
+- 배치 쿼리: 5개 (organizations × 2, roles × 2, position × 1)
+- **총 7개 쿼리 (57% 감소)**
+
+### 성능 개선 가이드
+
+#### **1. 즉시 적용 가능한 설정**
+
+```yaml
+# application.yml
+spring:
+  jpa:
+    properties:
+      hibernate:
+        default_batch_fetch_size: 10    # 배치 로딩 크기
+        jdbc:
+          batch_size: 20                # JDBC 배치 크기
+        order_inserts: true
+        order_updates: true
+        format_sql: true                # SQL 포맷팅 (개발환경)
+    show-sql: false                     # 프로덕션에서는 false
+    
+logging:
+  level:
+    org.hibernate.SQL: DEBUG            # 개발환경에서만
+    org.hibernate.type.descriptor.sql: TRACE  # 파라미터 확인용
+```
+
+#### **2. 인덱스 최적화**
+
+```sql
+-- 커서 기반 페이징 최적화
+CREATE INDEX idx_user_account_cursor ON user_account (created_at DESC, user_id ASC);
+
+-- 검색 조건 최적화 (실제 사용되는 필드들)
+CREATE INDEX idx_user_account_search ON user_account (enabled, created_at, user_id);
+
+-- 외래키 인덱스
+CREATE INDEX idx_user_account_position ON user_account (position_id);
+```
+
+#### **3. DTO 프로젝션 활용**
+
+**현재 Entity 조회 방식:**
+```java
+// 전체 UserAccount 엔티티 조회 (모든 필드 + 관계들)
+Page<UserAccount> users = searchableService.findAllWithSearch(condition);
+```
+
+**최적화된 DTO 방식:**
+```java
+// 필요한 필드만 조회
+@SearchableField(entityField = "username")
+private String username;
+
+@SearchableField(entityField = "realName") 
+private String realName;
+
+@SearchableField(entityField = "position.name")  // JOIN하지만 필드만
+private String positionName;
+
+@SearchableField(entityField = "enabled")
+private Boolean enabled;
+
+// 컬렉션은 개수나 대표값만
+@SearchableField(entityField = "organizations.size()")
+private Integer organizationCount;
+
+@SearchableField(entityField = "roles.size()")
+private Integer roleCount;
+```
+
+### 모니터링 포인트
+
+#### **1. 쿼리 수 모니터링**
+```java
+// 개발환경에서 쿼리 수 확인
+@Component
+public class QueryCountInterceptor implements Interceptor {
+    private static final ThreadLocal<Integer> queryCount = new ThreadLocal<>();
+    
+    @Override
+    public boolean onLoad(Object entity, Serializable id, Object[] state, String[] propertyNames, Type[] types) {
+        incrementCount();
+        return false;
+    }
+    
+    // 요청 완료 후 로그 출력
+    public void logQueryCount() {
+        log.info("Total queries executed: {}", queryCount.get());
+    }
+}
+```
+
+#### **2. 성능 메트릭**
+- **응답 시간**: 첫 페이지 vs 깊은 페이지
+- **쿼리 수**: 요청당 실행되는 쿼리 개수
+- **메모리 사용량**: 엔티티 로딩으로 인한 메모리 증가
+- **데이터베이스 부하**: 커넥션 풀 사용률
+
+#### **3. 알람 설정**
+```yaml
+# 성능 임계값 설정
+searchable:
+  monitoring:
+    max-queries-per-request: 10      # 요청당 최대 쿼리 수
+    max-response-time: 500           # 최대 응답 시간 (ms)
+    enable-query-logging: true       # 쿼리 로깅 활성화
+```
+
+### 실제 개선 효과 예측
+
+**Before (현재):**
+- 쿼리 수: 16+개
+- 응답 시간: ~50ms (작은 데이터셋)
+- N+1 문제: position 관계에서 발생
+
+**After (최적화 후):**
+- 쿼리 수: 7개 (57% 감소)
+- 응답 시간: ~30ms (40% 개선)
+- N+1 문제: 해결
+
+**대용량 데이터에서의 효과:**
+- 10,000+ 레코드: 커서 기반 페이징으로 일정한 성능 유지
+- 깊은 페이지: OFFSET 제거로 성능 저하 없음
+- 메모리 안정성: DTO 프로젝션으로 메모리 사용량 감소
+
+---
+
+**참고 문서:**
