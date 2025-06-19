@@ -102,6 +102,15 @@ subprojects {
 
     test {
         useJUnitPlatform()
+        
+        // Always run tests, never consider them up-to-date
+        outputs.upToDateWhen { false }
+        
+        // Clean test results before running
+        doFirst {
+            delete fileTree(dir: "${buildDir}/test-results", include: '**/*')
+            delete fileTree(dir: "${buildDir}/reports/tests", include: '**/*')
+        }
     }
 }
 

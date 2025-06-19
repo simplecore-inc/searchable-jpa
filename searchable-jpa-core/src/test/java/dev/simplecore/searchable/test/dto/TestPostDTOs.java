@@ -17,8 +17,11 @@ public class TestPostDTOs {
     @Setter
     public static class TestPostSearchDTO {
 
-        @SearchableField(entityField = "postId", operators = {EQUALS})
+        @SearchableField(entityField = "postId", operators = {EQUALS}, sortable = true)
         private Long id;
+        
+        @SearchableField(entityField = "postId", operators = {EQUALS}, sortable = true)
+        private Long postId;
 
         @SearchableField(entityField = "author.authorId", operators = {EQUALS})
         private Long authorId;
@@ -44,7 +47,7 @@ public class TestPostDTOs {
         private LocalDateTime updatedAt;
 
         @Size(max = 50, message = "Author name cannot exceed 50 characters")
-        @SearchableField(entityField = "author.name", operators = {EQUALS, CONTAINS, STARTS_WITH})
+        @SearchableField(entityField = "author.name", operators = {EQUALS, CONTAINS, STARTS_WITH}, sortable = true)
         private String authorName;
 
         @Size(max = 100, message = "Email address cannot exceed 100 characters")
@@ -58,6 +61,13 @@ public class TestPostDTOs {
         @Size(max = 50, message = "Comment author name cannot exceed 50 characters")
         @SearchableField(entityField = "comments.author.name", operators = {EQUALS, CONTAINS})
         private String commentAuthorName;
+
+        @SearchableField(entityField = "tags.tagId", operators = {EQUALS, IN})
+        private Long tagId;
+
+        @Size(max = 50, message = "Tag name cannot exceed 50 characters")
+        @SearchableField(entityField = "tags.name", operators = {EQUALS, CONTAINS, STARTS_WITH}, sortable = true)
+        private String tagName;
     }
 
     @Data

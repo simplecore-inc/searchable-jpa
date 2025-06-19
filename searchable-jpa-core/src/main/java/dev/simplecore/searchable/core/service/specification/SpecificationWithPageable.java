@@ -7,8 +7,6 @@ import org.springframework.data.jpa.domain.Specification;
 /**
  * Holds a JPA Specification and PageRequest together.
  * 
- * @deprecated This class uses OFFSET-based pagination which has performance issues with large datasets.
- * Use SearchableSpecificationBuilder.buildAndExecuteWithCursor() instead for cursor-based pagination.
  */
 @Data
 public class SpecificationWithPageable<T> {

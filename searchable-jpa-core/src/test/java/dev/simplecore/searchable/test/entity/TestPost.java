@@ -51,6 +51,15 @@ public class TestPost extends AuditingBaseEntity<Long> {
     @Builder.Default
     private List<TestComment> comments = new ArrayList<>();
 
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "test_post_tag",
+        joinColumns = @JoinColumn(name = "post_id"),
+        inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    @Builder.Default
+    private List<TestTag> tags = new ArrayList<>();
+
     @PrePersist
     void prePersist() {
         if (this.createdAt == null) {
@@ -74,6 +83,16 @@ public class TestPost extends AuditingBaseEntity<Long> {
     public void removeComment(TestComment comment) {
         comments.remove(comment);
         comment.setPost(null);
+    }
+
+    public void addTag(TestTag tag) {
+        tags.add(tag);
+        tag.getPosts().add(this);
+    }
+
+    public void removeTag(TestTag tag) {
+        tags.remove(tag);
+        tag.getPosts().remove(this);
     }
 
     //----------------------------------

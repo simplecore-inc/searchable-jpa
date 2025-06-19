@@ -1,15 +1,41 @@
 spring:
+  datasource:
+    # H2 in-memory database with optimizations for bulk operations
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL;LOCK_MODE=0
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
   jpa:
-    show-sql: true
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false  # Disable for performance tests
     properties:
       hibernate:
-        format_sql: true
-        use_sql_comments: true
+        format_sql: false
+        use_sql_comments: false
+        # Batch processing optimizations
+        jdbc:
+          batch_size: 1000
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+        # Connection pool settings
+        connection:
+          provider_disables_autocommit: true
+        # Query optimization
+        query:
+          in_clause_parameter_padding: true
+        # Cache settings
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
 
 logging:
   level:
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql: TRACE
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql: WARN
+    org.springframework.orm.jpa: WARN
 
 searchable:
   swagger:

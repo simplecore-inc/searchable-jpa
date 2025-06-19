@@ -80,6 +80,7 @@ GET /api/posts/search?title.contains=Spring&sort=createdAt,desc&page=0&size=10
 - [검색 연산자](docs/ko/search-operators.md) - 지원하는 모든 검색 연산자
 - [고급 기능](docs/ko/advanced-features.md) - 복잡한 검색 조건과 고급 기능
 - [커서 페이징](docs/ko/cursor-pagination.md) - 고성능 커서 기반 페이징
+- [관계형 DB와 커서 페이징](docs/ko/relationship-and-cursor-pagination.md) - JPA 관계 매핑과 N+1 문제 해결
 - [OpenAPI 통합](docs/ko/openapi-integration.md) - Swagger 문서 자동 생성
 - [API 레퍼런스](docs/ko/api-reference.md) - 전체 API 문서
 - [FAQ](docs/ko/faq.md) - 자주 묻는 질문과 문제 해결
@@ -90,6 +91,7 @@ GET /api/posts/search?title.contains=Spring&sort=createdAt,desc&page=0&size=10
 - [Search Operators](docs/en/search-operators.md) - All supported search operators
 - [Advanced Features](docs/en/advanced-features.md) - Complex search conditions and advanced features
 - [Cursor Pagination](docs/en/cursor-pagination.md) - High-performance cursor-based pagination
+- [Relationships & Cursor Pagination](docs/en/relationship-and-cursor-pagination.md) - JPA relationships and N+1 problem solutions
 - [OpenAPI Integration](docs/en/openapi-integration.md) - Automatic Swagger documentation
 - [API Reference](docs/en/api-reference.md) - Complete API documentation
 - [FAQ](docs/en/faq.md) - Frequently asked questions and troubleshooting
@@ -104,21 +106,6 @@ GET /api/posts/search?title.contains=Spring&sort=createdAt,desc&page=0&size=10
 ## 라이선스
 
 이 프로젝트는 [Apache License 2.0](LICENSE) 하에 배포됩니다.
-
-## 기여
-
-프로젝트에 기여하고 싶으시다면:
-
-1. 이 저장소를 포크하세요
-2. 기능 브랜치를 생성하세요 (`git checkout -b feature/amazing-feature`)
-3. 변경사항을 커밋하세요 (`git commit -m 'Add amazing feature'`)
-4. 브랜치에 푸시하세요 (`git push origin feature/amazing-feature`)
-5. Pull Request를 생성하세요
-
-## 지원
-
-- **이슈**: [GitHub Issues](https://github.com/simplecore-inc/searchable-jpa/issues)
-- **문서**: [Documentation](docs/ko/README.md)
 
 ---
 

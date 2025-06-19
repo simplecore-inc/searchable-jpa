@@ -55,9 +55,9 @@ public class DefaultSearchableService<T, ID> implements SearchableService<T> {
     @Override
     @NonNull
     public Page<T> findAllWithSearch(@NonNull SearchCondition<?> searchCondition) {
-        // Use cursor-based pagination for improved performance
+        // Use automatically optimized strategy for best performance and safety
         SearchableSpecificationBuilder<T> builder = createSpecificationBuilder(searchCondition);
-        return builder.buildAndExecuteWithCursor();
+        return builder.buildAndExecuteWithTwoPhaseOptimization();
     }
 
     @Override
@@ -67,9 +67,9 @@ public class DefaultSearchableService<T, ID> implements SearchableService<T> {
             throw new SearchableConfigurationException("Projection class must be an interface");
         }
 
-        // Use cursor-based pagination and apply projection
+        // Use automatically optimized strategy and apply projection
         SearchableSpecificationBuilder<T> builder = createSpecificationBuilder(searchCondition);
-        Page<T> entityPage = builder.buildAndExecuteWithCursor();
+        Page<T> entityPage = builder.buildAndExecuteWithTwoPhaseOptimization();
         
         return entityPage.map(entity -> projectionFactory.createProjection(projectionClass, entity));
     }
@@ -85,9 +85,9 @@ public class DefaultSearchableService<T, ID> implements SearchableService<T> {
     @Override
     @NonNull
     public Optional<T> findFirstWithSearch(@NonNull SearchCondition<?> searchCondition) {
-        // Use cursor-based pagination for first record
+        // Use automatically optimized strategy for first record
         SearchableSpecificationBuilder<T> builder = createSpecificationBuilder(searchCondition);
-        Page<T> firstPage = builder.buildAndExecuteWithCursor();
+        Page<T> firstPage = builder.buildAndExecuteWithTwoPhaseOptimization();
         return firstPage.getContent().stream().findFirst();
     }
 
