@@ -21,6 +21,7 @@ import javax.persistence.criteria.*;
 import javax.persistence.metamodel.Attribute;
 import javax.persistence.metamodel.EntityType;
 import javax.persistence.metamodel.ManagedType;
+import javax.persistence.metamodel.PluralAttribute;
 import javax.persistence.metamodel.SingularAttribute;
 import java.util.Collections;
 import java.util.HashSet;
@@ -33,6 +34,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 /**
  * Builds JPA Specification from SearchCondition.
@@ -208,10 +210,82 @@ public class SearchableSpecificationBuilder<T> {
      */
     public Page<T> buildAndExecuteWithCursor() {
         PageRequest originalPageRequest = buildPageRequest();
-        Specification<T> baseSpecification = buildSpecification();
         
-        CursorPageConverter<T> converter = new CursorPageConverter<>(specificationExecutor, entityClass);
-        return converter.convertToCursorBasedPage(originalPageRequest, baseSpecification);
+        // Try EntityGraph approach first for better relationship loading
+        try {
+            return buildAndExecuteWithCursorAndEntityGraph(originalPageRequest);
+        } catch (Exception e) {
+            log.warn("EntityGraph approach failed for cursor pagination, falling back to fetch joins: {}", e.getMessage());
+            // Fallback to traditional approach
+            Specification<T> baseSpecification = buildSpecification();
+            CursorPageConverter<T> converter = new CursorPageConverter<>(specificationExecutor, entityClass);
+            return converter.convertToCursorBasedPage(originalPageRequest, baseSpecification);
+        }
+    }
+
+    /**
+     * Executes cursor-based pagination with dynamic EntityGraph for optimal relationship loading.
+     */
+    private Page<T> buildAndExecuteWithCursorAndEntityGraph(PageRequest pageRequest) {
+        // Collect all relationship paths
+        Set<String> joinPaths = extractJoinPaths(condition.getNodes());
+        Set<String> allRelationshipPaths = new HashSet<>(joinPaths);
+        allRelationshipPaths.addAll(detectCommonToOneFields());
+        
+        if (allRelationshipPaths.isEmpty()) {
+            // No relationships to optimize, use traditional approach
+            throw new RuntimeException("No relationships detected for EntityGraph optimization");
+        }
+        
+        // Create criteria query manually to apply EntityGraph
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> query = cb.createQuery(entityClass);
+        Root<T> root = query.from(entityClass);
+        
+        // Apply only regular joins for filtering (no fetch joins)
+        if (!joinPaths.isEmpty()) {
+            applyRegularJoinsOnly(root, joinPaths);
+            query.distinct(true);
+        }
+
+        // Apply search conditions
+        JoinManager<T> joinManager = new JoinManager<>(entityManager, root);
+        PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
+        SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
+        Predicate predicate = createPredicates(root, query, cb, specBuilder);
+        if (predicate != null) {
+            query.where(predicate);
+        }
+        
+        // Apply sorting
+        if (pageRequest.getSort().isSorted()) {
+            List<Order> orders = new ArrayList<>();
+            for (Sort.Order order : pageRequest.getSort()) {
+                if (order.isAscending()) {
+                    orders.add(cb.asc(root.get(order.getProperty())));
+                } else {
+                    orders.add(cb.desc(root.get(order.getProperty())));
+                }
+            }
+            query.orderBy(orders);
+        }
+        
+        TypedQuery<T> typedQuery = entityManager.createQuery(query);
+        typedQuery.setFirstResult((int) pageRequest.getOffset());
+        typedQuery.setMaxResults(pageRequest.getPageSize());
+        
+        // Apply dynamic EntityGraph for relationship loading
+        applyDynamicEntityGraph(typedQuery, allRelationshipPaths);
+        
+        List<T> content = typedQuery.getResultList();
+        
+        // Calculate accurate total count
+        long totalElements = calculateAccurateTotalCount(allRelationshipPaths);
+        
+        log.info("EntityGraph cursor pagination: Retrieved {} entities with {} relationship paths", 
+                content.size(), allRelationshipPaths.size());
+        
+        return new PageImpl<>(content, pageRequest, totalElements);
     }
 
     /**
@@ -568,12 +642,28 @@ public class SearchableSpecificationBuilder<T> {
         if (!isCountQuery) {
             for (String field : finalToOneFields) {
                 try {
+                    // Handle nested paths with safety validation
+                    if (field.contains(".")) {
+                        if (isNestedPathSafeForJoin(root, field)) {
+                            log.debug("ApplyJoins: Attempting fetch join for validated nested path: {}", field);
+                            applyNestedFetchJoin(root, field);
+                            log.debug("Successfully applied fetch join for nested path: {}", field);
+                        } else {
+                            log.debug("ApplyJoins: Nested path '{}' failed safety validation, skipping", field);
+                        }
+                        continue;
+                    }
+                    
                     log.debug("ApplyJoins: Attempting fetch join for common ToOne field: {}", field);
                     root.fetch(field, JoinType.LEFT);
                     log.debug("Successfully applied fetch join for common ToOne field: {}", field);
                 } catch (Exception e) {
                     log.warn("Fetch join failed for common ToOne field '{}', using regular join as fallback: {}", field, e.getMessage());
-                    root.join(field, JoinType.LEFT);
+                    try {
+                        root.join(field, JoinType.LEFT);
+                    } catch (Exception joinException) {
+                        log.warn("Regular join also failed for field '{}': {}", field, joinException.getMessage());
+                    }
                 }
             }
         }
@@ -823,9 +913,70 @@ public class SearchableSpecificationBuilder<T> {
 
     /**
      * Phase 2: Fetch full entities by IDs with all relationships loaded.
-     * This ensures optimal loading of all required data.
+     * This ensures optimal loading of all required data using both fetch joins and EntityGraph.
      */
     private List<T> executePhaseTwoQuery(List<Object> entityIds, Set<String> allJoinPaths, Sort sort) {
+        // Collect all relationship paths for dynamic EntityGraph
+        Set<String> allRelationshipPaths = new HashSet<>(allJoinPaths);
+        allRelationshipPaths.addAll(detectCommonToOneFields());
+        
+        // Try EntityGraph approach first for better relationship loading
+        try {
+            List<T> entitiesWithEntityGraph = executePhaseTwoWithEntityGraph(entityIds, allRelationshipPaths, sort);
+            if (!entitiesWithEntityGraph.isEmpty()) {
+                log.info("Phase 2: Successfully used EntityGraph approach with {} paths", allRelationshipPaths.size());
+                return entitiesWithEntityGraph;
+            }
+        } catch (Exception e) {
+            log.warn("Phase 2: EntityGraph approach failed, falling back to fetch joins: {}", e.getMessage());
+        }
+        
+        // Fallback to fetch join approach
+        return executePhaseTwoWithFetchJoins(entityIds, allJoinPaths, sort);
+    }
+
+    /**
+     * Phase 2 implementation using dynamic EntityGraph for optimal relationship loading.
+     */
+    private List<T> executePhaseTwoWithEntityGraph(List<Object> entityIds, Set<String> relationshipPaths, Sort sort) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<T> query = cb.createQuery(entityClass);
+        Root<T> root = query.from(entityClass);
+        
+        // Filter by collected IDs
+        String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
+        Predicate idPredicate = root.get(primaryKeyField).in(entityIds);
+        query.where(idPredicate);
+        query.distinct(true);
+        
+        // Apply sorting
+        if (sort.isSorted()) {
+            List<Order> orders = new ArrayList<>();
+            for (Sort.Order order : sort) {
+                if (order.isAscending()) {
+                    orders.add(cb.asc(root.get(order.getProperty())));
+                } else {
+                    orders.add(cb.desc(root.get(order.getProperty())));
+                }
+            }
+            query.orderBy(orders);
+        }
+        
+        TypedQuery<T> typedQuery = entityManager.createQuery(query);
+        
+        // Apply dynamic EntityGraph for relationship loading
+        applyDynamicEntityGraph(typedQuery, relationshipPaths);
+        
+        List<T> entities = typedQuery.getResultList();
+        log.debug("Phase 2 EntityGraph: Retrieved {} entities", entities.size());
+        
+        return reorderEntitiesByIds(entities, entityIds);
+    }
+
+    /**
+     * Phase 2 fallback implementation using traditional fetch joins.
+     */
+    private List<T> executePhaseTwoWithFetchJoins(List<Object> entityIds, Set<String> allJoinPaths, Sort sort) {
         Specification<T> fullDataSpec = (root, query, cb) -> {
             // Apply SMART fetch joins to avoid MultipleBagFetchException
             applySmartFetchJoins(root, allJoinPaths);
@@ -1139,7 +1290,6 @@ public class SearchableSpecificationBuilder<T> {
 
         try {
             String[] parts = path.split("\\.");
-            From<?, ?> from = root;
             Class<?> currentType = root.getJavaType();
 
             for (String part : parts) {
@@ -1150,12 +1300,28 @@ public class SearchableSpecificationBuilder<T> {
                     return true;
                 }
                 
-                currentType = attribute.getJavaType();
+                // For nested paths, get the target entity type for next iteration
+                if (attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_ONE ||
+                    attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_ONE) {
+                    currentType = attribute.getJavaType();
+                } else if (attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_MANY ||
+                          attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_MANY) {
+                    // For collection attributes, get the element type
+                    if (attribute instanceof PluralAttribute) {
+                        currentType = ((PluralAttribute<?, ?, ?>) attribute).getElementType().getJavaType();
+                    }
+                } else {
+                    currentType = attribute.getJavaType();
+                }
             }
             
             return false;
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid path: " + path, e);
+            log.warn("Invalid path '{}' during ToMany analysis: {}", path, e.getMessage());
+            return false; // Assume ToOne if path is invalid
+        } catch (Exception e) {
+            log.warn("Unexpected error analyzing path '{}': {}", path, e.getMessage());
+            return false;
         }
     }
 
@@ -1172,7 +1338,7 @@ public class SearchableSpecificationBuilder<T> {
     /**
      * Detect commonly accessed ToOne relationships to prevent N+1 problems.
      * This analyzes the entity class to find ManyToOne and OneToOne fields
-     * that are likely to be accessed frequently.
+     * that are likely to be accessed frequently, including nested relationships.
      */
     private Set<String> detectCommonToOneFields() {
         Set<String> commonFields = new HashSet<>();
@@ -1192,6 +1358,14 @@ public class SearchableSpecificationBuilder<T> {
                              attr.getPersistentAttributeType(), attr.getName());
                 }
             });
+            
+            // ENHANCEMENT: Detect nested ToOne relationships in ManyToMany related entities
+            try {
+                Set<String> nestedToOneFields = detectNestedToOneRelationships();
+                commonFields.addAll(nestedToOneFields);
+            } catch (Exception e) {
+                log.warn("Failed to detect nested ToOne relationships, continuing without them: {}", e.getMessage());
+            }
             
             log.info("DetectCommonToOneFields: Detected {} ToOne relationships for automatic fetch joining: {}", 
                      commonFields.size(), commonFields);
@@ -1214,6 +1388,110 @@ public class SearchableSpecificationBuilder<T> {
         }
         
         return commonFields;
+    }
+
+    /**
+     * Detect nested ToOne relationships in ManyToMany and OneToMany related entities.
+     * This prevents N+1 problems in scenarios like UserAccount.organizations.parent.
+     */
+    private Set<String> detectNestedToOneRelationships() {
+        Set<String> nestedToOneFields = new HashSet<>();
+        
+        try {
+            log.debug("DetectNestedToOneRelationships: Analyzing nested relationships for entity: {}", entityClass.getSimpleName());
+            
+            EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
+            
+            // Analyze ManyToMany relationships
+            entityType.getPluralAttributes().forEach(attr -> {
+                if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_MANY) {
+                    String relationshipName = attr.getName();
+                    Class<?> targetEntityClass = attr.getElementType().getJavaType();
+                    
+                    log.debug("DetectNestedToOneRelationships: Analyzing ManyToMany relationship '{}' with target entity: {}", 
+                             relationshipName, targetEntityClass.getSimpleName());
+                    
+                    // Find ToOne relationships in the target entity
+                    Set<String> targetToOneFields = detectToOneFieldsForEntity(targetEntityClass);
+                    
+                    // Create nested paths (e.g., "organizations.parent")
+                    for (String targetToOneField : targetToOneFields) {
+                        String nestedPath = relationshipName + "." + targetToOneField;
+                        nestedToOneFields.add(nestedPath);
+                        log.debug("DetectNestedToOneRelationships: Found nested ToOne path: {}", nestedPath);
+                    }
+                }
+            });
+            
+            // Analyze OneToMany relationships
+            entityType.getPluralAttributes().forEach(attr -> {
+                if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_MANY) {
+                    String relationshipName = attr.getName();
+                    Class<?> targetEntityClass = attr.getElementType().getJavaType();
+                    
+                    log.debug("DetectNestedToOneRelationships: Analyzing OneToMany relationship '{}' with target entity: {}", 
+                             relationshipName, targetEntityClass.getSimpleName());
+                    
+                    // Find ToOne relationships in the target entity
+                    Set<String> targetToOneFields = detectToOneFieldsForEntity(targetEntityClass);
+                    
+                    // Create nested paths (e.g., "comments.author")
+                    for (String targetToOneField : targetToOneFields) {
+                        String nestedPath = relationshipName + "." + targetToOneField;
+                        nestedToOneFields.add(nestedPath);
+                        log.debug("DetectNestedToOneRelationships: Found nested ToOne path: {}", nestedPath);
+                    }
+                }
+            });
+            
+            if (!nestedToOneFields.isEmpty()) {
+                log.info("DetectNestedToOneRelationships: Detected {} nested ToOne relationships: {}", 
+                         nestedToOneFields.size(), nestedToOneFields);
+            }
+            
+        } catch (Exception e) {
+            log.warn("DetectNestedToOneRelationships: Failed to analyze nested relationships: {}", e.getMessage());
+        }
+        
+        return nestedToOneFields;
+    }
+
+    /**
+     * Detect ToOne relationships for a specific entity class.
+     * This is used to analyze target entities in ManyToMany/OneToMany relationships.
+     */
+    private Set<String> detectToOneFieldsForEntity(Class<?> entityClass) {
+        Set<String> toOneFields = new HashSet<>();
+        
+        try {
+            EntityType<?> entityType = entityManager.getMetamodel().entity(entityClass);
+            
+            entityType.getSingularAttributes().forEach(attr -> {
+                if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_ONE ||
+                    attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_ONE) {
+                    toOneFields.add(attr.getName());
+                    log.debug("DetectToOneFieldsForEntity: Found {} relationship '{}' in entity: {}", 
+                             attr.getPersistentAttributeType(), attr.getName(), entityClass.getSimpleName());
+                }
+            });
+            
+        } catch (Exception e) {
+            log.debug("DetectToOneFieldsForEntity: Metamodel analysis failed for entity {}, falling back to reflection: {}", 
+                     entityClass.getSimpleName(), e.getMessage());
+            
+            // Fallback to reflection
+            Field[] fields = entityClass.getDeclaredFields();
+            for (Field field : fields) {
+                if (field.isAnnotationPresent(javax.persistence.ManyToOne.class) ||
+                    field.isAnnotationPresent(javax.persistence.OneToOne.class)) {
+                    toOneFields.add(field.getName());
+                    log.debug("DetectToOneFieldsForEntity: Found ToOne field '{}' via reflection in entity: {}", 
+                             field.getName(), entityClass.getSimpleName());
+                }
+            }
+        }
+        
+        return toOneFields;
     }
 
     /**
@@ -1274,6 +1552,274 @@ public class SearchableSpecificationBuilder<T> {
             log.info("ConfigureBatchLoadingForSession: Batch loading is already enabled by Hibernate");
             log.info("ConfigureBatchLoadingForSession: For additional optimization, consider adding @BatchSize annotation to your ManyToMany fields");
             log.info("ConfigureBatchLoadingForSession: Example: @BatchSize(size = 25) @ManyToMany private Set<Organization> organizations;");
+        }
+    }
+
+    /**
+     * Validates if a nested path is safe for JOIN operations.
+     * Checks for valid entity relationships and prevents circular references.
+     */
+    private boolean isNestedPathSafeForJoin(Root<T> root, String nestedPath) {
+        if (nestedPath == null || nestedPath.trim().isEmpty()) {
+            return false;
+        }
+        
+        try {
+            String[] pathParts = nestedPath.split("\\.");
+            if (pathParts.length > 3) {
+                // Limit nesting depth to prevent performance issues
+                log.debug("Nested path '{}' exceeds maximum depth (3), skipping for safety", nestedPath);
+                return false;
+            }
+            
+            Class<?> currentType = root.getJavaType();
+            
+            for (String part : pathParts) {
+                EntityType<?> entityType = entityManager.getMetamodel().entity(currentType);
+                Attribute<?, ?> attribute = entityType.getAttribute(part);
+                
+                // Only allow ToOne relationships in nested paths for safety
+                if (attribute.getPersistentAttributeType() != Attribute.PersistentAttributeType.MANY_TO_ONE &&
+                    attribute.getPersistentAttributeType() != Attribute.PersistentAttributeType.ONE_TO_ONE) {
+                    log.debug("Nested path '{}' contains ToMany relationship at '{}', not safe for fetch join", nestedPath, part);
+                    return false;
+                }
+                
+                currentType = attribute.getJavaType();
+                
+                // Prevent circular references
+                if (currentType.equals(root.getJavaType())) {
+                    log.debug("Nested path '{}' contains circular reference, not safe for fetch join", nestedPath);
+                    return false;
+                }
+            }
+            
+            log.debug("Nested path '{}' passed safety validation", nestedPath);
+            return true;
+            
+        } catch (Exception e) {
+            log.debug("Safety validation failed for nested path '{}': {}", nestedPath, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Applies fetch join for nested paths by building the path step by step.
+     */
+    private void applyNestedFetchJoin(Root<T> root, String nestedPath) {
+        try {
+            String[] pathParts = nestedPath.split("\\.");
+            From<?, ?> currentFrom = root;
+            
+            for (String part : pathParts) {
+                // Check if this part is already fetched
+                boolean alreadyFetched = currentFrom.getFetches().stream()
+                        .anyMatch(fetch -> fetch.getAttribute().getName().equals(part));
+                
+                if (!alreadyFetched) {
+                    Fetch<?, ?> fetch = currentFrom.fetch(part, JoinType.LEFT);
+                    currentFrom = (From<?, ?>) fetch;
+                    log.debug("Applied fetch join for path part: {}", part);
+                } else {
+                    // Find existing fetch to continue the path
+                    currentFrom = (From<?, ?>) currentFrom.getFetches().stream()
+                            .filter(fetch -> fetch.getAttribute().getName().equals(part))
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalStateException("Expected fetch not found"));
+                    log.debug("Reusing existing fetch for path part: {}", part);
+                }
+            }
+            
+        } catch (Exception e) {
+            log.warn("Failed to apply nested fetch join for path '{}': {}", nestedPath, e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Creates dynamic EntityGraph with ToOne relationships only.
+     * ToMany relationships are excluded to prevent HHH000104 warning and memory pagination.
+     */
+    private javax.persistence.EntityGraph<T> createDynamicEntityGraph(Set<String> relationshipPaths) {
+        try {
+            javax.persistence.EntityGraph<T> entityGraph = entityManager.createEntityGraph(entityClass);
+            Set<String> toOneOnlyPaths = new HashSet<>();
+            
+            for (String path : relationshipPaths) {
+                try {
+                    // Only include ToOne relationships in EntityGraph
+                    if (!isToManyPathForEntityGraph(path)) {
+                        if (path.contains(".")) {
+                            // Handle nested paths in EntityGraph
+                            addNestedPathToEntityGraph(entityGraph, path);
+                        } else {
+                            // Simple path
+                            entityGraph.addAttributeNodes(path);
+                            log.debug("Added ToOne attribute '{}' to EntityGraph", path);
+                        }
+                        toOneOnlyPaths.add(path);
+                    } else {
+                        log.debug("Skipped ToMany path '{}' from EntityGraph to prevent memory pagination", path);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to add path '{}' to EntityGraph: {}", path, e.getMessage());
+                }
+            }
+            
+            log.info("Created dynamic EntityGraph with {} ToOne relationship paths (excluded {} ToMany paths)", 
+                    toOneOnlyPaths.size(), relationshipPaths.size() - toOneOnlyPaths.size());
+            return entityGraph;
+            
+        } catch (Exception e) {
+            log.warn("Failed to create dynamic EntityGraph: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Adds nested paths to EntityGraph using subgraphs.
+     */
+    private void addNestedPathToEntityGraph(javax.persistence.EntityGraph<T> entityGraph, String nestedPath) {
+        String[] pathParts = nestedPath.split("\\.");
+        
+        if (pathParts.length < 2) {
+            entityGraph.addAttributeNodes(nestedPath);
+            return;
+        }
+        
+        // Create subgraph for the first part
+        String firstPart = pathParts[0];
+        javax.persistence.Subgraph<?> subgraph;
+        
+        try {
+            subgraph = entityGraph.addSubgraph(firstPart);
+        } catch (Exception e) {
+            // If subgraph creation fails, try adding as simple attribute
+            entityGraph.addAttributeNodes(firstPart);
+            log.debug("Added '{}' as simple attribute instead of subgraph", firstPart);
+            return;
+        }
+        
+        // Build remaining path
+        String remainingPath = String.join(".", Arrays.copyOfRange(pathParts, 1, pathParts.length));
+        
+        if (remainingPath.contains(".")) {
+            // Still nested, create another subgraph
+            addNestedPathToSubgraph(subgraph, remainingPath);
+        } else {
+            // Final part, add as attribute
+            subgraph.addAttributeNodes(remainingPath);
+            log.debug("Added nested path '{}' to EntityGraph", nestedPath);
+        }
+    }
+
+    /**
+     * Recursively adds nested paths to subgraphs.
+     */
+    private void addNestedPathToSubgraph(javax.persistence.Subgraph<?> parentSubgraph, String nestedPath) {
+        String[] pathParts = nestedPath.split("\\.");
+        
+        if (pathParts.length == 1) {
+            parentSubgraph.addAttributeNodes(nestedPath);
+            return;
+        }
+        
+        String firstPart = pathParts[0];
+        String remainingPath = String.join(".", Arrays.copyOfRange(pathParts, 1, pathParts.length));
+        
+        try {
+            javax.persistence.Subgraph<?> subgraph = parentSubgraph.addSubgraph(firstPart);
+            addNestedPathToSubgraph(subgraph, remainingPath);
+        } catch (Exception e) {
+            // Fallback: add as simple attribute
+            parentSubgraph.addAttributeNodes(firstPart);
+            log.debug("Added '{}' as simple attribute in subgraph", firstPart);
+        }
+    }
+
+    /**
+     * Applies dynamic EntityGraph to a query for optimized relationship loading.
+     */
+    private void applyDynamicEntityGraph(TypedQuery<T> query, Set<String> relationshipPaths) {
+        if (relationshipPaths.isEmpty()) {
+            return;
+        }
+        
+        try {
+            javax.persistence.EntityGraph<T> entityGraph = createDynamicEntityGraph(relationshipPaths);
+            if (entityGraph != null) {
+                query.setHint("javax.persistence.fetchgraph", entityGraph);
+                log.info("Applied dynamic EntityGraph with {} paths to query", relationshipPaths.size());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to apply dynamic EntityGraph: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Checks if a path represents a ToMany relationship without requiring a Root parameter.
+     * This is specifically for EntityGraph creation where Root is not available.
+     */
+    private boolean isToManyPathForEntityGraph(String path) {
+        if (path == null || path.trim().isEmpty()) {
+            return false;
+        }
+
+        try {
+            String[] parts = path.split("\\.");
+            Class<?> currentType = entityClass;
+
+            for (String part : parts) {
+                EntityType<?> entityType = entityManager.getMetamodel().entity(currentType);
+                Attribute<?, ?> attribute = entityType.getAttribute(part);
+                
+                if (attribute.isCollection()) {
+                    return true;
+                }
+                
+                currentType = attribute.getJavaType();
+            }
+            
+            return false;
+        } catch (Exception e) {
+            log.debug("Error analyzing path '{}' for ToMany check: {}", path, e.getMessage());
+            // If we can't determine, assume it's ToMany to be safe
+            return true;
+        }
+    }
+
+    /**
+     * Calculate accurate total count for EntityGraph queries.
+     * This uses a separate count query to avoid issues with EntityGraph and DISTINCT.
+     */
+    private long calculateAccurateTotalCount(Set<String> relationshipPaths) {
+        try {
+            // Create count query specification
+            Specification<T> countSpec = (root, query, cb) -> {
+                // Apply only regular joins for count query (no fetch joins)
+                Set<String> joinPaths = extractJoinPaths(condition.getNodes());
+                if (!joinPaths.isEmpty()) {
+                    applyRegularJoinsOnly(root, joinPaths);
+                    query.distinct(true);
+                }
+
+                JoinManager<T> joinManager = new JoinManager<>(entityManager, root);
+                PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
+                SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
+
+                return createPredicates(root, query, cb, specBuilder);
+            };
+           
+            // Execute count query
+            long count = specificationExecutor.count(countSpec);
+            log.debug("calculateAccurateTotalCount: Found {} total elements", count);
+            return count;
+           
+        } catch (Exception e) {
+            log.warn("Failed to calculate accurate total count, falling back to estimation: {}", e.getMessage());
+            // Fallback to estimation
+            PageRequest pageRequest = buildPageRequest();
+            return pageRequest.getOffset() + relationshipPaths.size(); // Simple fallback
         }
     }
 }
