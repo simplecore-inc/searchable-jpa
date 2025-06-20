@@ -10,31 +10,19 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import javax.persistence.EntityManager;
-import javax.persistence.TypedQuery;
-import javax.persistence.criteria.*;
-import javax.persistence.metamodel.Attribute;
-import javax.persistence.metamodel.EntityType;
-import javax.persistence.metamodel.ManagedType;
-import javax.persistence.metamodel.PluralAttribute;
-import javax.persistence.metamodel.SingularAttribute;
-import java.util.Collections;
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Predicate;
+import javax.persistence.criteria.Root;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.ArrayList;
-import java.util.Arrays;
 
 /**
  * Builds JPA Specification from SearchCondition.
@@ -50,6 +38,10 @@ public class SearchableSpecificationBuilder<T> {
     private final EntityManager entityManager;
     private final Class<T> entityClass;
     private final JpaSpecificationExecutor<T> specificationExecutor;
+    private final RelationshipAnalyzer<T> relationshipAnalyzer;
+    private final JoinStrategyManager<T> joinStrategyManager;
+    private final TwoPhaseQueryExecutor<T> twoPhaseQueryExecutor;
+    private final EntityGraphManager<T> entityGraphManager;
 
     public SearchableSpecificationBuilder(@NonNull SearchCondition<?> condition,
                                           @NonNull EntityManager entityManager,
@@ -59,6 +51,10 @@ public class SearchableSpecificationBuilder<T> {
         this.entityManager = entityManager;
         this.entityClass = entityClass;
         this.specificationExecutor = specificationExecutor;
+        this.relationshipAnalyzer = new RelationshipAnalyzer<>(entityManager, entityClass);
+        this.joinStrategyManager = new JoinStrategyManager<>(entityManager, entityClass);
+        this.twoPhaseQueryExecutor = new TwoPhaseQueryExecutor<>(condition, entityManager, entityClass, specificationExecutor);
+        this.entityGraphManager = new EntityGraphManager<>(entityManager, entityClass);
     }
 
     public static <T> SearchableSpecificationBuilder<T> of(
@@ -99,36 +95,36 @@ public class SearchableSpecificationBuilder<T> {
     /**
      * Ensures unique sorting by adding primary key field if not already present.
      * This is crucial for cursor-based pagination to work correctly.
-     * 
+     *
      * @param sortOrders the existing sort orders
      * @return sort orders with primary key field added if necessary
      */
     private List<Sort.Order> ensureUniqueSorting(List<Sort.Order> sortOrders) {
         try {
             String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-            
+
             if (primaryKeyField != null) {
                 // Check if primary key field is already in sort orders
                 boolean hasPrimaryKey = sortOrders.stream()
                         .anyMatch(order -> primaryKeyField.equals(order.getProperty()));
-                
+
                 if (!hasPrimaryKey) {
                     // Add primary key field as the last sort criterion in ascending order
                     sortOrders = new java.util.ArrayList<>(sortOrders);
                     sortOrders.add(Sort.Order.asc(primaryKeyField));
-                    
-                    log.debug("Automatically added primary key field '{}' to sort criteria for cursor-based pagination uniqueness", 
-                             primaryKeyField);
+
+                    log.debug("Automatically added primary key field '{}' to sort criteria for cursor-based pagination uniqueness",
+                            primaryKeyField);
                 }
             } else {
-                log.warn("Could not determine primary key field for entity {}. Cursor-based pagination may not work correctly with duplicate sort values.", 
+                log.warn("Could not determine primary key field for entity {}. Cursor-based pagination may not work correctly with duplicate sort values.",
                         entityClass.getSimpleName());
             }
-            
+
             return sortOrders;
-            
+
         } catch (Exception e) {
-            log.warn("Failed to ensure unique sorting for entity {}: {}. Using original sort orders.", 
+            log.warn("Failed to ensure unique sorting for entity {}: {}. Using original sort orders.",
                     entityClass.getSimpleName(), e.getMessage());
             return sortOrders;
         }
@@ -189,9 +185,9 @@ public class SearchableSpecificationBuilder<T> {
     /**
      * Builds SpecificationWithPageable from SearchCondition.
      * Thread-safe method that creates new instance each time.
-     * 
-     * @deprecated Use buildAndExecuteWithCursor() instead for cursor-based pagination
+     *
      * @return SpecificationWithPageable containing specification and page request
+     * @deprecated Use buildAndExecuteWithCursor() instead for cursor-based pagination
      */
     @Deprecated
     public SpecificationWithPageable<T> build() {
@@ -210,168 +206,10 @@ public class SearchableSpecificationBuilder<T> {
      */
     public Page<T> buildAndExecuteWithCursor() {
         PageRequest originalPageRequest = buildPageRequest();
-        
-        // Try EntityGraph approach first for better relationship loading
-        try {
-            return buildAndExecuteWithCursorAndEntityGraph(originalPageRequest);
-        } catch (Exception e) {
-            log.warn("EntityGraph approach failed for cursor pagination, falling back to fetch joins: {}", e.getMessage());
-            // Fallback to traditional approach
-            Specification<T> baseSpecification = buildSpecification();
-            CursorPageConverter<T> converter = new CursorPageConverter<>(specificationExecutor, entityClass);
-            return converter.convertToCursorBasedPage(originalPageRequest, baseSpecification);
-        }
-    }
 
-    /**
-     * Executes cursor-based pagination with dynamic EntityGraph for optimal relationship loading.
-     */
-    private Page<T> buildAndExecuteWithCursorAndEntityGraph(PageRequest pageRequest) {
-        // Collect all relationship paths
-        Set<String> joinPaths = extractJoinPaths(condition.getNodes());
-        Set<String> allRelationshipPaths = new HashSet<>(joinPaths);
-        allRelationshipPaths.addAll(detectCommonToOneFields());
-        
-        if (allRelationshipPaths.isEmpty()) {
-            // No relationships to optimize, use traditional approach
-            throw new RuntimeException("No relationships detected for EntityGraph optimization");
-        }
-        
-        // Create criteria query manually to apply EntityGraph
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<T> query = cb.createQuery(entityClass);
-        Root<T> root = query.from(entityClass);
-        
-        // Apply only regular joins for filtering (no fetch joins)
-        if (!joinPaths.isEmpty()) {
-            applyRegularJoinsOnly(root, joinPaths);
-            query.distinct(true);
-        }
-
-        // Apply search conditions
-        JoinManager<T> joinManager = new JoinManager<>(entityManager, root);
-        PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
-        SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
-        Predicate predicate = createPredicates(root, query, cb, specBuilder);
-        if (predicate != null) {
-            query.where(predicate);
-        }
-        
-        // Apply sorting
-        if (pageRequest.getSort().isSorted()) {
-            List<Order> orders = new ArrayList<>();
-            for (Sort.Order order : pageRequest.getSort()) {
-                if (order.isAscending()) {
-                    orders.add(cb.asc(root.get(order.getProperty())));
-                } else {
-                    orders.add(cb.desc(root.get(order.getProperty())));
-                }
-            }
-            query.orderBy(orders);
-        }
-        
-        TypedQuery<T> typedQuery = entityManager.createQuery(query);
-        typedQuery.setFirstResult((int) pageRequest.getOffset());
-        typedQuery.setMaxResults(pageRequest.getPageSize());
-        
-        // Apply dynamic EntityGraph for relationship loading
-        applyDynamicEntityGraph(typedQuery, allRelationshipPaths);
-        
-        List<T> content = typedQuery.getResultList();
-        
-        // Calculate accurate total count
-        long totalElements = calculateAccurateTotalCount(allRelationshipPaths);
-        
-        log.info("EntityGraph cursor pagination: Retrieved {} entities with {} relationship paths", 
-                content.size(), allRelationshipPaths.size());
-        
-        return new PageImpl<>(content, pageRequest, totalElements);
-    }
-
-    /**
-     * Executes cursor-based pagination with two-phase query for ToMany relationships.
-     * This method avoids HHH000104 warning by separating ID query from data fetching.
-     *
-     * @return Page object with cursor-based pagination results
-     */
-    public Page<T> buildAndExecuteWithCursorTwoPhase() {
-        PageRequest originalPageRequest = buildPageRequest();
-        
-        // Check if we have ToMany relationships that would cause memory pagination
-        Set<String> joinPaths = extractJoinPaths(condition.getNodes());
-        boolean hasMultipleToMany = countToManyPaths(joinPaths) > 1;
-        
-        if (hasMultipleToMany) {
-            return executeTwoPhaseQuery(originalPageRequest);
-        } else {
-            // Use normal cursor-based pagination for simple cases
-            Specification<T> baseSpecification = buildSpecification();
-            CursorPageConverter<T> converter = new CursorPageConverter<>(specificationExecutor, entityClass);
-            return converter.convertToCursorBasedPage(originalPageRequest, baseSpecification);
-        }
-    }
-
-    /**
-     * Executes two-phase query to avoid memory pagination issues.
-     */
-    private Page<T> executeTwoPhaseQuery(PageRequest originalPageRequest) {
-        // Phase 1: Get IDs only with proper database-level pagination
-        List<Object> ids = getIdsWithCursorPagination(originalPageRequest);
-        
-        if (ids.isEmpty()) {
-            return new PageImpl<>(Collections.emptyList(), originalPageRequest, 0);
-        }
-        
-        // Phase 2: Fetch full entities by IDs with all ToMany relationships
-        List<T> entities = fetchEntitiesByIds(ids);
-        
-        // Calculate total elements for page metadata
-        long totalElements = calculateTotalElements();
-        
-        return new PageImpl<>(entities, originalPageRequest, totalElements);
-    }
-
-    /**
-     * Phase 1: Get entity IDs with cursor-based pagination (no ToMany fetch joins).
-     */
-    private List<Object> getIdsWithCursorPagination(PageRequest pageRequest) {
-        // Build specification without fetch joins (only regular joins for filtering)
-        Specification<T> idQuerySpec = (root, query, cb) -> {
-            // Set result type to ID only
-            String primaryKeyField = getPrimaryKeyFieldName();
-            query.select(root.get(primaryKeyField));
-            
-            // Apply regular joins for filtering (no fetch joins)
-            Set<String> joinPaths = extractJoinPaths(condition.getNodes());
-            if (!joinPaths.isEmpty()) {
-                applyRegularJoinsOnly(root, joinPaths);
-                query.distinct(true);
-            }
-
-            JoinManager<T> joinManager = new JoinManager<>(entityManager, root);
-            PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
-            SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
-
-            return createPredicates(root, query, cb, specBuilder);
-        };
-        
-        // Use cursor-based pagination for ID query
+        Specification<T> baseSpecification = buildSpecification();
         CursorPageConverter<T> converter = new CursorPageConverter<>(specificationExecutor, entityClass);
-        Page<T> idPage = converter.convertToCursorBasedPage(pageRequest, idQuerySpec);
-        
-        // Extract IDs from the result (this will be a list of ID objects)
-        return idPage.getContent().stream()
-                .map(entity -> {
-                    try {
-                        String primaryKeyField = getPrimaryKeyFieldName();
-                        Field field = entityClass.getDeclaredField(primaryKeyField);
-                        field.setAccessible(true);
-                        return field.get(entity);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Failed to extract ID from entity", e);
-                    }
-                })
-                .collect(Collectors.toList());
+        return converter.convertToCursorBasedPage(originalPageRequest, baseSpecification);
     }
 
     /**
@@ -383,7 +221,7 @@ public class SearchableSpecificationBuilder<T> {
     public Page<T> buildAndExecuteWithCursorOptimized() {
         PageRequest originalPageRequest = buildPageRequest();
         Specification<T> baseSpecification = buildSpecification();
-        
+
         CursorPageConverter<T> converter = new CursorPageConverter<>(specificationExecutor, entityClass);
         return converter.convertToCursorBasedPageWithoutCount(originalPageRequest, baseSpecification);
     }
@@ -401,144 +239,28 @@ public class SearchableSpecificationBuilder<T> {
         );
     }
 
-    /**
-     * Phase 2: Fetch full entities by IDs with all relationships.
-     */
-    private List<T> fetchEntitiesByIds(List<Object> ids) {
-        String primaryKeyField = getPrimaryKeyFieldName();
-        
-        // Build specification to fetch by IDs with all ToMany relationships
-        Specification<T> fetchSpec = (root, query, cb) -> {
-            // Apply all fetch joins (ToOne + all ToMany)
-            Set<String> joinPaths = extractJoinPaths(condition.getNodes());
-            if (!joinPaths.isEmpty()) {
-                applyAllFetchJoins(root, joinPaths);
-                query.distinct(true);
-            }
-            
-            // Filter by IDs
-            return root.get(primaryKeyField).in(ids);
-        };
-        
-        // Fetch entities and maintain original order
-        List<T> entities = specificationExecutor.findAll(fetchSpec);
-        
-        // Sort entities according to the original ID order
-        Map<Object, T> entityMap = entities.stream()
-                .collect(Collectors.toMap(
-                    entity -> {
-                        try {
-                            Field field = entityClass.getDeclaredField(primaryKeyField);
-                            field.setAccessible(true);
-                            return field.get(entity);
-                        } catch (Exception e) {
-                            throw new RuntimeException("Failed to extract ID", e);
-                        }
-                    },
-                    entity -> entity
-                ));
-        
-        return ids.stream()
-                .map(entityMap::get)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Apply only regular joins (no fetch joins) for filtering.
-     */
-    private void applyRegularJoinsOnly(Root<T> root, Set<String> paths) {
-        Set<Join<T, ?>> joins = (Set<Join<T, ?>>) root.getJoins();
-        joins.clear();
-
-        for (String path : paths) {
-            root.join(path, JoinType.LEFT);
-        }
-    }
-
-    /**
-     * Apply fetch joins for all relationships.
-     */
-    private void applyAllFetchJoins(Root<T> root, Set<String> paths) {
-        Set<Join<T, ?>> joins = (Set<Join<T, ?>>) root.getJoins();
-        joins.clear();
-
-        for (String path : paths) {
-            root.fetch(path, JoinType.LEFT);
-        }
-    }
-
-    /**
-     * Count the number of ToMany relationships.
-     */
-    private int countToManyPaths(Set<String> paths) {
-        return (int) paths.stream()
-                .filter(path -> isToManyPath(null, path))
-                .count();
-    }
-
-    /**
-     * Get primary key field name.
-     */
-    private String getPrimaryKeyFieldName() {
-        try {
-            EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
-            SingularAttribute<? super T, ?> idAttribute = entityType.getId(entityType.getIdType().getJavaType());
-            return idAttribute.getName();
-        } catch (Exception e) {
-            // Fallback to reflection
-            for (Field field : entityClass.getDeclaredFields()) {
-                if (field.isAnnotationPresent(javax.persistence.Id.class)) {
-                    return field.getName();
-                }
-            }
-            return "id"; // Default fallback
-        }
-    }
-
-    /**
-     * Calculate total elements for page metadata.
-     */
-    private long calculateTotalElements() {
-        Specification<T> countSpec = (root, query, cb) -> {
-            // Apply regular joins for filtering (no fetch joins for count)
-            Set<String> joinPaths = extractJoinPaths(condition.getNodes());
-            if (!joinPaths.isEmpty()) {
-                applyRegularJoinsOnly(root, joinPaths);
-                query.distinct(true);
-            }
-
-            JoinManager<T> joinManager = new JoinManager<>(entityManager, root);
-            PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
-            SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
-
-            return createPredicates(root, query, cb, specBuilder);
-        };
-        
-        return specificationExecutor.count(countSpec);
-    }
 
     private Specification<T> buildSpecification() {
         return (root, query, cb) -> {
             boolean isCountQuery = query.getResultType().equals(Long.class);
-            
+
             // Always extract join paths from conditions (needed for filtering)
             Set<String> conditionJoinPaths = extractJoinPaths(condition.getNodes());
-            
-            log.debug("Applying joins - condition paths: {}, query type: {}, isCountQuery: {}", 
-                     conditionJoinPaths, query.getResultType(), isCountQuery);
-            
+
+            log.debug("Applying joins - condition paths: {}, query type: {}, isCountQuery: {}",
+                    conditionJoinPaths, query.getResultType(), isCountQuery);
+
             // For non-count queries, add common ToOne fields to prevent N+1 problems
             Set<String> allJoinPaths = new HashSet<>(conditionJoinPaths);
             if (!isCountQuery) {
-                Set<String> commonToOneFields = detectCommonToOneFields();
+                Set<String> commonToOneFields = relationshipAnalyzer.detectCommonToOneFields();
                 log.debug("Adding common ToOne fields for non-count query: {}", commonToOneFields);
                 allJoinPaths.addAll(commonToOneFields);
             }
-            
+
             // Apply joins (with different strategy for count vs select queries)
-            applyJoins(root, allJoinPaths, isCountQuery);
-            
+            joinStrategyManager.applyJoins(root, allJoinPaths, isCountQuery);
+
             // Apply distinct only if we have actual joins
             if (!root.getJoins().isEmpty()) {
                 query.distinct(true);
@@ -555,7 +277,7 @@ public class SearchableSpecificationBuilder<T> {
     private Set<String> extractJoinPaths(List<Node> nodes) {
         Set<String> joinPaths = new HashSet<>();
         if (nodes == null) return joinPaths;
-        
+
         for (Node node : nodes) {
             if (node instanceof SearchCondition.Condition) {
                 SearchCondition.Condition condition = (SearchCondition.Condition) node;
@@ -563,7 +285,7 @@ public class SearchableSpecificationBuilder<T> {
                 if (entityField != null && !entityField.isEmpty()) {
                     String[] pathParts = entityField.split("\\.");
                     StringBuilder path = new StringBuilder();
-                    
+
                     // Add all intermediate paths for nested joins
                     for (int i = 0; i < pathParts.length - 1; i++) {
                         if (path.length() > 0) {
@@ -577,96 +299,8 @@ public class SearchableSpecificationBuilder<T> {
                 joinPaths.addAll(extractJoinPaths(node.getNodes()));
             }
         }
-        
+
         return joinPaths;
-    }
-
-    /**
-     * Apply improved join strategy for ToMany relationships.
-     * Uses different strategies based on the number of ToMany relationships.
-     */
-    private void applyJoins(Root<T> root, Set<String> paths, boolean isCountQuery) {
-        Set<Join<T, ?>> joins = (Set<Join<T, ?>>) root.getJoins();
-        joins.clear();
-
-        // Separate ToOne and ToMany paths
-        Set<String> toOnePaths = new HashSet<>();
-        Set<String> toManyPaths = new HashSet<>();
-        
-        for (String path : paths) {
-            if (isToManyPath(root, path)) {
-                toManyPaths.add(path);
-            } else {
-                toOnePaths.add(path);
-            }
-        }
-        
-        log.debug("Detected ToOne paths: {}", toOnePaths);
-        log.debug("Detected ToMany paths: {}", toManyPaths);
-        
-        // Apply ToOne joins
-        for (String path : toOnePaths) {
-            try {
-                if (isCountQuery) {
-                    // For count queries, use regular join to avoid fetch join errors
-                    log.debug("ApplyJoins: Using regular join for ToOne path (count query): {}", path);
-                    root.join(path, JoinType.LEFT);
-                } else {
-                    // For select queries, use fetch join to prevent N+1
-                    log.debug("ApplyJoins: Using fetch join for ToOne path (select query): {}", path);
-                    root.fetch(path, JoinType.LEFT);
-                }
-                log.debug("Successfully applied join for ToOne path: {}", path);
-            } catch (Exception e) {
-                log.warn("Join failed for ToOne path '{}', using regular join as fallback: {}", path, e.getMessage());
-                root.join(path, JoinType.LEFT);
-            }
-        }
-        
-        // Apply ToMany joins (always regular join to prevent memory pagination)
-        for (String path : toManyPaths) {
-            try {
-                log.debug("ApplyJoins: Using regular join for ToMany path: {}", path);
-                root.join(path, JoinType.LEFT);
-                log.debug("Successfully applied regular join for ToMany path: {}", path);
-            } catch (Exception e) {
-                log.warn("Join failed for ToMany path '{}': {}", path, e.getMessage());
-            }
-        }
-        
-        Set<String> finalToOneFields = detectCommonToOneFields();
-        finalToOneFields.removeAll(toOnePaths); // Remove already processed paths
-        log.debug("Final ToOne fields to add: {}", finalToOneFields);
-        
-        // Apply additional ToOne fields for N+1 prevention (only for select queries)
-        if (!isCountQuery) {
-            for (String field : finalToOneFields) {
-                try {
-                    // Handle nested paths with safety validation
-                    if (field.contains(".")) {
-                        if (isNestedPathSafeForJoin(root, field)) {
-                            log.debug("ApplyJoins: Attempting fetch join for validated nested path: {}", field);
-                            applyNestedFetchJoin(root, field);
-                            log.debug("Successfully applied fetch join for nested path: {}", field);
-                        } else {
-                            log.debug("ApplyJoins: Nested path '{}' failed safety validation, skipping", field);
-                        }
-                        continue;
-                    }
-                    
-                    log.debug("ApplyJoins: Attempting fetch join for common ToOne field: {}", field);
-                    root.fetch(field, JoinType.LEFT);
-                    log.debug("Successfully applied fetch join for common ToOne field: {}", field);
-                } catch (Exception e) {
-                    log.warn("Fetch join failed for common ToOne field '{}', using regular join as fallback: {}", field, e.getMessage());
-                    try {
-                        root.join(field, JoinType.LEFT);
-                    } catch (Exception joinException) {
-                        log.warn("Regular join also failed for field '{}': {}", field, joinException.getMessage());
-                    }
-                }
-            }
-        }
     }
 
     /**
@@ -675,588 +309,21 @@ public class SearchableSpecificationBuilder<T> {
      * Phase 2: Load complete entities with smart fetch joins
      */
     public Page<T> buildAndExecuteWithTwoPhaseOptimization() {
-        log.debug("Starting two-phase optimization query");
-        
         PageRequest pageRequest = buildPageRequest();
+
         Set<String> allJoinPaths = extractJoinPaths(condition.getNodes());
         Set<String> toManyPaths = allJoinPaths.stream()
-                .filter(path -> isToManyPath(createDummyRoot(), path))
+                .filter(path -> relationshipAnalyzer.isToManyPath(createDummyRoot(), path))
                 .collect(Collectors.toSet());
 
-        log.debug("All join paths: {}", allJoinPaths);
-        log.debug("ToMany paths detected: {}", toManyPaths);
-        
         // Check if two-phase optimization is needed
-        if (shouldUseTwoPhaseQuery(toManyPaths)) {
-            log.debug("Two-phase query optimization is NEEDED");
-            return executeTwoPhaseQuery(pageRequest, allJoinPaths);
+        if (twoPhaseQueryExecutor.shouldUseTwoPhaseQuery(toManyPaths)) {
+            return twoPhaseQueryExecutor.executeWithTwoPhaseOptimization(pageRequest);
         } else {
-            log.debug("Two-phase query optimization is NOT needed, using regular query");
             return buildAndExecuteWithCursor();
         }
     }
 
-    /**
-     * Determines whether to use two-phase query based on complexity analysis.
-     */
-    private boolean shouldUseTwoPhaseQuery(Set<String> toManyPaths) {
-        // Use two-phase query if:
-        // 1. Multiple ToMany relationships (high cartesian product risk)
-        // 2. Or single ToMany but with complex conditions (potential large result set)
-        
-        if (toManyPaths.size() >= 2) {
-            return true; // Multiple ToMany always use two-phase
-        }
-        
-        if (toManyPaths.size() == 1) {
-            // Check if conditions are complex enough to warrant two-phase
-            return hasComplexConditions();
-        }
-        
-        return false; // No ToMany or simple conditions - use single phase
-    }
-
-    /**
-     * Checks if the search conditions are complex enough to potentially 
-     * generate large intermediate result sets.
-     */
-    private boolean hasComplexConditions() {
-        if (condition.getNodes() == null) return false;
-        
-        // Count conditions involving ToMany relationships
-        long toManyConditionCount = condition.getNodes().stream()
-                .filter(node -> node instanceof SearchCondition.Condition)
-                .map(node -> (SearchCondition.Condition) node)
-                .filter(cond -> {
-                    String entityField = cond.getEntityField();
-                    return entityField != null && entityField.contains(".") && 
-                           isToManyPath(createDummyRoot(), getRelationshipPath(entityField));
-                })
-                .count();
-        
-        return toManyConditionCount > 0; // Any ToMany condition triggers two-phase
-    }
-
-    /**
-     * Executes two-phase query for optimal performance with large datasets.
-     * Phase 1: Query IDs only with all conditions applied
-     * Phase 2: Fetch full entities by IDs with all relationships
-     */
-    private Page<T> executeTwoPhaseQuery(PageRequest pageRequest, Set<String> allJoinPaths) {
-        log.debug("Starting two-phase query execution");
-        log.debug("Page request: page={}, size={}, sort={}", pageRequest.getPageNumber(), pageRequest.getPageSize(), pageRequest.getSort());
-        log.debug("All join paths: {}", allJoinPaths);
-        
-        // Phase 1: Get IDs only (fast pagination with all conditions)
-        List<Object> entityIds = executePhaseOneQuery(pageRequest);
-        log.debug("Phase 1 completed. Entity IDs retrieved: {} IDs", entityIds.size());
-        log.debug("Entity IDs: {}", entityIds);
-        
-        if (entityIds.isEmpty()) {
-            log.debug("No entity IDs found, returning empty page");
-            return new PageImpl<>(Collections.emptyList(), pageRequest, 0);
-        }
-        
-        // Phase 2: Fetch full entities with all relationships
-        log.debug("Starting Phase 2: Fetch full entities");
-        List<T> fullEntities = executePhaseTwoQuery(entityIds, allJoinPaths, pageRequest.getSort());
-        log.debug("Phase 2 completed. Full entities retrieved: {} entities", fullEntities.size());
-        
-        // Get total count (only if needed)
-        log.debug("Getting total count for pagination metadata");
-        long totalCount = getTotalCountForTwoPhase();
-        log.debug("Total count: {}", totalCount);
-        
-        log.debug("Two-phase query completed successfully");
-        return new PageImpl<>(fullEntities, pageRequest, totalCount);
-    }
-
-    /**
-     * Phase 1: Query only entity IDs with all search conditions applied.
-     * This avoids cartesian products while maintaining all filtering logic.
-     */
-    private List<Object> executePhaseOneQuery(PageRequest pageRequest) {
-        log.debug("Phase 1: Starting ID-only query");
-        
-        // Only extract join paths from conditions (no additional ToOne fields)
-        Set<String> conditionJoinPaths = extractJoinPaths(condition.getNodes());
-        log.debug("Phase 1: Extracted join paths from conditions: {}", conditionJoinPaths);
-        
-        // Get primary key field and sorting fields
-        String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-        
-        // Check if we have additional sorting fields beyond the primary key
-        Sort sort = pageRequest.getSort();
-        boolean hasAdditionalSortFields = false;
-        if (sort.isSorted()) {
-            for (Sort.Order order : sort) {
-                String property = order.getProperty();
-                if (!property.equals(primaryKeyField)) { // Don't duplicate primary key
-                    hasAdditionalSortFields = true;
-                    break;
-                }
-            }
-        }
-        
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        
-        // Decide query type based on whether we have additional fields
-        List<Object> ids;
-        if (hasAdditionalSortFields) {
-            // Multiple fields: use Object[] query
-            CriteriaQuery<Object[]> arrayQuery = cb.createQuery(Object[].class);
-            Root<T> arrayRoot = arrayQuery.from(entityClass);
-            
-            // Reapply joins and conditions to new root
-            applyRegularJoinsOnly(arrayRoot, conditionJoinPaths);
-            log.debug("Phase 1: Applied regular joins, total joins: {}", arrayRoot.getJoins().size());
-            
-            // Build selections for array root
-            List<Selection<?>> arraySelections = new ArrayList<>();
-            arraySelections.add(arrayRoot.get(primaryKeyField));
-            for (Sort.Order order : sort) {
-                String property = order.getProperty();
-                if (!property.equals(primaryKeyField)) {
-                    arraySelections.add(arrayRoot.get(property));
-                }
-            }
-            arrayQuery.multiselect(arraySelections);
-            
-            // Apply distinct and conditions
-            if (!arrayRoot.getJoins().isEmpty()) {
-                arrayQuery.distinct(true);
-            }
-            
-            JoinManager<T> joinManager = new JoinManager<>(entityManager, arrayRoot);
-            PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
-            SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
-            
-            Predicate predicate = createPredicates(arrayRoot, arrayQuery, cb, specBuilder);
-            if (predicate != null) {
-                arrayQuery.where(predicate);
-            }
-            
-            // Apply sorting
-            if (sort.isSorted()) {
-                List<Order> orders = new ArrayList<>();
-                for (Sort.Order order : sort) {
-                    Path<?> path = arrayRoot.get(order.getProperty());
-                    if (order.isAscending()) {
-                        orders.add(cb.asc(path));
-                    } else {
-                        orders.add(cb.desc(path));
-                    }
-                }
-                arrayQuery.orderBy(orders);
-            }
-            
-            // Execute array query
-            TypedQuery<Object[]> arrayTypedQuery = entityManager.createQuery(arrayQuery);
-            arrayTypedQuery.setFirstResult((int) pageRequest.getOffset());
-            arrayTypedQuery.setMaxResults(pageRequest.getPageSize());
-            
-            List<Object[]> arrayResults = arrayTypedQuery.getResultList();
-            ids = arrayResults.stream()
-                    .map(row -> row[0]) // ID is always the first column
-                    .collect(Collectors.toList());
-                    
-        } else {
-            // Single field: use Object query (just ID)
-            CriteriaQuery<Object> singleQuery = cb.createQuery(Object.class);
-            Root<T> singleRoot = singleQuery.from(entityClass);
-            
-            // Reapply joins and conditions to new root
-            applyRegularJoinsOnly(singleRoot, conditionJoinPaths);
-            log.debug("Phase 1: Applied regular joins, total joins: {}", singleRoot.getJoins().size());
-            
-            singleQuery.select(singleRoot.get(primaryKeyField));
-            
-            // Apply distinct and conditions
-            if (!singleRoot.getJoins().isEmpty()) {
-                singleQuery.distinct(true);
-            }
-            
-            JoinManager<T> joinManager = new JoinManager<>(entityManager, singleRoot);
-            PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
-            SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
-            
-            Predicate predicate = createPredicates(singleRoot, singleQuery, cb, specBuilder);
-            if (predicate != null) {
-                singleQuery.where(predicate);
-            }
-            
-            // Apply sorting (just by ID)
-            if (sort.isSorted()) {
-                List<Order> orders = new ArrayList<>();
-                for (Sort.Order order : sort) {
-                    Path<?> path = singleRoot.get(order.getProperty());
-                    if (order.isAscending()) {
-                        orders.add(cb.asc(path));
-                    } else {
-                        orders.add(cb.desc(path));
-                    }
-                }
-                singleQuery.orderBy(orders);
-            }
-            
-            // Execute single query
-            TypedQuery<Object> singleTypedQuery = entityManager.createQuery(singleQuery);
-            singleTypedQuery.setFirstResult((int) pageRequest.getOffset());
-            singleTypedQuery.setMaxResults(pageRequest.getPageSize());
-            
-            ids = singleTypedQuery.getResultList();
-        }
-        
-        log.debug("Phase 1: Retrieved {} IDs: {}", ids.size(), ids);
-        return ids;
-    }
-
-    /**
-     * Phase 2: Fetch full entities by IDs with all relationships loaded.
-     * This ensures optimal loading of all required data using both fetch joins and EntityGraph.
-     */
-    private List<T> executePhaseTwoQuery(List<Object> entityIds, Set<String> allJoinPaths, Sort sort) {
-        // Collect all relationship paths for dynamic EntityGraph
-        Set<String> allRelationshipPaths = new HashSet<>(allJoinPaths);
-        allRelationshipPaths.addAll(detectCommonToOneFields());
-        
-        // Try EntityGraph approach first for better relationship loading
-        try {
-            List<T> entitiesWithEntityGraph = executePhaseTwoWithEntityGraph(entityIds, allRelationshipPaths, sort);
-            if (!entitiesWithEntityGraph.isEmpty()) {
-                log.info("Phase 2: Successfully used EntityGraph approach with {} paths", allRelationshipPaths.size());
-                return entitiesWithEntityGraph;
-            }
-        } catch (Exception e) {
-            log.warn("Phase 2: EntityGraph approach failed, falling back to fetch joins: {}", e.getMessage());
-        }
-        
-        // Fallback to fetch join approach
-        return executePhaseTwoWithFetchJoins(entityIds, allJoinPaths, sort);
-    }
-
-    /**
-     * Phase 2 implementation using dynamic EntityGraph for optimal relationship loading.
-     */
-    private List<T> executePhaseTwoWithEntityGraph(List<Object> entityIds, Set<String> relationshipPaths, Sort sort) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<T> query = cb.createQuery(entityClass);
-        Root<T> root = query.from(entityClass);
-        
-        // Filter by collected IDs
-        String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-        Predicate idPredicate = root.get(primaryKeyField).in(entityIds);
-        query.where(idPredicate);
-        query.distinct(true);
-        
-        // Apply sorting
-        if (sort.isSorted()) {
-            List<Order> orders = new ArrayList<>();
-            for (Sort.Order order : sort) {
-                if (order.isAscending()) {
-                    orders.add(cb.asc(root.get(order.getProperty())));
-                } else {
-                    orders.add(cb.desc(root.get(order.getProperty())));
-                }
-            }
-            query.orderBy(orders);
-        }
-        
-        TypedQuery<T> typedQuery = entityManager.createQuery(query);
-        
-        // Apply dynamic EntityGraph for relationship loading
-        applyDynamicEntityGraph(typedQuery, relationshipPaths);
-        
-        List<T> entities = typedQuery.getResultList();
-        log.debug("Phase 2 EntityGraph: Retrieved {} entities", entities.size());
-        
-        return reorderEntitiesByIds(entities, entityIds);
-    }
-
-    /**
-     * Phase 2 fallback implementation using traditional fetch joins.
-     */
-    private List<T> executePhaseTwoWithFetchJoins(List<Object> entityIds, Set<String> allJoinPaths, Sort sort) {
-        Specification<T> fullDataSpec = (root, query, cb) -> {
-            // Apply SMART fetch joins to avoid MultipleBagFetchException
-            applySmartFetchJoins(root, allJoinPaths);
-            query.distinct(true);
-            
-            // Filter by collected IDs
-            String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-            return root.get(primaryKeyField).in(entityIds);
-        };
-        
-        // Configure batch loading for ManyToMany relationships to prevent N+1
-        Set<String> manyToManyFields = detectManyToManyFields();
-        
-        if (!manyToManyFields.isEmpty()) {
-            log.info("Phase 2: Configuring batch loading for ManyToMany relationships: {}", manyToManyFields);
-            configureBatchLoadingForSession();
-        }
-        
-        // Execute and maintain original sort order
-        List<T> entities = specificationExecutor.findAll(fullDataSpec, sort);
-        
-        log.debug("Phase 2: Retrieved {} raw entities from database", entities.size());
-        
-        // Debug: Log first few entities
-        for (int i = 0; i < Math.min(3, entities.size()); i++) {
-            T entity = entities.get(i);
-            log.debug("Phase 2: Entity[{}] = {}", i, entity);
-            try {
-                String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-                Field idField = entityClass.getDeclaredField(primaryKeyField);
-                idField.setAccessible(true);
-                Object id = idField.get(entity);
-                log.debug("Phase 2: Entity[{}] ID = {}", i, id);
-            } catch (Exception e) {
-                log.error("Phase 2: Failed to extract ID from entity[{}]: {}", i, e.getMessage());
-            }
-        }
-        
-        // Ensure entities are returned in the same order as the IDs
-        return reorderEntitiesByIds(entities, entityIds);
-    }
-
-    /**
-     * Apply smart fetch joins to avoid MultipleBagFetchException.
-     * Strategy: Fetch only ToOne relationships and one primary ToMany relationship.
-     * Other ToMany relationships will be loaded lazily or via batch fetching.
-     */
-    private void applySmartFetchJoins(Root<T> root, Set<String> paths) {
-        log.debug("ApplySmartFetchJoins: Starting with paths: {}", paths);
-        
-        Set<Join<T, ?>> joins = (Set<Join<T, ?>>) root.getJoins();
-        joins.clear();
-        
-        // Separate ToOne and ToMany paths
-        Set<String> toOnePaths = new HashSet<>();
-        Set<String> toManyPaths = new HashSet<>();
-        
-        for (String path : paths) {
-            if (isToManyPath(root, path)) {
-                toManyPaths.add(path);
-            } else {
-                toOnePaths.add(path);
-            }
-        }
-        
-        log.debug("ApplySmartFetchJoins: ToOne paths from conditions: {}", toOnePaths);
-        log.debug("ApplySmartFetchJoins: ToMany paths from conditions: {}", toManyPaths);
-        
-        // CRITICAL: Add commonly accessed ToOne relationships even if not in search conditions
-        // This prevents N+1 problems for frequently accessed fields like 'position'
-        Set<String> commonToOneFields = detectCommonToOneFields();
-        log.debug("ApplySmartFetchJoins: Common ToOne fields detected: {}", commonToOneFields);
-        
-        // Add all common ToOne fields to prevent N+1
-        toOnePaths.addAll(commonToOneFields);
-        log.debug("ApplySmartFetchJoins: Final ToOne paths to fetch: {}", toOnePaths);
-        
-        // Strategy 1: Always fetch join ALL ToOne relationships (safe and efficient)
-        for (String path : toOnePaths) {
-            try {
-                log.debug("ApplySmartFetchJoins: Attempting fetch join for ToOne path: {}", path);
-                root.fetch(path, JoinType.LEFT);
-                log.info("ApplySmartFetchJoins: Successfully applied fetch join for ToOne: {}", path);
-            } catch (Exception e) {
-                log.warn("ApplySmartFetchJoins: Fetch join failed for path '{}', using regular join as fallback: {}", path, e.getMessage());
-                // If fetch join fails, use regular join as fallback
-                try {
-                    root.join(path, JoinType.LEFT);
-                    log.debug("ApplySmartFetchJoins: Successfully applied regular join fallback for: {}", path);
-                } catch (Exception joinException) {
-                    log.error("ApplySmartFetchJoins: Both fetch join and regular join failed for path '{}': {}", path, joinException.getMessage());
-                }
-            }
-        }
-        
-        // Strategy 2: For ToMany relationships, use selective fetching
-        if (toManyPaths.size() == 1) {
-            // Single ToMany: Safe to fetch join
-            String toManyPath = toManyPaths.iterator().next();
-            log.debug("ApplySmartFetchJoins: Single ToMany path, applying fetch join: {}", toManyPath);
-            try {
-                root.fetch(toManyPath, JoinType.LEFT);
-                log.info("ApplySmartFetchJoins: Successfully applied fetch join for single ToMany: {}", toManyPath);
-            } catch (Exception e) {
-                log.warn("ApplySmartFetchJoins: Fetch join failed for ToMany '{}', using regular join: {}", toManyPath, e.getMessage());
-                root.join(toManyPath, JoinType.LEFT);
-            }
-        } else if (toManyPaths.size() > 1) {
-            // Multiple ToMany: Select the most important one for fetch join
-            String primaryToMany = selectPrimaryToManyForFetch(toManyPaths);
-            log.debug("ApplySmartFetchJoins: Multiple ToMany paths, selected primary: {}", primaryToMany);
-            if (primaryToMany != null) {
-                try {
-                    root.fetch(primaryToMany, JoinType.LEFT);
-                    log.info("ApplySmartFetchJoins: Successfully applied fetch join for primary ToMany: {}", primaryToMany);
-                } catch (Exception e) {
-                    log.warn("ApplySmartFetchJoins: Fetch join failed for primary ToMany '{}': {}", primaryToMany, e.getMessage());
-                }
-            }
-            
-            // Other ToMany relationships: Use regular joins to enable lazy loading
-            for (String path : toManyPaths) {
-                if (!path.equals(primaryToMany)) {
-                    log.debug("ApplySmartFetchJoins: Applying regular join for secondary ToMany: {}", path);
-                    try {
-                        root.join(path, JoinType.LEFT);
-                        log.debug("ApplySmartFetchJoins: Successfully applied regular join for secondary ToMany: {}", path);
-                    } catch (Exception e) {
-                        log.error("ApplySmartFetchJoins: Regular join failed for secondary ToMany '{}': {}", path, e.getMessage());
-                    }
-                }
-            }
-        }
-        
-        log.info("ApplySmartFetchJoins: Completed join application - ToOne fetched: {}, ToMany fetched: {}", 
-                 toOnePaths.size(), toManyPaths.isEmpty() ? 0 : 1);
-    }
-    
-    /**
-     * Select the most important ToMany relationship for fetch joining.
-     * Priority: relationships used in search conditions > first alphabetically
-     */
-    private String selectPrimaryToManyForFetch(Set<String> toManyPaths) {
-        if (toManyPaths.isEmpty()) {
-            return null;
-        }
-        
-        // Get all field paths used in conditions
-        Set<String> conditionPaths = extractConditionPaths(condition.getNodes());
-        
-        // Find ToMany paths that are used in conditions (these are more important)
-        for (String path : toManyPaths) {
-            if (conditionPaths.contains(path)) {
-                return path;
-            }
-        }
-        
-        // If no path is used in conditions, return the first one alphabetically
-        return toManyPaths.stream()
-                .sorted()
-                .findFirst()
-                .orElse(null);
-    }
-    
-    /**
-     * Extract all field paths used in search conditions.
-     */
-    private Set<String> extractConditionPaths(List<Node> nodes) {
-        Set<String> conditionPaths = new HashSet<>();
-        if (nodes == null) return conditionPaths;
-        
-        for (Node node : nodes) {
-            if (node instanceof SearchCondition.Condition) {
-                SearchCondition.Condition condition = (SearchCondition.Condition) node;
-                String entityField = condition.getEntityField();
-                if (entityField != null && !entityField.isEmpty()) {
-                    // Extract the relationship path (everything except the last field)
-                    String[] pathParts = entityField.split("\\.");
-                    if (pathParts.length > 1) {
-                        StringBuilder path = new StringBuilder();
-                        for (int i = 0; i < pathParts.length - 1; i++) {
-                            if (path.length() > 0) {
-                                path.append(".");
-                            }
-                            path.append(pathParts[i]);
-                        }
-                        conditionPaths.add(path.toString());
-                    }
-                }
-            } else if (node instanceof SearchCondition.Group) {
-                conditionPaths.addAll(extractConditionPaths(node.getNodes()));
-            }
-        }
-        
-        return conditionPaths;
-    }
-
-    /**
-     * Reorder entities to match the original ID order from phase 1.
-     */
-    private List<T> reorderEntitiesByIds(List<T> entities, List<Object> orderedIds) {
-        log.debug("Reordering entities: {} entities, {} ordered IDs", entities.size(), orderedIds.size());
-        
-        if (entities.size() != orderedIds.size()) {
-            log.warn("Entity count ({}) does not match ordered ID count ({}). This may be due to DISTINCT removing duplicates.", entities.size(), orderedIds.size());
-            // Don't return early - proceed with reordering using available entities
-        }
-        
-        // Create a map for O(1) lookup
-        Map<Object, T> entityMap = new HashMap<>();
-        String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-        log.debug("Detected primary key field: {}", primaryKeyField);
-        
-        for (T entity : entities) {
-            try {
-                Object id = null;
-                
-                // Try using getId() method first (handles Hibernate proxies better)
-                try {
-                    Method getIdMethod = entity.getClass().getMethod("getId");
-                    id = getIdMethod.invoke(entity);
-                    log.debug("Extracted ID via getId() method: {}", id);
-                } catch (Exception getIdException) {
-                    log.debug("getId() method not available, falling back to reflection: {}", getIdException.getMessage());
-                    // Fallback to reflection
-                    Field idField = entityClass.getDeclaredField(primaryKeyField);
-                    idField.setAccessible(true);
-                    id = idField.get(entity);
-                    log.debug("Extracted ID via reflection: {}", id);
-                }
-                
-                if (id != null) {
-                    entityMap.put(id, entity);
-                    log.debug("Added entity to map: ID={}, field={}", id, primaryKeyField);
-                } else {
-                    log.warn("Entity ID is null for entity: {}", entity);
-                }
-            } catch (Exception e) {
-                log.error("Failed to extract ID from entity using field '{}': {}", primaryKeyField, entity, e);
-                // If reordering fails, return original order
-                return entities;
-            }
-        }
-        
-        // Reorder according to original ID sequence
-        List<T> reorderedEntities = orderedIds.stream()
-                .map(id -> {
-                    T entity = entityMap.get(id);
-                    if (entity == null) {
-                        log.warn("No entity found for ID: {}", id);
-                    }
-                    return entity;
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-        
-        log.debug("Reordering completed: {} entities after reordering", reorderedEntities.size());
-        return reorderedEntities;
-    }
-
-    /**
-     * Get total count for two-phase query (optimized count query).
-     */
-    private long getTotalCountForTwoPhase() {
-        Specification<T> countSpec = (root, query, cb) -> {
-            Set<String> joinPaths = extractJoinPaths(condition.getNodes());
-            applyRegularJoinsOnly(root, joinPaths);
-            
-            // Apply distinct for accurate count with joins
-            query.distinct(true);
-            
-            JoinManager<T> joinManager = new JoinManager<>(entityManager, root);
-            PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
-            SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
-            
-            return createPredicates(root, query, cb, specBuilder);
-        };
-        
-        return specificationExecutor.count(countSpec);
-    }
 
     /**
      * Create a dummy root for path analysis without executing queries.
@@ -1265,64 +332,6 @@ public class SearchableSpecificationBuilder<T> {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> query = cb.createQuery(entityClass);
         return query.from(entityClass);
-    }
-
-    /**
-     * Extract relationship path from entity field (e.g., "tags.name" -> "tags").
-     */
-    private String getRelationshipPath(String entityField) {
-        if (entityField == null || !entityField.contains(".")) {
-            return entityField;
-        }
-        
-        String[] parts = entityField.split("\\.");
-        if (parts.length > 1) {
-            return parts[0]; // Return the relationship part
-        }
-        
-        return entityField;
-    }
-
-    private boolean isToManyPath(Root<T> root, String path) {
-        if (path == null || path.trim().isEmpty()) {
-            return false;
-        }
-
-        try {
-            String[] parts = path.split("\\.");
-            Class<?> currentType = root.getJavaType();
-
-            for (String part : parts) {
-                ManagedType<?> managedType = entityManager.getMetamodel().managedType(currentType);
-                Attribute<?, ?> attribute = managedType.getAttribute(part);
-                
-                if (attribute.isCollection()) {
-                    return true;
-                }
-                
-                // For nested paths, get the target entity type for next iteration
-                if (attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_ONE ||
-                    attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_ONE) {
-                    currentType = attribute.getJavaType();
-                } else if (attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_MANY ||
-                          attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_MANY) {
-                    // For collection attributes, get the element type
-                    if (attribute instanceof PluralAttribute) {
-                        currentType = ((PluralAttribute<?, ?, ?>) attribute).getElementType().getJavaType();
-                    }
-                } else {
-                    currentType = attribute.getJavaType();
-                }
-            }
-            
-            return false;
-        } catch (IllegalArgumentException e) {
-            log.warn("Invalid path '{}' during ToMany analysis: {}", path, e.getMessage());
-            return false; // Assume ToOne if path is invalid
-        } catch (Exception e) {
-            log.warn("Unexpected error analyzing path '{}': {}", path, e.getMessage());
-            return false;
-        }
     }
 
     private PageRequest buildPageRequest() {
@@ -1335,491 +344,4 @@ public class SearchableSpecificationBuilder<T> {
         return PageRequest.of(page, size, createSort());
     }
 
-    /**
-     * Detect commonly accessed ToOne relationships to prevent N+1 problems.
-     * This analyzes the entity class to find ManyToOne and OneToOne fields
-     * that are likely to be accessed frequently, including nested relationships.
-     */
-    private Set<String> detectCommonToOneFields() {
-        Set<String> commonFields = new HashSet<>();
-        
-        try {
-            log.debug("DetectCommonToOneFields: Analyzing entity class: {}", entityClass.getSimpleName());
-            
-            // Use JPA metamodel to find ToOne relationships
-            EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
-            
-            // Add all ManyToOne and OneToOne relationships
-            entityType.getSingularAttributes().forEach(attr -> {
-                if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_ONE ||
-                    attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_ONE) {
-                    commonFields.add(attr.getName());
-                    log.debug("DetectCommonToOneFields: Found {} relationship: {}", 
-                             attr.getPersistentAttributeType(), attr.getName());
-                }
-            });
-            
-            // ENHANCEMENT: Detect nested ToOne relationships in ManyToMany related entities
-            try {
-                Set<String> nestedToOneFields = detectNestedToOneRelationships();
-                commonFields.addAll(nestedToOneFields);
-            } catch (Exception e) {
-                log.warn("Failed to detect nested ToOne relationships, continuing without them: {}", e.getMessage());
-            }
-            
-            log.info("DetectCommonToOneFields: Detected {} ToOne relationships for automatic fetch joining: {}", 
-                     commonFields.size(), commonFields);
-            
-        } catch (Exception e) {
-            log.warn("DetectCommonToOneFields: Metamodel analysis failed, falling back to reflection: {}", e.getMessage());
-            
-            // Fallback to reflection if metamodel fails
-            Field[] fields = entityClass.getDeclaredFields();
-            for (Field field : fields) {
-                if (field.isAnnotationPresent(javax.persistence.ManyToOne.class) ||
-                    field.isAnnotationPresent(javax.persistence.OneToOne.class)) {
-                    commonFields.add(field.getName());
-                    log.debug("DetectCommonToOneFields: Found ToOne field via reflection: {}", field.getName());
-                }
-            }
-            
-            log.info("DetectCommonToOneFields: Reflection fallback detected {} ToOne relationships: {}", 
-                     commonFields.size(), commonFields);
-        }
-        
-        return commonFields;
-    }
-
-    /**
-     * Detect nested ToOne relationships in ManyToMany and OneToMany related entities.
-     * This prevents N+1 problems in scenarios like UserAccount.organizations.parent.
-     */
-    private Set<String> detectNestedToOneRelationships() {
-        Set<String> nestedToOneFields = new HashSet<>();
-        
-        try {
-            log.debug("DetectNestedToOneRelationships: Analyzing nested relationships for entity: {}", entityClass.getSimpleName());
-            
-            EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
-            
-            // Analyze ManyToMany relationships
-            entityType.getPluralAttributes().forEach(attr -> {
-                if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_MANY) {
-                    String relationshipName = attr.getName();
-                    Class<?> targetEntityClass = attr.getElementType().getJavaType();
-                    
-                    log.debug("DetectNestedToOneRelationships: Analyzing ManyToMany relationship '{}' with target entity: {}", 
-                             relationshipName, targetEntityClass.getSimpleName());
-                    
-                    // Find ToOne relationships in the target entity
-                    Set<String> targetToOneFields = detectToOneFieldsForEntity(targetEntityClass);
-                    
-                    // Create nested paths (e.g., "organizations.parent")
-                    for (String targetToOneField : targetToOneFields) {
-                        String nestedPath = relationshipName + "." + targetToOneField;
-                        nestedToOneFields.add(nestedPath);
-                        log.debug("DetectNestedToOneRelationships: Found nested ToOne path: {}", nestedPath);
-                    }
-                }
-            });
-            
-            // Analyze OneToMany relationships
-            entityType.getPluralAttributes().forEach(attr -> {
-                if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_MANY) {
-                    String relationshipName = attr.getName();
-                    Class<?> targetEntityClass = attr.getElementType().getJavaType();
-                    
-                    log.debug("DetectNestedToOneRelationships: Analyzing OneToMany relationship '{}' with target entity: {}", 
-                             relationshipName, targetEntityClass.getSimpleName());
-                    
-                    // Find ToOne relationships in the target entity
-                    Set<String> targetToOneFields = detectToOneFieldsForEntity(targetEntityClass);
-                    
-                    // Create nested paths (e.g., "comments.author")
-                    for (String targetToOneField : targetToOneFields) {
-                        String nestedPath = relationshipName + "." + targetToOneField;
-                        nestedToOneFields.add(nestedPath);
-                        log.debug("DetectNestedToOneRelationships: Found nested ToOne path: {}", nestedPath);
-                    }
-                }
-            });
-            
-            if (!nestedToOneFields.isEmpty()) {
-                log.info("DetectNestedToOneRelationships: Detected {} nested ToOne relationships: {}", 
-                         nestedToOneFields.size(), nestedToOneFields);
-            }
-            
-        } catch (Exception e) {
-            log.warn("DetectNestedToOneRelationships: Failed to analyze nested relationships: {}", e.getMessage());
-        }
-        
-        return nestedToOneFields;
-    }
-
-    /**
-     * Detect ToOne relationships for a specific entity class.
-     * This is used to analyze target entities in ManyToMany/OneToMany relationships.
-     */
-    private Set<String> detectToOneFieldsForEntity(Class<?> entityClass) {
-        Set<String> toOneFields = new HashSet<>();
-        
-        try {
-            EntityType<?> entityType = entityManager.getMetamodel().entity(entityClass);
-            
-            entityType.getSingularAttributes().forEach(attr -> {
-                if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_ONE ||
-                    attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_ONE) {
-                    toOneFields.add(attr.getName());
-                    log.debug("DetectToOneFieldsForEntity: Found {} relationship '{}' in entity: {}", 
-                             attr.getPersistentAttributeType(), attr.getName(), entityClass.getSimpleName());
-                }
-            });
-            
-        } catch (Exception e) {
-            log.debug("DetectToOneFieldsForEntity: Metamodel analysis failed for entity {}, falling back to reflection: {}", 
-                     entityClass.getSimpleName(), e.getMessage());
-            
-            // Fallback to reflection
-            Field[] fields = entityClass.getDeclaredFields();
-            for (Field field : fields) {
-                if (field.isAnnotationPresent(javax.persistence.ManyToOne.class) ||
-                    field.isAnnotationPresent(javax.persistence.OneToOne.class)) {
-                    toOneFields.add(field.getName());
-                    log.debug("DetectToOneFieldsForEntity: Found ToOne field '{}' via reflection in entity: {}", 
-                             field.getName(), entityClass.getSimpleName());
-                }
-            }
-        }
-        
-        return toOneFields;
-    }
-
-    /**
-     * Detect ManyToMany relationships that need batch loading to prevent N+1 problems.
-     * This method analyzes the entity class to find ManyToMany fields.
-     */
-    private Set<String> detectManyToManyFields() {
-        Set<String> manyToManyFields = new HashSet<>();
-        
-        try {
-            log.debug("DetectManyToManyFields: Analyzing entity class: {}", entityClass.getSimpleName());
-            
-            // Use JPA metamodel to find ManyToMany relationships
-            EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
-            
-            // Find all ManyToMany relationships
-            entityType.getPluralAttributes().forEach(attr -> {
-                if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_MANY) {
-                    manyToManyFields.add(attr.getName());
-                    log.debug("DetectManyToManyFields: Found ManyToMany relationship: {}", attr.getName());
-                }
-            });
-            
-            if (!manyToManyFields.isEmpty()) {
-                log.info("DetectManyToManyFields: Detected {} ManyToMany relationships: {}", 
-                         manyToManyFields.size(), manyToManyFields);
-            }
-            
-        } catch (Exception e) {
-            log.warn("DetectManyToManyFields: Metamodel analysis failed, falling back to reflection: {}", e.getMessage());
-            
-            // Fallback to reflection if metamodel fails
-            Field[] fields = entityClass.getDeclaredFields();
-            for (Field field : fields) {
-                if (field.isAnnotationPresent(javax.persistence.ManyToMany.class)) {
-                    manyToManyFields.add(field.getName());
-                    log.debug("DetectManyToManyFields: Found ManyToMany field via reflection: {}", field.getName());
-                }
-            }
-            
-            log.info("DetectManyToManyFields: Reflection fallback detected {} ManyToMany relationships: {}", 
-                     manyToManyFields.size(), manyToManyFields);
-        }
-        
-        return manyToManyFields;
-    }
-
-    /**
-     * Configure Hibernate session for optimal batch loading to prevent N+1 problems.
-     * Note: Hibernate batch loading is already enabled by default. 
-     * For additional optimization, consider adding @BatchSize annotation to your entity's ManyToMany fields.
-     */
-    private void configureBatchLoadingForSession() {
-        Set<String> manyToManyFields = detectManyToManyFields();
-        
-        if (!manyToManyFields.isEmpty()) {
-            log.info("ConfigureBatchLoadingForSession: Detected ManyToMany relationships: {}", manyToManyFields);
-            log.info("ConfigureBatchLoadingForSession: Batch loading is already enabled by Hibernate");
-            log.info("ConfigureBatchLoadingForSession: For additional optimization, consider adding @BatchSize annotation to your ManyToMany fields");
-            log.info("ConfigureBatchLoadingForSession: Example: @BatchSize(size = 25) @ManyToMany private Set<Organization> organizations;");
-        }
-    }
-
-    /**
-     * Validates if a nested path is safe for JOIN operations.
-     * Checks for valid entity relationships and prevents circular references.
-     */
-    private boolean isNestedPathSafeForJoin(Root<T> root, String nestedPath) {
-        if (nestedPath == null || nestedPath.trim().isEmpty()) {
-            return false;
-        }
-        
-        try {
-            String[] pathParts = nestedPath.split("\\.");
-            if (pathParts.length > 3) {
-                // Limit nesting depth to prevent performance issues
-                log.debug("Nested path '{}' exceeds maximum depth (3), skipping for safety", nestedPath);
-                return false;
-            }
-            
-            Class<?> currentType = root.getJavaType();
-            
-            for (String part : pathParts) {
-                EntityType<?> entityType = entityManager.getMetamodel().entity(currentType);
-                Attribute<?, ?> attribute = entityType.getAttribute(part);
-                
-                // Only allow ToOne relationships in nested paths for safety
-                if (attribute.getPersistentAttributeType() != Attribute.PersistentAttributeType.MANY_TO_ONE &&
-                    attribute.getPersistentAttributeType() != Attribute.PersistentAttributeType.ONE_TO_ONE) {
-                    log.debug("Nested path '{}' contains ToMany relationship at '{}', not safe for fetch join", nestedPath, part);
-                    return false;
-                }
-                
-                currentType = attribute.getJavaType();
-                
-                // Prevent circular references
-                if (currentType.equals(root.getJavaType())) {
-                    log.debug("Nested path '{}' contains circular reference, not safe for fetch join", nestedPath);
-                    return false;
-                }
-            }
-            
-            log.debug("Nested path '{}' passed safety validation", nestedPath);
-            return true;
-            
-        } catch (Exception e) {
-            log.debug("Safety validation failed for nested path '{}': {}", nestedPath, e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Applies fetch join for nested paths by building the path step by step.
-     */
-    private void applyNestedFetchJoin(Root<T> root, String nestedPath) {
-        try {
-            String[] pathParts = nestedPath.split("\\.");
-            From<?, ?> currentFrom = root;
-            
-            for (String part : pathParts) {
-                // Check if this part is already fetched
-                boolean alreadyFetched = currentFrom.getFetches().stream()
-                        .anyMatch(fetch -> fetch.getAttribute().getName().equals(part));
-                
-                if (!alreadyFetched) {
-                    Fetch<?, ?> fetch = currentFrom.fetch(part, JoinType.LEFT);
-                    currentFrom = (From<?, ?>) fetch;
-                    log.debug("Applied fetch join for path part: {}", part);
-                } else {
-                    // Find existing fetch to continue the path
-                    currentFrom = (From<?, ?>) currentFrom.getFetches().stream()
-                            .filter(fetch -> fetch.getAttribute().getName().equals(part))
-                            .findFirst()
-                            .orElseThrow(() -> new IllegalStateException("Expected fetch not found"));
-                    log.debug("Reusing existing fetch for path part: {}", part);
-                }
-            }
-            
-        } catch (Exception e) {
-            log.warn("Failed to apply nested fetch join for path '{}': {}", nestedPath, e.getMessage());
-            throw e;
-        }
-    }
-
-    /**
-     * Creates dynamic EntityGraph with ToOne relationships only.
-     * ToMany relationships are excluded to prevent HHH000104 warning and memory pagination.
-     */
-    private javax.persistence.EntityGraph<T> createDynamicEntityGraph(Set<String> relationshipPaths) {
-        try {
-            javax.persistence.EntityGraph<T> entityGraph = entityManager.createEntityGraph(entityClass);
-            Set<String> toOneOnlyPaths = new HashSet<>();
-            
-            for (String path : relationshipPaths) {
-                try {
-                    // Only include ToOne relationships in EntityGraph
-                    if (!isToManyPathForEntityGraph(path)) {
-                        if (path.contains(".")) {
-                            // Handle nested paths in EntityGraph
-                            addNestedPathToEntityGraph(entityGraph, path);
-                        } else {
-                            // Simple path
-                            entityGraph.addAttributeNodes(path);
-                            log.debug("Added ToOne attribute '{}' to EntityGraph", path);
-                        }
-                        toOneOnlyPaths.add(path);
-                    } else {
-                        log.debug("Skipped ToMany path '{}' from EntityGraph to prevent memory pagination", path);
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to add path '{}' to EntityGraph: {}", path, e.getMessage());
-                }
-            }
-            
-            log.info("Created dynamic EntityGraph with {} ToOne relationship paths (excluded {} ToMany paths)", 
-                    toOneOnlyPaths.size(), relationshipPaths.size() - toOneOnlyPaths.size());
-            return entityGraph;
-            
-        } catch (Exception e) {
-            log.warn("Failed to create dynamic EntityGraph: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * Adds nested paths to EntityGraph using subgraphs.
-     */
-    private void addNestedPathToEntityGraph(javax.persistence.EntityGraph<T> entityGraph, String nestedPath) {
-        String[] pathParts = nestedPath.split("\\.");
-        
-        if (pathParts.length < 2) {
-            entityGraph.addAttributeNodes(nestedPath);
-            return;
-        }
-        
-        // Create subgraph for the first part
-        String firstPart = pathParts[0];
-        javax.persistence.Subgraph<?> subgraph;
-        
-        try {
-            subgraph = entityGraph.addSubgraph(firstPart);
-        } catch (Exception e) {
-            // If subgraph creation fails, try adding as simple attribute
-            entityGraph.addAttributeNodes(firstPart);
-            log.debug("Added '{}' as simple attribute instead of subgraph", firstPart);
-            return;
-        }
-        
-        // Build remaining path
-        String remainingPath = String.join(".", Arrays.copyOfRange(pathParts, 1, pathParts.length));
-        
-        if (remainingPath.contains(".")) {
-            // Still nested, create another subgraph
-            addNestedPathToSubgraph(subgraph, remainingPath);
-        } else {
-            // Final part, add as attribute
-            subgraph.addAttributeNodes(remainingPath);
-            log.debug("Added nested path '{}' to EntityGraph", nestedPath);
-        }
-    }
-
-    /**
-     * Recursively adds nested paths to subgraphs.
-     */
-    private void addNestedPathToSubgraph(javax.persistence.Subgraph<?> parentSubgraph, String nestedPath) {
-        String[] pathParts = nestedPath.split("\\.");
-        
-        if (pathParts.length == 1) {
-            parentSubgraph.addAttributeNodes(nestedPath);
-            return;
-        }
-        
-        String firstPart = pathParts[0];
-        String remainingPath = String.join(".", Arrays.copyOfRange(pathParts, 1, pathParts.length));
-        
-        try {
-            javax.persistence.Subgraph<?> subgraph = parentSubgraph.addSubgraph(firstPart);
-            addNestedPathToSubgraph(subgraph, remainingPath);
-        } catch (Exception e) {
-            // Fallback: add as simple attribute
-            parentSubgraph.addAttributeNodes(firstPart);
-            log.debug("Added '{}' as simple attribute in subgraph", firstPart);
-        }
-    }
-
-    /**
-     * Applies dynamic EntityGraph to a query for optimized relationship loading.
-     */
-    private void applyDynamicEntityGraph(TypedQuery<T> query, Set<String> relationshipPaths) {
-        if (relationshipPaths.isEmpty()) {
-            return;
-        }
-        
-        try {
-            javax.persistence.EntityGraph<T> entityGraph = createDynamicEntityGraph(relationshipPaths);
-            if (entityGraph != null) {
-                query.setHint("javax.persistence.fetchgraph", entityGraph);
-                log.info("Applied dynamic EntityGraph with {} paths to query", relationshipPaths.size());
-            }
-        } catch (Exception e) {
-            log.warn("Failed to apply dynamic EntityGraph: {}", e.getMessage());
-        }
-    }
-
-    /**
-     * Checks if a path represents a ToMany relationship without requiring a Root parameter.
-     * This is specifically for EntityGraph creation where Root is not available.
-     */
-    private boolean isToManyPathForEntityGraph(String path) {
-        if (path == null || path.trim().isEmpty()) {
-            return false;
-        }
-
-        try {
-            String[] parts = path.split("\\.");
-            Class<?> currentType = entityClass;
-
-            for (String part : parts) {
-                EntityType<?> entityType = entityManager.getMetamodel().entity(currentType);
-                Attribute<?, ?> attribute = entityType.getAttribute(part);
-                
-                if (attribute.isCollection()) {
-                    return true;
-                }
-                
-                currentType = attribute.getJavaType();
-            }
-            
-            return false;
-        } catch (Exception e) {
-            log.debug("Error analyzing path '{}' for ToMany check: {}", path, e.getMessage());
-            // If we can't determine, assume it's ToMany to be safe
-            return true;
-        }
-    }
-
-    /**
-     * Calculate accurate total count for EntityGraph queries.
-     * This uses a separate count query to avoid issues with EntityGraph and DISTINCT.
-     */
-    private long calculateAccurateTotalCount(Set<String> relationshipPaths) {
-        try {
-            // Create count query specification
-            Specification<T> countSpec = (root, query, cb) -> {
-                // Apply only regular joins for count query (no fetch joins)
-                Set<String> joinPaths = extractJoinPaths(condition.getNodes());
-                if (!joinPaths.isEmpty()) {
-                    applyRegularJoinsOnly(root, joinPaths);
-                    query.distinct(true);
-                }
-
-                JoinManager<T> joinManager = new JoinManager<>(entityManager, root);
-                PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
-                SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
-
-                return createPredicates(root, query, cb, specBuilder);
-            };
-           
-            // Execute count query
-            long count = specificationExecutor.count(countSpec);
-            log.debug("calculateAccurateTotalCount: Found {} total elements", count);
-            return count;
-           
-        } catch (Exception e) {
-            log.warn("Failed to calculate accurate total count, falling back to estimation: {}", e.getMessage());
-            // Fallback to estimation
-            PageRequest pageRequest = buildPageRequest();
-            return pageRequest.getOffset() + relationshipPaths.size(); // Simple fallback
-        }
-    }
 }

@@ -6,7 +6,6 @@ import org.springframework.data.jpa.domain.Specification;
 
 /**
  * Holds a JPA Specification and PageRequest together.
- * 
  */
 @Data
 public class SpecificationWithPageable<T> {
