@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import javax.persistence.EntityManager;
 import javax.persistence.criteria.From;
+import javax.persistence.criteria.Join;
 import javax.persistence.criteria.JoinType;
 import javax.persistence.criteria.Root;
 import java.util.HashSet;
@@ -91,9 +92,12 @@ public class JoinStrategyManager<T> {
                     // Handle nested paths with safety validation
                     if (field.contains(".")) {
                         if (relationshipAnalyzer.isNestedPathSafeForJoin(root, field)) {
-                            log.debug("ApplyJoins: Attempting fetch join for validated nested path: {}", field);
-                            applyNestedFetchJoin(root, field);
-                            log.debug("Successfully applied fetch join for nested path: {}", field);
+                            log.debug("ApplyJoins: Attempting safe nested join for validated path: {}", field);
+                            if (safelyApplyNestedJoin(root, field, true)) {
+                                log.debug("Successfully applied safe nested join for path: {}", field);
+                            } else {
+                                log.debug("Safe nested join failed for path: {}", field);
+                            }
                         } else {
                             log.debug("ApplyJoins: Nested path '{}' failed safety validation, skipping", field);
                         }
@@ -310,6 +314,64 @@ public class JoinStrategyManager<T> {
         } catch (Exception e) {
             log.warn("Failed to apply nested fetch join for path '{}': {}", nestedPath, e.getMessage());
             throw e;
+        }
+    }
+
+    /**
+     * Safely applies nested joins by validating each path segment.
+     * This prevents "Unable to locate Attribute" errors by checking path validity.
+     */
+    private boolean safelyApplyNestedJoin(Root<T> root, String nestedPath, boolean useFetchJoin) {
+        try {
+            String[] pathParts = nestedPath.split("\\.");
+            From<?, ?> currentFrom = root;
+            
+            // Validate the complete path first
+            if (!relationshipAnalyzer.isValidPath(root, nestedPath)) {
+                log.debug("Path validation failed for nested path: {}", nestedPath);
+                return false;
+            }
+
+            // Apply joins step by step
+            StringBuilder currentPath = new StringBuilder();
+            for (int i = 0; i < pathParts.length; i++) {
+                String part = pathParts[i];
+                if (currentPath.length() > 0) {
+                    currentPath.append(".");
+                }
+                currentPath.append(part);
+                
+                // Check if this join already exists
+                boolean alreadyJoined = currentFrom.getJoins().stream()
+                        .anyMatch(join -> join.getAttribute().getName().equals(part));
+                        
+                if (!alreadyJoined) {
+                    if (useFetchJoin && i == pathParts.length - 1) {
+                        // Only use fetch join for the final part if requested
+                        currentFrom = (From<?, ?>) currentFrom.fetch(part, JoinType.LEFT);
+                        log.debug("Applied fetch join for final path part: {}", currentPath);
+                    } else {
+                        // Use regular join for intermediate parts
+                        currentFrom = (From<?, ?>) currentFrom.join(part, JoinType.LEFT);
+                        log.debug("Applied regular join for path part: {}", currentPath);
+                    }
+                } else {
+                    // Find existing join to continue the path
+                    Join<?, ?> existingJoin = currentFrom.getJoins().stream()
+                            .filter(join -> join.getAttribute().getName().equals(part))
+                            .findFirst()
+                            .orElse(null);
+                    if (existingJoin != null) {
+                        currentFrom = (From<?, ?>) existingJoin;
+                        log.debug("Reusing existing join for path part: {}", currentPath);
+                    }
+                }
+            }
+            
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to safely apply nested join for path '{}': {}", nestedPath, e.getMessage());
+            return false;
         }
     }
 } 

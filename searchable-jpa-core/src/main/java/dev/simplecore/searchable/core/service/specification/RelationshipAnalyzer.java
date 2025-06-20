@@ -332,4 +332,49 @@ public class RelationshipAnalyzer<T> {
             return false;
         }
     }
+
+    /**
+     * Validates if a path exists and is accessible in the entity metamodel.
+     * This prevents "Unable to locate Attribute" errors during JOIN operations.
+     */
+    public boolean isValidPath(Root<T> root, String path) {
+        if (path == null || path.trim().isEmpty()) {
+            return false;
+        }
+
+        try {
+            String[] pathParts = path.split("\\.");
+            Class<?> currentType = root.getJavaType();
+
+            for (String part : pathParts) {
+                EntityType<?> entityType = entityManager.getMetamodel().entity(currentType);
+                
+                // Check if the attribute exists
+                try {
+                    Attribute<?, ?> attribute = entityType.getAttribute(part);
+                    
+                    // Get the next type for validation
+                    if (attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_ONE ||
+                            attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_ONE) {
+                        currentType = attribute.getJavaType();
+                    } else if (attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_MANY ||
+                            attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_MANY) {
+                        if (attribute instanceof PluralAttribute) {
+                            currentType = ((PluralAttribute<?, ?, ?>) attribute).getElementType().getJavaType();
+                        }
+                    } else {
+                        currentType = attribute.getJavaType();
+                    }
+                } catch (IllegalArgumentException e) {
+                    log.debug("Path validation failed: attribute '{}' not found in entity '{}'", part, currentType.getSimpleName());
+                    return false;
+                }
+            }
+
+            return true;
+        } catch (Exception e) {
+            log.debug("Path validation failed for '{}': {}", path, e.getMessage());
+            return false;
+        }
+    }
 } 

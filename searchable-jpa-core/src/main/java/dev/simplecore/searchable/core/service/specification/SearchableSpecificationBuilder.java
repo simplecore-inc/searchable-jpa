@@ -42,6 +42,10 @@ public class SearchableSpecificationBuilder<T> {
     private final JoinStrategyManager<T> joinStrategyManager;
     private final TwoPhaseQueryExecutor<T> twoPhaseQueryExecutor;
     private final EntityGraphManager<T> entityGraphManager;
+    
+    // Cache for relationship analysis to prevent redundant calls
+    private volatile Set<String> cachedCommonToOneFields;
+    private final Object cacheLock = new Object();
 
     public SearchableSpecificationBuilder(@NonNull SearchCondition<?> condition,
                                           @NonNull EntityManager entityManager,
@@ -253,7 +257,7 @@ public class SearchableSpecificationBuilder<T> {
             // For non-count queries, add common ToOne fields to prevent N+1 problems
             Set<String> allJoinPaths = new HashSet<>(conditionJoinPaths);
             if (!isCountQuery) {
-                Set<String> commonToOneFields = relationshipAnalyzer.detectCommonToOneFields();
+                Set<String> commonToOneFields = getCachedCommonToOneFields();
                 log.debug("Adding common ToOne fields for non-count query: {}", commonToOneFields);
                 allJoinPaths.addAll(commonToOneFields);
             }
@@ -332,6 +336,25 @@ public class SearchableSpecificationBuilder<T> {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<T> query = cb.createQuery(entityClass);
         return query.from(entityClass);
+    }
+
+    /**
+     * Get cached common ToOne fields to prevent redundant relationship analysis.
+     * Uses double-checked locking pattern for thread-safe lazy initialization.
+     */
+    private Set<String> getCachedCommonToOneFields() {
+        Set<String> result = cachedCommonToOneFields;
+        if (result == null) {
+            synchronized (cacheLock) {
+                result = cachedCommonToOneFields;
+                if (result == null) {
+                    result = relationshipAnalyzer.detectCommonToOneFields();
+                    cachedCommonToOneFields = result;
+                    log.debug("Cached common ToOne fields: {}", result);
+                }
+            }
+        }
+        return result;
     }
 
     private PageRequest buildPageRequest() {
