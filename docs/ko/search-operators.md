@@ -1,10 +1,12 @@
 # 검색 연산자
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 기본 사용법](basic-usage.md) | [다음: 고급 기능](advanced-features.md)
+[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 기본 사용법](basic-usage.md) | [다음: 2단계 쿼리 최적화](two-phase-query-optimization.md)
 
 ---
 
 Searchable JPA는 다양한 검색 연산자를 제공하여 복잡한 검색 조건을 구성할 수 있습니다. 이 문서는 모든 검색 연산자의 사용법과 예제를 설명합니다.
+
+> **참고**: 기본적인 DTO 설정과 SearchableField 어노테이션 사용법은 [기본 사용법](basic-usage.md) 문서를 참조하세요.
 
 ## 비교 연산자 (Comparison Operators)
 
@@ -12,15 +14,10 @@ Searchable JPA는 다양한 검색 연산자를 제공하여 복잡한 검색 �
 값이 정확히 일치하는지 확인합니다.
 
 ```java
-// DTO 정의
-@SearchableField(operators = {EQUALS})
-private String title;
-
-// 사용 예제
+// URL 파라미터 방식
 GET /api/posts/search?title.equals=Spring Boot
-```
 
-```json
+// JSON 방식
 {
   "field": "title",
   "searchOperator": "equals",
@@ -48,9 +45,6 @@ GET /api/posts/search?status.notEquals=DELETED
 값이 지정된 값보다 큰지 확인합니다.
 
 ```java
-@SearchableField(operators = {GREATER_THAN})
-private Long viewCount;
-
 // 사용 예제
 GET /api/posts/search?viewCount.greaterThan=100
 ```
@@ -85,9 +79,6 @@ GET /api/posts/search?viewCount.lessThanOrEqualTo=1000
 문자열이 지정된 부분 문자열을 포함하는지 확인합니다.
 
 ```java
-@SearchableField(operators = {CONTAINS})
-private String title;
-
 // 사용 예제
 GET /api/posts/search?title.contains=Spring
 
@@ -414,9 +405,10 @@ JSON에서 특수 문자 사용 시 이스케이프 처리가 필요합니다.
 
 ## 다음 단계
 
+- [2단계 쿼리 최적화](two-phase-query-optimization.md) - 고성능 페이징 시스템
 - [고급 기능](advanced-features.md) - 복잡한 검색 조건과 중첩 쿼리
 - [API 레퍼런스](api-reference.md) - 전체 API 문서
 
 ---
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 기본 사용법](basic-usage.md) | [다음: 고급 기능](advanced-features.md) 
+[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 기본 사용법](basic-usage.md) | [다음: 2단계 쿼리 최적화](two-phase-query-optimization.md) 

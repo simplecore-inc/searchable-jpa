@@ -1,6 +1,6 @@
 # OpenAPI 통합
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 커서 페이징](cursor-pagination.md) | [다음: API 레퍼런스](api-reference.md)
+[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 2단계 쿼리 최적화](two-phase-query-optimization.md) | [다음: API 레퍼런스](api-reference.md)
 
 ---
 
@@ -395,19 +395,19 @@ public class PostPageResponse {
 }
 ```
 
-### 커서 페이징 응답
+### 2단계 쿼리 페이징 응답
 
 ```java
-@Schema(description = "커서 기반 페이징 응답")
+@Schema(description = "2단계 쿼리 최적화 페이징 응답")
 public class CursorPageResponse<T> {
     
     @Schema(description = "현재 페이지 데이터")
     private List<T> content;
     
-    @Schema(description = "다음 페이지 커서", example = "eyJjcmVhdGVkQXQiOiIyMDI0LTAxLTE0VDE1OjIwOjAwIiwiaWQiOjk5fQ==")
+    @Schema(description = "다음 페이지 토큰", example = "eyJjcmVhdGVkQXQiOiIyMDI0LTAxLTE0VDE1OjIwOjAwIiwiaWQiOjk5fQ==")
     private String nextCursor;
     
-    @Schema(description = "이전 페이지 커서")
+    @Schema(description = "이전 페이지 토큰")
     private String previousCursor;
     
     @Schema(description = "다음 페이지 존재 여부")
@@ -489,9 +489,9 @@ public class PostController {
     }
     
     @Operation(
-        summary = "커서 기반 검색",
-        description = "대용량 데이터를 위한 커서 기반 페이징 검색",
-        tags = {"게시글 검색", "커서 페이징"}
+        summary = "2단계 쿼리 검색",
+        description = "대용량 데이터를 위한 2단계 쿼리 최적화 검색",
+        tags = {"게시글 검색", "2단계 쿼리"}
     )
     @GetMapping("/cursor-search")
     public Page<Post> searchPosts(/* ... */) {
@@ -569,7 +569,7 @@ public OpenAPI secureOpenAPI() {
    }
    ```
 
-3. **커서 페이징 테스트**
+3. **2단계 쿼리 최적화 테스트**
    ```
    GET /api/posts/cursor-search?sort=createdAt,desc&size=10
    GET /api/posts/cursor-search?cursor=eyJjcmVhdGVkQXQiOiIyMDI0LTAxLTE0VDE1OjIwOjAwIiwiaWQiOjk5fQ==&size=10
@@ -611,4 +611,4 @@ public class OpenApiConfig {
 
 ---
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 커서 페이징](cursor-pagination.md) | [다음: API 레퍼런스](api-reference.md) 
+[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 2단계 쿼리 최적화](two-phase-query-optimization.md) | [다음: API 레퍼런스](api-reference.md) 

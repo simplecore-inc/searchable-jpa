@@ -15,404 +15,421 @@
 - Java 8+: 지원
 - JPA 2.2+: 지원
 
-### Q: 기존 프로젝트에 추가할 때 기존 코드에 영향을 주나요?
+### Q: 자동 설정이 작동하지 않아요.
 
-**A:** 아니요. Searchable JPA는 기존 JPA Repository와 완전히 독립적으로 동작합니다. 기존 코드를 수정할 필요 없이 새로운 검색 기능만 추가할 수 있습니다.
+**A:** 다음 사항을 확인해주세요:
 
-```java
-// 기존 Repository는 그대로 유지
-@Repository
-public interface PostRepository extends JpaRepository<Post, Long> {
-    List<Post> findByTitle(String title); // 기존 메서드 유지
-}
-
-// Searchable 기능만 추가
-@Service  
-public class PostService extends DefaultSearchableService<Post> {
-    // 새로운 검색 기능
+1. **의존성 확인**:
+```gradle
+dependencies {
+    implementation 'dev.simplecore:spring-boot-starter-searchable-jpa:1.0.0'
+    // spring-boot-starter-data-jpa도 필요합니다
 }
 ```
 
-### Q: Maven을 사용하는데 의존성 설정은 어떻게 하나요?
+2. **패키지 스캔 확인**:
+```java
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+```
 
-**A:** Maven 사용 시 다음과 같이 설정하세요:
+3. **설정 파일 확인**:
+```yaml
+searchable:
+  hibernate:
+    auto-optimization: true
+```
 
-```xml
-<dependency>
-    <groupId>dev.simplecore.searchable</groupId>
-    <artifactId>spring-boot-starter-searchable-jpa</artifactId>
-    <version>0.0.4-SNAPSHOT</version>
-</dependency>
+### Q: 데이터베이스별 설정이 필요한가요?
+
+**A:** 기본적으로 자동 감지되지만, 명시적 설정도 가능합니다:
+
+```yaml
+# H2 (테스트용)
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+
+# MySQL
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/mydb
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+
+# SQL Server
+spring:
+  datasource:
+    url: jdbc:sqlserver://localhost:1433;databaseName=mydb
+  jpa:
+    database-platform: org.hibernate.dialect.SQLServer2012Dialect
 ```
 
 ## 기본 사용법
 
-### Q: DTO 필드명과 엔티티 필드명이 다를 때 어떻게 매핑하나요?
+### Q: SearchableService를 어떻게 구현하나요?
 
-**A:** `@SearchableField`의 `entityField` 속성을 사용하세요:
+A: `DefaultSearchableService`를 상속받아 구현합니다.
+
+> **상세한 서비스 구현**: 완전한 서비스 구현 예제는 [기본 사용법](basic-usage.md) 문서를 참조하세요.
 
 ```java
-public class PostSearchDTO {
-    @SearchableField(entityField = "title", operators = {CONTAINS})
-    private String searchTitle; // DTO 필드명
+// 서비스 구현 예제는 기본 사용법 문서 참조
+// 고급 서비스 기능은 고급 기능 문서 참조
+```
+
+### Q: SearchableField 어노테이션을 어떻게 사용하나요?
+
+A: DTO 클래스의 필드에 `@SearchableField` 어노테이션을 추가합니다.
+
+> **상세한 DTO 설정**: 완전한 DTO 설정 예제는 [기본 사용법](basic-usage.md) 문서를 참조하세요.
+
+```java
+// DTO 설정 예제는 기본 사용법 문서 참조
+// 복합 키 DTO 설정은 고급 기능 문서 참조
+```
+
+### Q: 복합 키 엔티티는 어떻게 처리하나요?
+
+**A:** 복합 키 타입을 명시하여 구현합니다:
+
+```java
+// @IdClass 방식
+@Service
+public class IdClassEntityService extends DefaultSearchableService<TestIdClassEntity, TestIdClassEntity.CompositeKey> {
     
-    @SearchableField(entityField = "author.name", operators = {CONTAINS})
-    private String authorName; // 중첩 필드 매핑
+    public IdClassEntityService(TestIdClassEntityRepository repository, EntityManager entityManager) {
+        super(repository, entityManager);
+    }
+}
+
+// @EmbeddedId 방식
+@Service
+public class EmbeddedIdEntityService extends DefaultSearchableService<TestCompositeKeyEntity, TestCompositeKeyEntity.CompositeKey> {
+    
+    public EmbeddedIdEntityService(TestCompositeKeyEntityRepository repository, EntityManager entityManager) {
+        super(repository, entityManager);
+    }
 }
 ```
 
-### Q: 모든 필드에 @SearchableField를 붙여야 하나요?
+### Q: DTO 클래스는 어떻게 정의해야 하나요?
 
-**A:** 아니요. 검색 가능하게 만들고 싶은 필드에만 붙이면 됩니다. 어노테이션이 없는 필드는 검색 조건에서 무시됩니다.
+A: `@SearchableField` 어노테이션을 사용하여 정의합니다.
 
-### Q: 날짜 검색 시 어떤 형식을 사용해야 하나요?
+> **상세한 DTO 설정**: 완전한 DTO 설정 예제는 [기본 사용법](basic-usage.md) 문서를 참조하세요.
 
-**A:** ISO 8601 형식을 사용하세요:
+```java
+// DTO 설정 예제는 기본 사용법 문서 참조
+// 복합 키 DTO 설정은 고급 기능 문서 참조
+```
+
+## 검색 기능
+
+### Q: 복잡한 검색 조건은 어떻게 구성하나요?
+
+**A:** 여러 방법이 있습니다:
+
+1. **쿼리 파라미터 방식**:
+```bash
+GET /search?title.contains=Spring&status.equals=PUBLISHED&authorName.contains=John
+```
+
+2. **JSON 방식**:
+```json
+{
+  "nodes": [
+    {
+      "operator": "and",
+      "field": "title",
+      "searchOperator": "contains",
+      "value": "Spring"
+    },
+    {
+      "operator": "and",
+      "field": "status",
+      "searchOperator": "equals",
+      "value": "PUBLISHED"
+    }
+  ]
+}
+```
+
+### Q: 중첩된 엔티티 검색은 어떻게 하나요?
+
+**A:** `entityField` 속성을 사용하여 중첩 필드를 지정합니다:
+
+```java
+public class PostSearchDTO {
+    // 작성자 이름으로 검색
+    @SearchableField(entityField = "author.name", operators = {CONTAINS})
+    private String authorName;
+    
+    // 작성자 이메일로 검색
+    @SearchableField(entityField = "author.email", operators = {EQUALS})
+    private String authorEmail;
+    
+    // 깊은 중첩 (작성자의 부서명)
+    @SearchableField(entityField = "author.department.name", operators = {EQUALS})
+    private String departmentName;
+}
+```
+
+### Q: 날짜 범위 검색은 어떻게 하나요?
+
+**A:** `BETWEEN` 연산자를 사용합니다:
 
 ```bash
-# LocalDateTime
-GET /api/posts/search?createdAt.greaterThan=2024-01-01T00:00:00
+# 쿼리 파라미터 방식
+GET /search?createdAt.between=2023-01-01,2023-12-31
 
-# LocalDate  
-GET /api/posts/search?publishDate.equals=2024-01-01
-
-# 범위 검색
-GET /api/posts/search?createdAt.between=2024-01-01T00:00:00,2024-12-31T23:59:59
+# 개별 조건 방식
+GET /search?createdAt.greaterThanOrEqualTo=2023-01-01&createdAt.lessThanOrEqualTo=2023-12-31
 ```
 
-## 검색 연산자
+## 성능 최적화
 
-### Q: 대소문자 구분 없이 검색하려면 어떻게 해야 하나요?
+### Q: N+1 문제가 발생하는데 어떻게 해결하나요?
 
-**A:** 현재 버전에서는 대소문자 구분 없는 검색을 위해 데이터베이스 함수를 활용하거나, 검색 전에 값을 소문자로 변환하는 방법을 사용할 수 있습니다:
+**A:** Searchable JPA는 자동으로 N+1 문제를 해결합니다:
 
 ```java
-// 서비스에서 전처리
-public Page<Post> searchPosts(String title) {
-    SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
-        .create(PostSearchDTO.class)
-        .where(group -> group.contains("title", title.toLowerCase()))
-        .build();
-    return findAllWithSearch(condition);
-}
+// 자동으로 JOIN FETCH가 적용됩니다
+// 검색 조건에 연관 엔티티 필드가 있으면 자동 JOIN 처리
+
+// 수동 설정이 필요한 경우
+searchable:
+  hibernate:
+    default-batch-fetch-size: 100
 ```
 
-### Q: LIKE 검색에서 와일드카드를 직접 사용할 수 있나요?
+### Q: 대용량 데이터에서 페이징 성능이 느려요.
 
-**A:** 아니요. 보안상의 이유로 와일드카드는 자동으로 추가됩니다. 대신 적절한 연산자를 사용하세요:
+**A:** 2단계 쿼리 최적화가 자동으로 적용되지만, 인덱스 최적화가 필요할 수 있습니다:
 
-```java
-// 자동으로 %가 추가됨
-title.contains=Spring     // WHERE title LIKE '%Spring%'
-title.startsWith=Spring   // WHERE title LIKE 'Spring%'  
-title.endsWith=Boot       // WHERE title LIKE '%Boot'
-```
-
-### Q: IN 연산자에서 사용할 수 있는 값의 개수에 제한이 있나요?
-
-**A:** 기술적 제한은 없지만, 데이터베이스 성능을 위해 1000개 이하로 제한하는 것을 권장합니다. 많은 값이 필요한 경우 다른 검색 방식을 고려하세요.
-
-## 고급 기능
-
-### Q: 복잡한 OR 조건을 어떻게 구성하나요?
-
-**A:** SearchConditionBuilder를 사용하여 구성할 수 있습니다:
-
-```java
-// (title CONTAINS 'Spring' OR title CONTAINS 'Java') AND status = 'PUBLISHED'
-SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
-    .create(PostSearchDTO.class)
-    .where(group -> group.contains("title", "Spring"))
-    .or(group -> group.contains("title", "Java"))
-    .and(group -> group.equals("status", PostStatus.PUBLISHED))
-    .build();
-```
-
-### Q: 동적으로 검색 조건을 추가하려면 어떻게 해야 하나요?
-
-**A:** 조건부로 빌더를 사용하세요:
-
-```java
-public Page<Post> dynamicSearch(String title, PostStatus status, LocalDateTime fromDate) {
-    ChainedSearchCondition<PostSearchDTO> builder = SearchConditionBuilder
-        .create(PostSearchDTO.class);
-        
-    if (title != null && !title.isEmpty()) {
-        builder = builder.where(group -> group.contains("title", title));
-    }
-    
-    if (status != null) {
-        builder = builder.and(group -> group.equals("status", status));
-    }
-    
-    if (fromDate != null) {
-        builder = builder.and(group -> group.greaterThan("createdAt", fromDate));
-    }
-    
-    return findAllWithSearch(builder.build());
-}
-```
-
-### Q: 중첩된 엔티티의 깊은 필드까지 검색할 수 있나요?
-
-**A:** 네, 점 표기법을 사용하여 깊은 중첩까지 가능합니다:
-
-```java
-public class PostSearchDTO {
-    // author.department.company.name까지 접근 가능
-    @SearchableField(entityField = "author.department.company.name")
-    private String companyName;
-}
-```
-
-## 성능 및 최적화
-
-### Q: 대용량 데이터에서 성능이 느린데 어떻게 개선할 수 있나요?
-
-**A:** 다음 방법들을 시도해보세요:
-
-1. **적절한 인덱스 생성**:
 ```sql
--- 검색 + 정렬 필드에 복합 인덱스
+-- 정렬 필드에 인덱스 생성
+CREATE INDEX idx_posts_created_at ON posts(created_at DESC);
+
+-- 복합 조건에 복합 인덱스 생성
 CREATE INDEX idx_posts_status_created_at ON posts(status, created_at DESC);
+
+-- 복합 키 인덱스
+CREATE INDEX idx_composite_tenant_entity ON test_idclass_entity(tenant_id, entity_id);
 ```
 
-2. **커서 페이징 활용**:
-```java
-// 내부적으로 커서 페이징이 자동 적용됨
-public Page<Post> findPosts(SearchCondition<PostSearchDTO> condition) {
-    return findAllWithSearch(condition);
-}
-```
+### Q: 2단계 쿼리 최적화는 언제 적용되나요?
 
-3. **DTO 프로젝션 활용**:
-```java
-// 필요한 필드만 조회
-public Page<PostSummaryDTO> findPostSummaries(SearchCondition<PostSearchDTO> condition) {
-    return findAllWithSearch(condition, PostSummaryDTO.class);
-}
-```
+**A:** 다음 조건에서 자동으로 적용됩니다:
 
-### Q: N+1 문제가 발생할 수 있나요?
-
-**A:** 연관 엔티티를 검색할 때 N+1 문제가 발생할 수 있습니다. 이를 해결하려면:
+- 복잡한 JOIN이 포함된 검색
+- 복합 키 엔티티 검색
+- ToMany 관계가 포함된 검색
+- 대용량 데이터 검색
 
 ```java
-@Entity
-public class Post {
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "author_id")
-    private Author author;
-}
-
-// Repository에서 fetch join 사용
-@Query("SELECT p FROM Post p JOIN FETCH p.author WHERE ...")
-Page<Post> findPostsWithAuthor(Specification<Post> spec, Pageable pageable);
-```
-
-### Q: 검색 조건이 복잡할 때 쿼리 성능을 어떻게 확인하나요?
-
-**A:** 다음 설정으로 생성된 SQL을 확인할 수 있습니다:
-
-```yaml
+// 로그로 확인 가능
 logging:
   level:
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    dev.simplecore.searchable.core.service.specification.TwoPhaseQueryExecutor: DEBUG
+```
+
+## 복합 키 관련
+
+### Q: @IdClass와 @EmbeddedId 중 어느 것을 사용해야 하나요?
+
+**A:** 각각의 장단점이 있습니다:
+
+**@IdClass 방식**:
+- 장점: 엔티티 클래스가 깔끔함
+- 단점: 복합 키 클래스 별도 정의 필요
+- 쿼리: 복합 OR 조건 사용
+
+**@EmbeddedId 방식**:
+- 장점: 타입 안전성, 더 최적화된 쿼리
+- 단점: 엔티티 접근 시 `entity.getId().getTenantId()` 형태
+- 쿼리: IN 조건으로 최적화
+
+```java
+// 성능상 @EmbeddedId가 약간 유리 (IN 조건 최적화)
+// 복합 키 엔티티 설정 예제는 고급 기능 문서 참조
+```
+
+### Q: 복합 키 검색에서 부분 키로만 검색할 수 있나요?
+
+**A:** 가능하지만 인덱스 설계에 주의해야 합니다:
+
+```java
+// 부분 키 검색 DTO
+public class PartialKeySearchDTO {
+    @SearchableField(operators = {EQUALS})
+    private String tenantId;  // 복합 키의 일부만 검색
     
-spring:
-  jpa:
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
+    @SearchableField(operators = {CONTAINS})
+    private String name;
+}
+
+// 인덱스 최적화 필요
+CREATE INDEX idx_partial_tenant_name ON entity_table(tenant_id, name);
 ```
 
 ## 에러 처리
 
-### Q: "No qualifying bean of type 'SearchableService'" 에러가 발생합니다.
+### Q: "Repository must implement JpaSpecificationExecutor" 에러가 발생해요.
 
-**A:** 다음을 확인하세요:
+**A:** 레포지토리에 `JpaSpecificationExecutor`를 추가해야 합니다:
 
-1. **Spring Boot Starter 의존성 확인**:
-```gradle
-implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:0.0.4-SNAPSHOT'
-```
-
-2. **서비스 클래스가 올바르게 정의되었는지 확인**:
 ```java
-@Service
-public class PostService extends DefaultSearchableService<Post> {
-    public PostService(PostRepository repository) {
-        super(repository, Post.class);
-    }
+// 잘못된 예
+public interface PostRepository extends JpaRepository<Post, Long> {
+}
+
+// 올바른 예
+public interface PostRepository extends JpaRepository<Post, Long>, JpaSpecificationExecutor<Post> {
 }
 ```
 
-### Q: "SearchableValidationException" 예외가 발생합니다.
+### Q: "Unable to determine ID field name" 에러가 발생해요.
 
-**A:** 검색 조건 검증에 실패한 경우입니다. 다음을 확인하세요:
-
-1. **허용되지 않은 연산자 사용**:
-```java
-// EQUALS만 허용했는데 CONTAINS 사용
-@SearchableField(operators = {EQUALS})
-private String title;
-
-// 잘못된 요청: title.contains=Spring
-// 올바른 요청: title.equals=Spring Boot
-```
-
-2. **존재하지 않는 필드 사용**:
-```java
-// DTO에 정의되지 않은 필드로 검색
-GET /api/posts/search?nonExistentField.equals=value
-```
-
-### Q: JSON 파싱 에러가 발생합니다.
-
-**A:** POST 방식 검색 시 JSON 형식을 확인하세요:
-
-```json
-// 올바른 형식
-{
-  "conditions": [
-    {
-      "operator": "and",
-      "field": "title",
-      "searchOperator": "contains", 
-      "value": "Spring"
-    }
-  ]
-}
-
-// 잘못된 형식 - operator 오타
-{
-  "conditions": [
-    {
-      "operator": "AND", // 소문자 "and"여야 함
-      "field": "title",
-      "searchOperator": "contains",
-      "value": "Spring"
-    }
-  ]
-}
-```
-
-## 커서 페이징
-
-### Q: 커서 페이징에서 특정 페이지로 바로 이동할 수 있나요?
-
-**A:** 아니요. 커서 페이징의 특성상 순차적으로만 이동 가능합니다. 특정 페이지로의 직접 이동이 필요한 경우 일반 페이징을 사용하세요.
-
-### Q: 커서가 만료되거나 무효해질 수 있나요?
-
-**A:** 네, 다음 경우에 커서가 무효해질 수 있습니다:
-
-- 정렬 기준이 된 데이터가 변경된 경우
-- 커서가 가리키는 레코드가 삭제된 경우
-- 너무 오래된 커서를 사용하는 경우
-
-이런 경우 첫 페이지부터 다시 시작하세요.
-
-### Q: 커서 페이징에서 전체 개수를 알 수 있나요?
-
-**A:** 커서 페이징은 성능을 위해 전체 개수를 제공하지 않습니다. 전체 개수가 필요한 경우:
+**A:** 엔티티에 `@Id` 어노테이션이 없거나 복합 키 설정이 잘못되었을 수 있습니다:
 
 ```java
-// 별도로 카운트 조회
-long totalCount = countWithSearch(condition);
-
-// 또는 일반 페이징 사용
-Page<Post> page = findAllWithSearch(condition);
-long totalElements = page.getTotalElements();
+// 엔티티 ID 설정 예제는 기본 사용법 문서 참조
+// 복합 키 엔티티 설정 예제는 고급 기능 문서 참조
 ```
 
-## OpenAPI/Swagger
+### Q: SQL Server에서 "Incorrect syntax near ','" 에러가 발생해요.
 
-### Q: Swagger UI에서 검색 파라미터가 표시되지 않습니다.
-
-**A:** 다음을 확인하세요:
-
-1. **OpenAPI 모듈 의존성**:
-```gradle
-implementation 'dev.simplecore.searchable:searchable-jpa-openapi:0.0.4-SNAPSHOT'
-```
-
-2. **@SearchableParams 어노테이션 사용**:
-```java
-@GetMapping("/search")
-public Page<Post> search(
-    @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params
-) {
-    // ...
-}
-```
-
-### Q: 프로덕션 환경에서 Swagger를 비활성화하려면?
-
-**A:** 프로파일별로 설정하세요:
+**A:** 이는 복합 키 COUNT 쿼리 문제로, 자동으로 해결됩니다. 최신 버전을 사용하세요:
 
 ```yaml
-# application-prod.yml
-springdoc:
-  api-docs:
-    enabled: false
-  swagger-ui:
-    enabled: false
+# 로그로 확인
+logging:
+  level:
+    dev.simplecore.searchable.core.service.specification.TwoPhaseQueryExecutor: DEBUG
 ```
 
-## 기타
+## 고급 사용법
 
-### Q: 트랜잭션 처리는 어떻게 되나요?
+### Q: 커스텀 연산자를 만들 수 있나요?
 
-**A:** Searchable JPA는 기본적으로 읽기 전용이므로 `@Transactional(readOnly = true)`가 적용됩니다. 수정/삭제 작업 시에는 명시적으로 트랜잭션을 설정하세요:
+**A:** 가능합니다:
 
 ```java
-@Transactional
-public long updatePosts(SearchCondition<PostSearchDTO> condition, PostUpdateDTO updateData) {
-    return updateWithSearch(condition, updateData);
+public enum CustomSearchOperator implements SearchOperator {
+    FULL_TEXT_SEARCH("fullTextSearch") {
+        @Override
+        public <T> Predicate toPredicate(Root<T> root, CriteriaBuilder cb, String field, Object value) {
+            return cb.function("MATCH", Boolean.class, 
+                root.get(field), cb.literal(value)).isTrue();
+        }
+    };
+    
+    private final String operation;
+    
+    CustomSearchOperator(String operation) {
+        this.operation = operation;
+    }
+    
+    @Override
+    public String getOperation() {
+        return operation;
+    }
 }
 ```
 
-### Q: 다국어 지원은 되나요?
+### Q: 프로젝션을 사용할 수 있나요?
 
-**A:** 현재 한국어와 영어 에러 메시지를 지원합니다. 추가 언어가 필요한 경우 메시지 파일을 확장할 수 있습니다:
+**A:** 인터페이스 기반 프로젝션을 지원합니다:
 
-```properties
-# messages_ja.properties (일본어 추가)
-validator.field.required=フィールドは必須です
+```java
+public interface PostSummary {
+    String getTitle();
+    String getAuthorName();
+    LocalDateTime getCreatedAt();
+}
+
+// 사용
+Page<PostSummary> summaries = postService.findAllWithSearch(condition, PostSummary.class);
 ```
 
-### Q: 커스텀 검색 연산자를 추가할 수 있나요?
+### Q: 배치 업데이트/삭제는 어떻게 하나요?
 
-**A:** 현재 버전에서는 지원하지 않습니다. 향후 버전에서 확장 가능한 구조로 개선할 예정입니다. 현재는 기존 연산자를 조합하여 사용하세요.
+**A:** 검색 조건 기반으로 배치 작업이 가능합니다:
 
-### Q: 성능 모니터링은 어떻게 할 수 있나요?
+```java
+// 배치 업데이트
+PostUpdateDTO updateData = new PostUpdateDTO();
+updateData.setStatus(PostStatus.PUBLISHED);
+long updatedCount = postService.updateWithSearch(searchCondition, updateData);
 
-**A:** Spring Boot Actuator와 함께 사용할 수 있습니다:
-
-```gradle
-implementation 'org.springframework.boot:spring-boot-starter-actuator'
+// 배치 삭제
+long deletedCount = postService.deleteWithSearch(searchCondition);
 ```
+
+## 모니터링 및 디버깅
+
+### Q: 실행되는 쿼리를 확인하고 싶어요.
+
+**A:** 로그 레벨을 조정하여 확인할 수 있습니다:
+
+```yaml
+logging:
+  level:
+    # Searchable JPA 로그
+    dev.simplecore.searchable: DEBUG
+    
+    # Hibernate SQL 로그
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    
+    # Spring Data JPA 로그
+    org.springframework.data.jpa: DEBUG
+```
+
+### Q: 성능 메트릭을 수집하고 싶어요.
+
+**A:** 이벤트 리스너를 구현할 수 있습니다:
 
 ```java
 @Component
-public class SearchMetrics {
-    private final MeterRegistry meterRegistry;
+public class SearchPerformanceMonitor {
     
-    public void recordSearchTime(String searchType, long duration) {
-        Timer.Sample.start(meterRegistry)
-            .stop(Timer.builder("searchable.search.duration")
-                .tag("type", searchType)
-                .register(meterRegistry));
+    @EventListener
+    public void handleSearchEvent(SearchExecutedEvent event) {
+        log.info("Search executed - Entity: {}, Duration: {}ms, Strategy: {}", 
+            event.getEntityClass().getSimpleName(),
+            event.getDuration(),
+            event.getStrategy());
     }
 }
+```
+
+## 마이그레이션
+
+### Q: 기존 JPA 코드에서 마이그레이션하려면?
+
+**A:** 점진적 마이그레이션이 가능합니다:
+
+1. **1단계**: 의존성 추가 및 자동 설정 활성화
+2. **2단계**: 기존 서비스를 `DefaultSearchableService`로 변경
+3. **3단계**: 검색 DTO 정의 및 컨트롤러 수정
+4. **4단계**: 성능 모니터링 및 최적화
+
+```java
+// 기존 코드와 병행 사용 가능
+// 서비스 마이그레이션 예제는 기본 사용법 문서 참조
 ```
 
 ---
 
-더 많은 질문이나 문제가 있으시면 [GitHub Issues](https://github.com/simplecore-inc/searchable-jpa/issues)에 문의해 주세요.
+더 궁금한 점이 있으시면 [GitHub Issues](https://github.com/simplecore-inc/searchable-jpa/issues)에 문의해주세요.
 
 ---
 

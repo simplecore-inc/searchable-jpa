@@ -235,34 +235,40 @@ public enum LogicalOperator {
 ```java
 public interface SearchableService<T> {
     // 검색 메서드
-    Page<T> findAllWithSearch(SearchCondition<?> searchCondition);
-    <D> Page<D> findAllWithSearch(SearchCondition<?> searchCondition, Class<D> dtoClass);
-    Optional<T> findOneWithSearch(SearchCondition<?> searchCondition);
-    Optional<T> findFirstWithSearch(SearchCondition<?> searchCondition);
+    @NonNull
+    Page<T> findAllWithSearch(@NonNull SearchCondition<?> searchCondition);
+    
+    @NonNull
+    <D> Page<D> findAllWithSearch(@NonNull SearchCondition<?> searchCondition, Class<D> dtoClass);
+    
+    @NonNull
+    Optional<T> findOneWithSearch(@NonNull SearchCondition<?> searchCondition);
+    
+    @NonNull
+    Optional<T> findFirstWithSearch(@NonNull SearchCondition<?> searchCondition);
     
     // 집계 메서드
-    long countWithSearch(SearchCondition<?> searchCondition);
-    boolean existsWithSearch(SearchCondition<?> searchCondition);
+    long countWithSearch(@NonNull SearchCondition<?> searchCondition);
+    boolean existsWithSearch(@NonNull SearchCondition<?> searchCondition);
     
     // 수정/삭제 메서드
-    long updateWithSearch(SearchCondition<?> searchCondition, Object updateData);
-    long deleteWithSearch(SearchCondition<?> searchCondition);
+    long deleteWithSearch(@NonNull SearchCondition<?> searchCondition);
+    long updateWithSearch(@NonNull SearchCondition<?> searchCondition, @NonNull Object updateData);
 }
 ```
 
-### DefaultSearchableService<T>
+### DefaultSearchableService<T, ID>
 
 `SearchableService`의 기본 구현체입니다.
 
 ```java
-public class DefaultSearchableService<T> implements SearchableService<T> {
+public class DefaultSearchableService<T, ID> implements SearchableService<T> {
     
     // 생성자
-    public DefaultSearchableService(JpaRepository<T, ?> repository, Class<T> entityClass)
-    public DefaultSearchableService(JpaRepository<T, ?> repository, EntityManager entityManager)
+    public DefaultSearchableService(JpaRepository<T, ID> repository, EntityManager entityManager)
     
-    // 내부적으로 커서 기반 페이징을 사용하는 기본 메서드들
-    // 클라이언트는 기존 방식대로 사용하면서 커서 페이징의 성능 이점을 얻음
+    // 내부적으로 2단계 쿼리 최적화를 사용하는 기본 메서드들
+    // 클라이언트는 기존 방식대로 사용하면서 2단계 쿼리 최적화의 성능 이점을 얻음
 }
 ```
 
@@ -273,8 +279,16 @@ public class DefaultSearchableService<T> implements SearchableService<T> {
 프로그래매틱하게 검색 조건을 생성하는 빌더입니다.
 
 ```java
-public class SearchConditionBuilder {
-    public static <D> ChainedSearchCondition<D> create(Class<D> dtoClass)
+public class SearchConditionBuilder<D> {
+    public static <D> SearchConditionBuilder<D> create(Class<D> dtoClass)
+    
+    public SearchConditionBuilder<D> where(Consumer<ConditionGroupBuilder> consumer)
+    public SearchConditionBuilder<D> and(Consumer<ConditionGroupBuilder> consumer)
+    public SearchConditionBuilder<D> or(Consumer<ConditionGroupBuilder> consumer)
+    public ChainedSearchCondition<D> sort(Consumer<SortBuilder> consumer)
+    public ChainedSearchCondition<D> page(int page)
+    public ChainedSearchCondition<D> size(int size)
+    public SearchCondition<D> build()
 }
 ```
 
@@ -308,26 +322,29 @@ public interface FirstCondition {
     ChainedCondition lessThanOrEqualTo(String field, Object value);
     
     // 문자열 패턴 연산자
-    ChainedCondition contains(String field, Object value);
-    ChainedCondition notContains(String field, Object value);
-    ChainedCondition startsWith(String field, Object value);
-    ChainedCondition notStartsWith(String field, Object value);
-    ChainedCondition endsWith(String field, Object value);
-    ChainedCondition notEndsWith(String field, Object value);
+    ChainedCondition contains(String field, String value);
+    ChainedCondition notContains(String field, String value);
+    ChainedCondition startsWith(String field, String value);
+    ChainedCondition notStartsWith(String field, String value);
+    ChainedCondition endsWith(String field, String value);
+    ChainedCondition notEndsWith(String field, String value);
     
     // NULL 체크 연산자
     ChainedCondition isNull(String field);
     ChainedCondition isNotNull(String field);
     
     // 컬렉션 연산자
-    ChainedCondition in(String field, Object... values);
-    ChainedCondition in(String field, Collection<?> values);
-    ChainedCondition notIn(String field, Object... values);
-    ChainedCondition notIn(String field, Collection<?> values);
+    ChainedCondition in(String field, List<?> values);
+    ChainedCondition notIn(String field, List<?> values);
     
     // 범위 연산자
-    ChainedCondition between(String field, Object from, Object to);
-    ChainedCondition notBetween(String field, Object from, Object to);
+    ChainedCondition between(String field, Object start, Object end);
+    ChainedCondition notBetween(String field, Object start, Object end);
+    
+    // 그룹 조건
+    ChainedCondition where(Consumer<FirstCondition> consumer);
+    ChainedCondition and(Consumer<FirstCondition> consumer);
+    ChainedCondition or(Consumer<FirstCondition> consumer);
 }
 ```
 
@@ -338,6 +355,25 @@ public interface FirstCondition {
 ```java
 public interface ChainedCondition extends FirstCondition {
     // FirstCondition의 모든 메서드를 상속받아 체이닝 가능
+    // 추가로 OR 연산자들 제공
+    ChainedCondition orEquals(String field, Object value);
+    ChainedCondition orNotEquals(String field, Object value);
+    ChainedCondition orGreaterThan(String field, Object value);
+    ChainedCondition orGreaterThanOrEqualTo(String field, Object value);
+    ChainedCondition orLessThan(String field, Object value);
+    ChainedCondition orLessThanOrEqualTo(String field, Object value);
+    ChainedCondition orContains(String field, String value);
+    ChainedCondition orNotContains(String field, String value);
+    ChainedCondition orStartsWith(String field, String value);
+    ChainedCondition orNotStartsWith(String field, String value);
+    ChainedCondition orEndsWith(String field, String value);
+    ChainedCondition orNotEndsWith(String field, String value);
+    ChainedCondition orIsNull(String field);
+    ChainedCondition orIsNotNull(String field);
+    ChainedCondition orIn(String field, List<?> values);
+    ChainedCondition orNotIn(String field, List<?> values);
+    ChainedCondition orBetween(String field, Object start, Object end);
+    ChainedCondition orNotBetween(String field, Object start, Object end);
 }
 ```
 
@@ -349,8 +385,6 @@ public interface ChainedCondition extends FirstCondition {
 public interface SortBuilder {
     SortBuilder asc(String field);
     SortBuilder desc(String field);
-    SortBuilder asc(String field, String entityField);
-    SortBuilder desc(String field, String entityField);
 }
 ```
 
@@ -365,7 +399,6 @@ public class SearchableParamsParser<D> {
     public SearchableParamsParser(Class<D> dtoClass)
     
     public SearchCondition<D> convert(Map<String, String> params)
-    public SearchCondition<D> convert(MultiValueMap<String, String> params)
 }
 ```
 
@@ -376,7 +409,7 @@ public class SearchableParamsParser<D> {
 "field.operator=value"
 
 // 정렬
-"sort=field,direction"
+"sort=field.asc,field.desc"
 
 // 페이징
 "page=0&size=10"
@@ -388,18 +421,17 @@ public class SearchableParamsParser<D> {
 "field.in=value1,value2,value3"
 ```
 
-## 커서 페이징
+## 2단계 쿼리 최적화
 
-### 내부 구현
+### 자동 최적화
 
-Searchable JPA는 내부적으로 커서 기반 페이징을 사용하여 성능을 최적화합니다. 클라이언트는 표준 Spring Data의 `Page<T>` 인터페이스를 사용하면서 커서 페이징의 이점을 얻을 수 있습니다.
+Searchable JPA는 내부적으로 2단계 쿼리 최적화를 사용하여 성능을 최적화합니다. 클라이언트는 표준 Spring Data의 `Page<T>` 인터페이스를 사용하면서 2단계 쿼리 최적화의 이점을 얻을 수 있습니다.
 
 ```java
-// 표준 Spring Data Page 인터페이스 사용
-Page<Post> result = searchableService.findAllWithSearch(condition);
+// 클라이언트 코드는 기존과 동일
+Page<Post> result = postService.findAllWithSearch(condition);
 
-// 내부적으로는 커서 기반 쿼리로 변환되어 실행됨
-// 클라이언트 코드 변경 없이 성능 향상
+// 내부적으로는 2단계 쿼리 최적화로 변환되어 실행됨
 ```
 
 ## 예외 클래스
@@ -496,64 +528,28 @@ public class SearchableProperties {
 }
 ```
 
-## 사용 예제
+## 예제 코드
 
-### 기본 사용법
+### 기본 사용 예제
 
+> **상세한 사용 예제**: [기본 사용법](basic-usage.md) 문서에서 완전한 예제 코드를 확인할 수 있습니다.
+
+#### DTO 클래스 정의
 ```java
-// 1. DTO 정의
-public class PostSearchDTO {
-    @SearchableField(operators = {EQUALS, CONTAINS}, sortable = true)
-    private String title;
-    
-    @SearchableField(operators = {EQUALS, IN})
-    private PostStatus status;
-}
-
-// 2. 서비스 구현
-@Service
-public class PostService extends DefaultSearchableService<Post> {
-    public PostService(PostRepository repository) {
-        super(repository, Post.class);
-    }
-}
-
-// 3. 컨트롤러 구현
-@RestController
-public class PostController {
-    
-    @GetMapping("/search")
-    public Page<Post> search(
-        @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params
-    ) {
-        SearchCondition<PostSearchDTO> condition = 
-            new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
-        return postService.findAllWithSearch(condition);
-    }
-    
-    @PostMapping("/search")
-    public Page<Post> searchPost(@RequestBody SearchCondition<PostSearchDTO> condition) {
-        return postService.findAllWithSearch(condition);
-    }
-}
+// 기본적인 DTO 설정 예제는 기본 사용법 문서 참조
+// 복합 키 관련 예제는 고급 기능 문서 참조
 ```
 
-### 빌더 사용법
-
+#### 서비스 클래스 구현
 ```java
-SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
-    .create(PostSearchDTO.class)
-    .where(group -> group
-        .contains("title", "Spring")
-        .equals("status", PostStatus.PUBLISHED)
-    )
-    .sort(sort -> sort
-        .desc("createdAt")
-        .asc("title")
-    )
-    .page(0)
-    .size(10)
-    .build();
+// 서비스 구현 예제는 기본 사용법 문서 참조
+// 고급 기능은 고급 기능 문서 참조
+```
+
+#### 컨트롤러 구현
+```java
+// 컨트롤러 구현 예제는 기본 사용법 문서 참조
+// OpenAPI 통합은 OpenAPI 통합 문서 참조
 ```
 
 ## 다음 단계

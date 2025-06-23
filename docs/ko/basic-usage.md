@@ -111,10 +111,10 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
 ```java
 @Service
-public class PostService extends DefaultSearchableService<Post> {
+public class PostService extends DefaultSearchableService<Post, Long> {
     
-    public PostService(PostRepository repository) {
-        super(repository, Post.class);
+    public PostService(PostRepository repository, EntityManager entityManager) {
+        super(repository, entityManager);
     }
     
     // 기본 검색 메서드들이 자동으로 제공됩니다
@@ -158,7 +158,7 @@ GET /api/posts/search?title.contains=Spring
 GET /api/posts/search?status.equals=PUBLISHED&viewCount.greaterThan=100
 
 # 작성자 이름으로 검색하고 제목으로 정렬
-GET /api/posts/search?authorName.contains=John&sort=title,asc
+GET /api/posts/search?authorName.contains=John&sort=title.asc
 
 # 페이징 포함
 GET /api/posts/search?title.contains=Java&page=0&size=10
@@ -179,7 +179,7 @@ public Page<Post> searchPosts(
 
 ```json
 {
-  "conditions": [
+  "nodes": [
     {
       "operator": "and",
       "field": "title",
@@ -203,7 +203,7 @@ public Page<Post> searchPosts(
     "orders": [
       {
         "field": "createdAt",
-        "direction": "desc"
+        "direction": "DESC"
       }
     ]
   },
@@ -271,14 +271,14 @@ status.notIn=DELETED,ARCHIVED
 ### 단일 필드 정렬
 
 ```bash
-GET /api/posts/search?sort=title,asc
-GET /api/posts/search?sort=createdAt,desc
+GET /api/posts/search?sort=title.asc
+GET /api/posts/search?sort=createdAt.desc
 ```
 
 ### 다중 필드 정렬
 
 ```bash
-GET /api/posts/search?sort=status,asc&sort=createdAt,desc
+GET /api/posts/search?sort=status.asc,createdAt.desc
 ```
 
 ### JSON 방식 정렬
@@ -289,11 +289,11 @@ GET /api/posts/search?sort=status,asc&sort=createdAt,desc
     "orders": [
       {
         "field": "status",
-        "direction": "asc"
+        "direction": "ASC"
       },
       {
         "field": "createdAt",
-        "direction": "desc"
+        "direction": "DESC"
       }
     ]
   }
@@ -317,7 +317,7 @@ GET /api/posts/search?page=1&size=20
 ```bash
 # 제목에 "Spring"이 포함되고, 상태가 PUBLISHED이며, 
 # 조회수가 100 이상인 게시글을 최신순으로 정렬
-GET /api/posts/search?title.contains=Spring&status.equals=PUBLISHED&viewCount.greaterThan=100&sort=createdAt,desc&page=0&size=10
+GET /api/posts/search?title.contains=Spring&status.equals=PUBLISHED&viewCount.greaterThan=100&sort=createdAt.desc&page=0&size=10
 ```
 
 ### 중첩 필드 검색
