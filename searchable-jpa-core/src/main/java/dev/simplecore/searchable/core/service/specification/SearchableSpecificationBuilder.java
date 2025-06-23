@@ -3,7 +3,6 @@ package dev.simplecore.searchable.core.service.specification;
 import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.SearchCondition.Node;
 import dev.simplecore.searchable.core.condition.operator.LogicalOperator;
-import dev.simplecore.searchable.core.service.cursor.CursorPageConverter;
 import dev.simplecore.searchable.core.service.join.JoinManager;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import lombok.NonNull;
@@ -72,23 +71,21 @@ public class SearchableSpecificationBuilder<T> {
     /**
      * Creates Sort object from SearchCondition orders.
      * Automatically adds primary key field for cursor-based pagination uniqueness.
-     * Returns Sort.unsorted() if no orders defined.
+     * If no sort conditions are specified, automatically adds PK sorting in ascending order.
      */
     private Sort createSort() {
         SearchCondition.Sort sortCondition = condition.getSort();
-        if (sortCondition == null) {
-            return Sort.unsorted();
+        List<Sort.Order> sortOrders;
+        
+        if (sortCondition == null || sortCondition.getOrders().isEmpty()) {
+            // No sort conditions specified - automatically add PK sorting
+            sortOrders = new java.util.ArrayList<>();
+        } else {
+            // Convert SearchCondition orders to Spring Data Sort orders
+            sortOrders = sortCondition.getOrders().stream()
+                    .map(this::createOrder)
+                    .collect(Collectors.toList());
         }
-
-        List<SearchCondition.Order> orders = sortCondition.getOrders();
-        if (orders.isEmpty()) {
-            return Sort.unsorted();
-        }
-
-        // Convert SearchCondition orders to Spring Data Sort orders
-        List<Sort.Order> sortOrders = orders.stream()
-                .map(this::createOrder)
-                .collect(Collectors.toList());
 
         // Automatically add primary key field for cursor-based pagination uniqueness
         sortOrders = ensureUniqueSorting(sortOrders);
@@ -115,7 +112,7 @@ public class SearchableSpecificationBuilder<T> {
                 if (!hasPrimaryKey) {
                     // Add primary key field as the last sort criterion in ascending order
                     sortOrders = new java.util.ArrayList<>(sortOrders);
-                    sortOrders.add(Sort.Order.asc(primaryKeyField));
+                    sortOrders.add(Sort.Order.by(primaryKeyField));
 
                     log.debug("Automatically added primary key field '{}' to sort criteria for cursor-based pagination uniqueness",
                             primaryKeyField);
@@ -191,7 +188,7 @@ public class SearchableSpecificationBuilder<T> {
      * Thread-safe method that creates new instance each time.
      *
      * @return SpecificationWithPageable containing specification and page request
-     * @deprecated Use buildAndExecuteWithCursor() instead for cursor-based pagination
+     * @deprecated Use buildAndExecuteWithTwoPhaseOptimization() instead for optimized pagination
      */
     @Deprecated
     public SpecificationWithPageable<T> build() {
@@ -201,34 +198,7 @@ public class SearchableSpecificationBuilder<T> {
         );
     }
 
-    /**
-     * Executes cursor-based pagination query directly.
-     * This method bypasses the traditional SpecificationWithPageable approach
-     * and executes cursor-based pagination internally while maintaining API compatibility.
-     *
-     * @return Page object with cursor-based pagination results
-     */
-    public Page<T> buildAndExecuteWithCursor() {
-        PageRequest originalPageRequest = buildPageRequest();
 
-        Specification<T> baseSpecification = buildSpecification();
-        CursorPageConverter<T> converter = new CursorPageConverter<>(specificationExecutor, entityClass);
-        return converter.convertToCursorBasedPage(originalPageRequest, baseSpecification);
-    }
-
-    /**
-     * Executes cursor-based pagination without total count calculation.
-     * This is an optimized version that avoids expensive count queries.
-     *
-     * @return Page object with cursor-based pagination results (without total count)
-     */
-    public Page<T> buildAndExecuteWithCursorOptimized() {
-        PageRequest originalPageRequest = buildPageRequest();
-        Specification<T> baseSpecification = buildSpecification();
-
-        CursorPageConverter<T> converter = new CursorPageConverter<>(specificationExecutor, entityClass);
-        return converter.convertToCursorBasedPageWithoutCount(originalPageRequest, baseSpecification);
-    }
 
     /**
      * Builds only the specification part for operations that don't need pagination.
@@ -311,21 +281,14 @@ public class SearchableSpecificationBuilder<T> {
      * Execute query with two-phase optimization.
      * Phase 1: Get IDs only (regular joins to avoid memory paging)
      * Phase 2: Load complete entities with smart fetch joins
+     * 
+     * This method now applies two-phase optimization to ALL queries for consistent performance.
      */
     public Page<T> buildAndExecuteWithTwoPhaseOptimization() {
         PageRequest pageRequest = buildPageRequest();
 
-        Set<String> allJoinPaths = extractJoinPaths(condition.getNodes());
-        Set<String> toManyPaths = allJoinPaths.stream()
-                .filter(path -> relationshipAnalyzer.isToManyPath(createDummyRoot(), path))
-                .collect(Collectors.toSet());
-
-        // Check if two-phase optimization is needed
-        if (twoPhaseQueryExecutor.shouldUseTwoPhaseQuery(toManyPaths)) {
-            return twoPhaseQueryExecutor.executeWithTwoPhaseOptimization(pageRequest);
-        } else {
-            return buildAndExecuteWithCursor();
-        }
+        // Always use two-phase optimization for all queries
+        return twoPhaseQueryExecutor.executeWithTwoPhaseOptimization(pageRequest);
     }
 
 

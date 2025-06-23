@@ -47,6 +47,7 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'com.h2database:h2'
+    testImplementation 'com.microsoft.sqlserver:mssql-jdbc'
 }
 
 bootJar {
@@ -67,10 +68,21 @@ jar {
 }
 
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // Exclude performance tests from regular test runs
+        excludeTags 'performance'
+    }
     
     // Always run tests, never consider them up-to-date
     outputs.upToDateWhen { false }
+    
+    // Pass system properties to test JVM
+    systemProperties = System.properties
+    
+    // Enable passing specific system properties
+    if (System.getProperty('spring.profiles.active')) {
+        systemProperty 'spring.profiles.active', System.getProperty('spring.profiles.active')
+    }
     
     // Clean test results before running
     doFirst {
@@ -79,8 +91,51 @@ test {
     }
 }
 
+// Performance test task - run separately
+task performanceTest(type: Test) {
+    group = 'verification'
+    description = 'Run performance tests manually'
+    
+    useJUnitPlatform {
+        includeTags 'performance'
+    }
+    
+    // Pass system properties to test JVM
+    systemProperties = System.properties
+    
+    // Enable passing specific system properties
+    if (System.getProperty('spring.profiles.active')) {
+        systemProperty 'spring.profiles.active', System.getProperty('spring.profiles.active')
+    }
+    
+    // Always run performance tests, never consider them up-to-date
+    outputs.upToDateWhen { false }
+    
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+    }
+}
+
 compileJava.inputs.files(processResources)
 
 compileJava {
     options.compilerArgs << '-parameters'
+}
+
+// Task to generate test data
+task generateLargeData(type: JavaExec) {
+    group = 'data'
+    description = 'Generate large test dataset (5M records)'
+    classpath = sourceSets.test.runtimeClasspath
+    main = 'dev.simplecore.searchable.test.fixture.CsvTestDataGenerator'
+    args = ['large']
+}
+
+task generateSmallData(type: JavaExec) {
+    group = 'data'
+    description = 'Generate small test dataset (10K records)'
+    classpath = sourceSets.test.runtimeClasspath
+    main = 'dev.simplecore.searchable.test.fixture.CsvTestDataGenerator'
+    args = ['small']
 }

@@ -168,7 +168,7 @@ public class PredicateBuilder<T> {
         Expression<String> stringPath = getStringPath(path);
         String pattern = escapePattern(value.toString());
         pattern = patternBuilder.apply(pattern);
-        Predicate predicate = cb.like(cb.lower(stringPath), pattern.toLowerCase());
+        Predicate predicate = cb.like(stringPath, pattern);
         return negate ? predicate.not() : predicate;
     }
 

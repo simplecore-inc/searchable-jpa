@@ -1,8 +1,6 @@
 spring:
-  profiles:
-    default: test  # Set default profile to 'test' if no profile is specified
   datasource:
-    # H2 in-memory database with optimizations for bulk operations
+    # H2 test database configuration
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL;LOCK_MODE=0
     driver-class-name: org.h2.Driver
     username: sa
@@ -23,16 +21,6 @@ spring:
         order_updates: true
         # N+1 problem optimization
         default_batch_fetch_size: 100
-        # Connection pool settings
-        connection:
-          provider_disables_autocommit: true
-        # Query optimization
-        query:
-          in_clause_parameter_padding: true
-        # Cache settings
-        cache:
-          use_second_level_cache: false
-          use_query_cache: false
 
 logging:
   level:

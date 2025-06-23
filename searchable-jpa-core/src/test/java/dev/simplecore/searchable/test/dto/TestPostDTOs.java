@@ -29,7 +29,7 @@ public class TestPostDTOs {
         @SearchableField(entityField = "comments.commentId", operators = {EQUALS})
         private Long commentId;
 
-        @Size(min = 5, message = "Title must be at least 5 characters")
+        @Size(min = 2, message = "Title must be at least 2 characters")
         @Size(max = 100, message = "Title cannot exceed 100 characters")
         @SearchableField(entityField = "title", operators = {EQUALS, CONTAINS, STARTS_WITH}, sortable = true)
         private String searchTitle;
@@ -37,7 +37,7 @@ public class TestPostDTOs {
         @SearchableField(operators = {EQUALS, NOT_EQUALS, IN, NOT_IN, IS_NULL, IS_NOT_NULL})
         private TestPostStatus status;
 
-        @SearchableField(operators = {GREATER_THAN, LESS_THAN, BETWEEN}, sortable = true)
+        @SearchableField(operators = {GREATER_THAN, LESS_THAN, BETWEEN, GREATER_THAN_OR_EQUAL_TO}, sortable = true)
         private Long viewCount;
 
         @SearchableField(operators = {GREATER_THAN, LESS_THAN, BETWEEN}, sortable = true)

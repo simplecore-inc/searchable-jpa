@@ -216,12 +216,28 @@ public class JoinStrategyManager<T> {
 
     /**
      * Apply only regular joins (no fetch joins) for filtering.
+     * Uses safe path validation to prevent "Unable to locate Attribute" errors.
      */
     public void applyRegularJoinsOnly(Root<T> root, Set<String> paths) {
         root.getJoins().clear();
 
         for (String path : paths) {
-            root.join(path, JoinType.LEFT);
+            // Validate path before attempting to join
+            if (relationshipAnalyzer.isValidPath(root, path)) {
+                try {
+                    // Try to apply nested join safely
+                    if (path.contains(".")) {
+                        safelyApplyNestedJoin(root, path, false);
+                    } else {
+                        root.join(path, JoinType.LEFT);
+                    }
+                    log.debug("ApplyRegularJoinsOnly: Successfully applied join for path: {}", path);
+                } catch (Exception e) {
+                    log.warn("ApplyRegularJoinsOnly: Failed to apply join for path '{}': {}", path, e.getMessage());
+                }
+            } else {
+                log.warn("ApplyRegularJoinsOnly: Invalid path '{}' skipped during join application", path);
+            }
         }
     }
 

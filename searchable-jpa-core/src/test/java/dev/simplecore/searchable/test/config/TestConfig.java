@@ -1,26 +1,25 @@
 package dev.simplecore.searchable.test.config;
 
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.context.annotation.Bean;
+import dev.simplecore.searchable.test.fixture.TestDataManager;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
+import javax.annotation.PostConstruct;
 
-@Configuration
-@EnableAutoConfiguration
-@EntityScan(basePackages = "dev.simplecore.searchable.test.entity")
-@EnableJpaRepositories(basePackages = "dev.simplecore.searchable.test.repository")
+@Slf4j
+@TestConfiguration
 @ComponentScan(basePackages = "dev.simplecore.searchable.test")
 public class TestConfig {
-    @PersistenceContext
-    private EntityManager entityManager;
 
-    @Bean
-    public EntityManager entityManager() {
-        return entityManager;
+    @Autowired
+    private TestDataManager testDataManager;
+
+    @PostConstruct
+    public void initializeTestData() {
+        log.info("Initializing test data via TestDataManager...");
+        testDataManager.initializeTestData();
+        log.info("Test data initialization complete");
     }
 } 

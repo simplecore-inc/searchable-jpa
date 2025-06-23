@@ -6,13 +6,15 @@ import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.SearchConditionBuilder;
 import dev.simplecore.searchable.core.condition.operator.LogicalOperator;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
+import dev.simplecore.searchable.test.config.BaseTestConfig;
+import dev.simplecore.searchable.test.config.TestConfig;
 import lombok.Data;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -26,12 +28,8 @@ import static org.assertj.core.api.Assertions.*;
  * Verifies the proper handling of conditions, groups, and various data types.
  */
 @SpringBootTest
-@ContextConfiguration(classes = dev.simplecore.searchable.test.config.TestConfig.class)
-@TestPropertySource(properties = {
-    "spring.datasource.url=jdbc:h2:mem:search_condition_test_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL;LOCK_MODE=0",
-    "spring.jpa.hibernate.ddl-auto=create-drop"
-})
-@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
+@ContextConfiguration(classes = {BaseTestConfig.class, TestConfig.class})
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Transactional
 class SearchConditionTest {
 

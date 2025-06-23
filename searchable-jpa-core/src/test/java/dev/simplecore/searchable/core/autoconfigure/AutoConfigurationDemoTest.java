@@ -1,5 +1,6 @@
 package dev.simplecore.searchable.core.autoconfigure;
 
+import dev.simplecore.searchable.test.config.BaseTestConfig;
 import dev.simplecore.searchable.test.config.TestConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
@@ -8,17 +9,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.env.Environment;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.TestPropertySource;
 
 @Slf4j
 @SpringBootTest
-@ContextConfiguration(classes = TestConfig.class)
-@TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:auto_config_demo_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
-})
-@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
+@ContextConfiguration(classes = {BaseTestConfig.class, TestConfig.class})
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @DisplayName("Auto Configuration Demo")
 class AutoConfigurationDemoTest {
 

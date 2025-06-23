@@ -1,15 +1,18 @@
 spring:
-  profiles:
-    default: test  # Set default profile to 'test' if no profile is specified
   datasource:
-    # H2 in-memory database with optimizations for bulk operations
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL;LOCK_MODE=0
-    driver-class-name: org.h2.Driver
+    # MSSQL database configuration
+    url: jdbc:sqlserver://localhost:1433;databaseName=testDB;encrypt=false;trustServerCertificate=true
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
     username: sa
-    password: 
+    password: Password123!
+    hikari:
+      auto-commit: false
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:

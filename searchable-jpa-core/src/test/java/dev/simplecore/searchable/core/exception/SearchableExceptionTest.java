@@ -1,23 +1,20 @@
 package dev.simplecore.searchable.core.exception;
 
+import dev.simplecore.searchable.test.config.BaseTestConfig;
 import dev.simplecore.searchable.test.config.TestConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest
-@ContextConfiguration(classes = TestConfig.class)
-@TestPropertySource(properties = {
-    "spring.datasource.url=jdbc:h2:mem:exception_test_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL;LOCK_MODE=0",
-    "spring.jpa.hibernate.ddl-auto=create-drop"
-})
-@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
+@ContextConfiguration(classes = {BaseTestConfig.class, TestConfig.class})
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Transactional
 class SearchableExceptionTest {
 

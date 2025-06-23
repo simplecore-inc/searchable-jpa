@@ -61,3 +61,5 @@ bin/
 *.hprof
 .cursorrules
 .cursor
+test-data
+*.log
