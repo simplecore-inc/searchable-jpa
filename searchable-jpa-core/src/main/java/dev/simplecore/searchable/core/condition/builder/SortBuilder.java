@@ -42,13 +42,14 @@ public class SortBuilder {
     /**
      * Adds an ascending sort order for the specified field.
      * The field name is resolved to its corresponding entity field name using the DTO class.
+     * First checks for sortField attribute, then falls back to entityField or the field name itself.
      *
      * @param field the field name to sort by
      * @return this builder instance for method chaining
      * @throws IllegalArgumentException if the field is not marked as sortable
      */
     public SortBuilder asc(String field) {
-        String entityField = SearchableFieldUtils.getEntityFieldFromDto(dtoClass, field);
+        String entityField = SearchableFieldUtils.getSortFieldFromDto(dtoClass, field);
         sort.addOrder(new SearchCondition.Order(field, SearchCondition.Direction.ASC, entityField));
         return this;
     }
@@ -56,6 +57,7 @@ public class SortBuilder {
     /**
      * Adds a descending sort order for the specified field.
      * The field name is resolved to its corresponding entity field name using the DTO class.
+     * First checks for sortField attribute, then falls back to entityField or the field name itself.
      *
      * @param field the field name to sort by
      * @return this builder instance for method chaining
@@ -63,7 +65,7 @@ public class SortBuilder {
      */
     @SuppressWarnings({"UnusedReturnValue"})
     public SortBuilder desc(String field) {
-        String entityField = SearchableFieldUtils.getEntityFieldFromDto(dtoClass, field);
+        String entityField = SearchableFieldUtils.getSortFieldFromDto(dtoClass, field);
         sort.addOrder(new SearchCondition.Order(field, SearchCondition.Direction.DESC, entityField));
         return this;
     }

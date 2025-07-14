@@ -184,13 +184,13 @@ public class SearchableParamsParser<D> {
                     if (values.length != 2) {
                         throw new SearchableParseException(MessageUtils.getMessage("parser.operator.requires.two.values", new Object[]{operatorStr}));
                     }
-                    whereBuilder.between(field, parseValue(field, values[0]), parseValue(field, values[1]));
+                    whereBuilder.between(field, parseValueForBetween(field, values[0], false), parseValueForBetween(field, values[1], true));
                     break;
                 case NOT_BETWEEN:
                     if (values.length != 2) {
                         throw new SearchableParseException(MessageUtils.getMessage("parser.operator.requires.two.values", new Object[]{operatorStr}));
                     }
-                    whereBuilder.notBetween(field, parseValue(field, values[0]), parseValue(field, values[1]));
+                    whereBuilder.notBetween(field, parseValueForBetween(field, values[0], false), parseValueForBetween(field, values[1], true));
                     break;
                 case IS_NULL:
                     whereBuilder.isNull(field);
@@ -214,6 +214,19 @@ public class SearchableParamsParser<D> {
         try {
             Class<?> fieldType = getFieldType(field);
             return SearchableValueParser.parseValue(value, fieldType);
+        } catch (Exception e) {
+            throw new SearchableParseException("Failed to parse value for field: " + field, e);
+        }
+    }
+
+    private Object parseValueForBetween(String field, String value, boolean isEndValue) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            Class<?> fieldType = getFieldType(field);
+            return SearchableValueParser.parseValueForBetween(value, fieldType, isEndValue);
         } catch (Exception e) {
             throw new SearchableParseException("Failed to parse value for field: " + field, e);
         }

@@ -78,4 +78,40 @@ public class TestPostDTOs {
 
         private TestPostStatus status;
     }
+
+    /**
+     * DTO for testing sortField functionality
+     */
+    public static class TestPostSortFieldDTO {
+        @SearchableField(operators = {EQUALS, CONTAINS})
+        private String title;
+
+        @SearchableField(operators = {EQUALS})
+        private String status;
+
+        @SearchableField(sortable = true, sortField = "author.name")
+        private String authorName;
+
+        @SearchableField(sortable = true, sortField = "createdAt")
+        private String createdDate;
+
+        @SearchableField(sortable = true, entityField = "updatedAt", sortField = "modifiedAt")
+        private String lastModified;
+
+        // Getters and setters
+        public String getTitle() { return title; }
+        public void setTitle(String title) { this.title = title; }
+
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
+
+        public String getAuthorName() { return authorName; }
+        public void setAuthorName(String authorName) { this.authorName = authorName; }
+
+        public String getCreatedDate() { return createdDate; }
+        public void setCreatedDate(String createdDate) { this.createdDate = createdDate; }
+
+        public String getLastModified() { return lastModified; }
+        public void setLastModified(String lastModified) { this.lastModified = lastModified; }
+    }
 }

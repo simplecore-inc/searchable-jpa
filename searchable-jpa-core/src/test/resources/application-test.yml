@@ -1,4 +1,7 @@
 spring:
+  web:
+    locale: en_US
+    locale-resolver: fixed
   datasource:
     # H2 test database configuration
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL;LOCK_MODE=0

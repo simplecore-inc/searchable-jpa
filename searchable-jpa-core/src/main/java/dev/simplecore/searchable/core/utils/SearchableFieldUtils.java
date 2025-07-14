@@ -32,6 +32,41 @@ public class SearchableFieldUtils {
     }
 
     /**
+     * Gets the sort field name from the DTO class using SearchableField annotation.
+     * This method checks for sortField attribute first, then falls back to entityField or the field name itself.
+     * 
+     * @param dtoClass the DTO class
+     * @param field the field name in the DTO
+     * @return the field name to use for sorting
+     */
+    public static String getSortFieldFromDto(Class<?> dtoClass, String field) {
+        if (dtoClass == null) {
+            return field;
+        }
+
+        try {
+            java.lang.reflect.Field dtoField = dtoClass.getDeclaredField(field);
+            SearchableField annotation = dtoField.getAnnotation(SearchableField.class);
+            
+            if (annotation != null) {
+                // First priority: sortField attribute
+                if (!annotation.sortField().isEmpty()) {
+                    return annotation.sortField();
+                }
+                // Second priority: entityField attribute
+                if (!annotation.entityField().isEmpty()) {
+                    return annotation.entityField();
+                }
+            }
+            
+            // Default: use the field name itself
+            return field;
+        } catch (NoSuchFieldException e) {
+            return field;
+        }
+    }
+
+    /**
      * Gets the primary key field name from the entity class.
      * This is used for cursor-based pagination to ensure unique ordering.
      * 

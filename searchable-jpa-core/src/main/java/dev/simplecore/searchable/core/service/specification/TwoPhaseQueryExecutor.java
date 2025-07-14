@@ -1,6 +1,7 @@
 package dev.simplecore.searchable.core.service.specification;
 
 import dev.simplecore.searchable.core.condition.SearchCondition;
+import dev.simplecore.searchable.core.i18n.MessageUtils;
 import dev.simplecore.searchable.core.service.join.JoinManager;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -144,7 +145,7 @@ public class TwoPhaseQueryExecutor<T> {
             String sortProperty = sortOrder.getProperty();
             // Skip __COMPOSITE_KEY__ marker and ID fields already included
             if (!"__COMPOSITE_KEY__".equals(sortProperty) && !idFields.contains(sortProperty)) {
-                selections.add(root.get(sortProperty));
+                selections.add(getPath(root, sortProperty));
             }
         }
         
@@ -161,8 +162,8 @@ public class TwoPhaseQueryExecutor<T> {
             List<Order> orders = pageRequest.getSort().stream()
                 .filter(sortOrder -> !"__COMPOSITE_KEY__".equals(sortOrder.getProperty()))
                 .map(sortOrder -> sortOrder.isAscending() 
-                    ? cb.asc(root.get(sortOrder.getProperty()))
-                    : cb.desc(root.get(sortOrder.getProperty())))
+                    ? cb.asc(getPath(root, sortOrder.getProperty()))
+                    : cb.desc(getPath(root, sortOrder.getProperty())))
                 .collect(Collectors.toList());
             if (!orders.isEmpty()) {
                 multiSelectQuery.orderBy(orders);
@@ -214,7 +215,7 @@ public class TwoPhaseQueryExecutor<T> {
             
             for (org.springframework.data.domain.Sort.Order sortOrder : pageRequest.getSort()) {
                 if (!sortOrder.getProperty().equals(primaryKeyField)) {
-                    selections.add(root.get(sortOrder.getProperty()));
+                    selections.add(getPath(root, sortOrder.getProperty()));
                 }
             }
             
@@ -229,8 +230,8 @@ public class TwoPhaseQueryExecutor<T> {
             // Apply sorting
             List<Order> orders = pageRequest.getSort().stream()
                 .map(sortOrder -> sortOrder.isAscending() 
-                    ? cb.asc(root.get(sortOrder.getProperty()))
-                    : cb.desc(root.get(sortOrder.getProperty())))
+                    ? cb.asc(getPath(root, sortOrder.getProperty()))
+                    : cb.desc(getPath(root, sortOrder.getProperty())))
                 .collect(Collectors.toList());
             multiSelectQuery.orderBy(orders);
 
@@ -260,8 +261,8 @@ public class TwoPhaseQueryExecutor<T> {
             if (pageRequest.getSort().isSorted()) {
                 List<Order> orders = pageRequest.getSort().stream()
                     .map(sortOrder -> sortOrder.isAscending() 
-                        ? cb.asc(root.get(sortOrder.getProperty()))
-                        : cb.desc(root.get(sortOrder.getProperty())))
+                        ? cb.asc(getPath(root, sortOrder.getProperty()))
+                        : cb.desc(getPath(root, sortOrder.getProperty())))
                     .collect(Collectors.toList());
                 singleSelectQuery.orderBy(orders);
             }
@@ -469,7 +470,6 @@ public class TwoPhaseQueryExecutor<T> {
                 if (id != null) {
                     String keyStr = createComparableKey(id);
                     entityMap.put(keyStr, entity);
-                    log.debug("Entity key: {} -> entity class: {}", keyStr, entity.getClass().getSimpleName());
                 }
             } catch (Exception e) {
                 log.warn("Failed to get entity ID for reordering: {}", e.getMessage());
@@ -483,7 +483,6 @@ public class TwoPhaseQueryExecutor<T> {
             T entity = entityMap.get(keyStr);
             if (entity != null) {
                 reorderedEntities.add(entity);
-                log.debug("Matched ordered key: {} -> entity class: {}", keyStr, entity.getClass().getSimpleName());
             } else {
                 log.warn("No entity found for ordered key: {}", keyStr);
             }
@@ -511,7 +510,7 @@ public class TwoPhaseQueryExecutor<T> {
     private Object getEntityId(T entity) throws Exception {
         String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
         if (primaryKeyField == null) {
-            throw new RuntimeException("Primary key field not found for entity: " + entityClass.getSimpleName());
+            throw new RuntimeException(MessageUtils.getMessage("executor.primary.key.not.found", new Object[]{entityClass.getSimpleName()}));
         }
 
         // Handle composite key entities
@@ -540,7 +539,7 @@ public class TwoPhaseQueryExecutor<T> {
         boolean isEmbeddedId = isEmbeddedIdEntity();
         
         if (idFields.isEmpty()) {
-            throw new RuntimeException("No composite key fields found for entity: " + entityClass.getSimpleName());
+            throw new RuntimeException(MessageUtils.getMessage("executor.composite.key.not.found", new Object[]{entityClass.getSimpleName()}));
         }
         
         if (idFields.size() == 1) {
@@ -568,7 +567,7 @@ public class TwoPhaseQueryExecutor<T> {
             Method idGetter = entityClass.getMethod("getId");
             Object embeddedId = idGetter.invoke(entity);
             if (embeddedId == null) {
-                throw new RuntimeException("Embedded ID is null for entity: " + entityClass.getSimpleName());
+                throw new RuntimeException(MessageUtils.getMessage("executor.embedded.id.null", new Object[]{entityClass.getSimpleName()}));
             }
             
             // Get field from embedded ID object
@@ -672,5 +671,45 @@ public class TwoPhaseQueryExecutor<T> {
             log.warn("Failed to check if entity {} uses @EmbeddedId: {}", entityClass.getSimpleName(), e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Get path for a potentially nested property.
+     * Handles properties like "position.name" by creating appropriate joins.
+     */
+    private Path<?> getPath(Root<T> root, String property) {
+        if (!property.contains(".")) {
+            // Simple property
+            return root.get(property);
+        }
+        
+        // Nested property - need to create joins
+        String[] parts = property.split("\\.");
+        Path<?> path = root;
+        
+        for (int i = 0; i < parts.length - 1; i++) {
+            // Create join for each intermediate path
+            if (path instanceof From) {
+                From<?, ?> from = (From<?, ?>) path;
+                Join<?, ?> join = null;
+                
+                // Check if join already exists
+                for (Join<?, ?> existingJoin : from.getJoins()) {
+                    if (existingJoin.getAttribute().getName().equals(parts[i])) {
+                        join = existingJoin;
+                        break;
+                    }
+                }
+                
+                // Create new join if not exists
+                if (join == null) {
+                    join = from.join(parts[i], JoinType.LEFT);
+                }
+                path = join;
+            }
+        }
+        
+        // Get the final property
+        return path.get(parts[parts.length - 1]);
     }
 } 
