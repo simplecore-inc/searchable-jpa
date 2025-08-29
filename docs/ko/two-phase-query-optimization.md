@@ -471,14 +471,21 @@ public Page<Post> searchPosts(String title,
 
 ### 최적화 전략 선택
 
+Searchable JPA는 **항상 2단계 쿼리 최적화**를 사용합니다. 이는 복잡한 조인, 복합 키, 대용량 데이터에서 일관된 고성능을 보장하기 위함입니다.
+
 ```java
-// TwoPhaseQueryExecutor에서 자동으로 판단
-if (hasComplexJoins() || isCompositeKeyEntity() || hasToManyRelations()) {
-    // 2단계 쿼리 사용
-    return executeWithTwoPhaseOptimization();
-} else {
-    // 단일 쿼리 사용
-    return executeWithSingleQuery();
+// TwoPhaseQueryExecutor에서 항상 2단계 최적화 사용
+public boolean shouldUseTwoPhaseQuery(Set<String> toManyPaths) {
+    return true; // Always use two-phase optimization
+}
+
+public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest) {
+    // 항상 2단계 쿼리 실행
+    List<Object> ids = executePhaseOneQuery(pageRequest);
+    List<T> entities = executePhaseTwoQuery(ids, pageRequest.getSort());
+    long totalCount = executeCountQuery();
+
+    return new PageImpl<>(entities, pageRequest, totalCount);
 }
 ```
 

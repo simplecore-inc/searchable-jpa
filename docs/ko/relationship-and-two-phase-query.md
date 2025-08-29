@@ -6,11 +6,12 @@
 
 ## 목차
 
-1. [N+1 문제와 해결 방법](#n1-문제와-해결-방법)
-2. [ToOne 관계 최적화](#toone-관계-최적화)
-3. [ToMany 관계 최적화](#tomany-관계-최적화)
-4. [동적 EntityGraph](#동적-entitygraph)
-5. [2단계 쿼리 최적화 시스템](#2단계-쿼리-최적화-시스템)
+1. [N+1 문제와 해결 방법](#n-1-문제와-해결책)
+2. [JPA 관계형 매핑 개요](#jpa-관계형-매핑-개요)
+3. [관계형 매핑별 특징](#관계형-매핑별-특징)
+4. [2단계 쿼리 최적화 시스템](#2단계-쿼리-최적화-시스템)
+5. [자동 Primary Key 정렬의 이유](#자동-primary-key-정렬의-이유)
+6. [구현 상세](#구현-상세)
 
 ## 자동화된 최적화 전략
 
@@ -26,9 +27,18 @@ public class PostController {
     private SearchableService<Post> postService;
     
     @GetMapping("/posts")
-    public Page<Post> getPosts(@RequestParam String search) {
-        SearchCondition condition = SearchCondition.of(search);
-        
+    public Page<Post> getPosts(
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "10") int size) {
+
+        SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
+            .create(PostSearchDTO.class)
+            .where(w -> w.equals("title", title))
+            .page(page)
+            .size(size)
+            .build();
+
         // 자동으로 2단계 쿼리 최적화 적용 - 복잡한 성능 최적화 고민 불필요
         return postService.findAllWithSearch(condition);
     }
@@ -162,9 +172,10 @@ searchable-jpa는 관계형 필드가 검색 조건이나 정렬에 사용될 �
 
 ```java
 // 이 검색 조건은 자동으로 JOIN을 생성합니다
-SearchCondition condition = SearchCondition.builder()
-    .filter("author.name", SearchOperator.CONTAINS, "John")
-    .sort("author.name", SortDirection.ASC)
+SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
+    .create(PostSearchDTO.class)
+    .where(w -> w.contains("authorName", "John"))
+    .sort(s -> s.asc("authorName"))
     .build();
 ```
 
@@ -278,6 +289,84 @@ spring:
 
 ---
 
+## 동적 EntityGraph
+
+### EntityGraph 자동 생성
+
+searchable-jpa는 검색 조건에 사용된 관계형 필드들을 기반으로 **동적 EntityGraph**를 자동 생성합니다:
+
+```java
+// 검색 조건에 관계형 필드가 포함된 경우
+SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
+    .create(PostSearchDTO.class)
+    .where(w -> w
+        .contains("authorName", "John")  // author 관계 사용
+        .equals("categoryName", "Tech")) // category 관계 사용
+    .build();
+
+// 자동으로 EntityGraph 생성 및 적용
+// ToOne 관계만 포함 (author, category)
+// ToMany 관계 제외 (메모리 페이징 방지)
+```
+
+### EntityGraph 최적화 전략
+
+**포함되는 관계:**
+- `@OneToOne`, `@ManyToOne` 관계
+- 중첩된 ToOne 관계 (`author.department.name`)
+
+**제외되는 관계:**
+- `@OneToMany`, `@ManyToMany` 관계
+- ToMany 관계는 2단계 쿼리로 처리
+
+```java
+/**
+ * 동적 EntityGraph 생성 로직
+ */
+public jakarta.persistence.EntityGraph<T> createDynamicEntityGraph(Set<String> relationshipPaths) {
+    jakarta.persistence.EntityGraph<T> entityGraph = entityManager.createEntityGraph(entityClass);
+
+    for (String path : relationshipPaths) {
+        // ToOne 관계만 EntityGraph에 추가
+        if (!isToManyPath(path)) {
+            entityGraph.addAttributeNodes(path);
+        }
+    }
+
+    return entityGraph;
+}
+```
+
+### EntityGraph 적용 시점
+
+EntityGraph는 다음 경우에 자동으로 적용됩니다:
+
+1. **관계형 필드 검색**: `author.name`, `category.title` 등
+2. **중첩 관계 검색**: `author.department.name`
+3. **다중 관계 검색**: 여러 ToOne 관계 동시 검색
+
+### 메모리 효율성
+
+```sql
+-- EntityGraph 적용 전 (N+1 문제 가능)
+SELECT p.* FROM posts p WHERE p.title LIKE '%Spring%';
+-- 각 Post마다 Author 조회 (N+1 문제!)
+
+-- EntityGraph 적용 후 (최적화)
+SELECT p.*, a.* FROM posts p
+LEFT JOIN author a ON p.author_id = a.id
+WHERE p.title LIKE '%Spring%';
+-- 한 번의 쿼리로 모든 데이터 조회
+```
+
+**EntityGraph의 장점:**
+- ✅ N+1 문제 자동 방지
+- ✅ 메모리 효율성 향상
+- ✅ 쿼리 수 최소화
+- ✅ ToMany 관계에 의한 카티시안 곱 방지
+
+---
+
 ## 2단계 쿼리 최적화 시스템
 
 ### 2단계 쿼리의 장점
@@ -318,8 +407,9 @@ WHERE (t.entity_id, t.tenant_id) IN ((1, 'tenant1'), (2, 'tenant1'));
 
 ```java
 // 생성일시로만 정렬할 경우
-SearchCondition condition = SearchCondition.builder()
-    .sort("createdAt", SortDirection.DESC)
+SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
+    .create(PostSearchDTO.class)
+    .sort(s -> s.desc("createdAt"))
     .build();
 ```
 
@@ -355,11 +445,11 @@ searchable-jpa는 **자동으로 Primary Key를 보조 정렬 기준으로 추�
 
 ```java
 // 사용자 입력
-.sort("createdAt", SortDirection.DESC)
+.sort(s -> s.desc("createdAt"))
 
-// 자동 변환
-.sort("createdAt", SortDirection.DESC)
-.sort("id", SortDirection.ASC)  // 자동 추가!
+// 자동 변환 (내부적으로 처리됨)
+.sort(s -> s.desc("createdAt"))
+.sort(s -> s.asc("id"))  // 자동 추가!
 ```
 
 **생성되는 SQL:**
@@ -401,11 +491,20 @@ private List<Sort.Order> ensureUniqueSorting(List<Sort.Order> sortOrders) {
                 // Add primary key field as the last sort criterion in ascending order
                 sortOrders = new ArrayList<>(sortOrders);
                 sortOrders.add(Sort.Order.by(primaryKeyField));
+
+                log.debug("Automatically added primary key field '{}' to sort criteria for cursor-based pagination uniqueness",
+                        primaryKeyField);
             }
+        } else {
+            log.warn("Could not determine primary key field for entity {}. Cursor-based pagination may not work correctly with duplicate sort values.",
+                    entityClass.getSimpleName());
         }
 
         return sortOrders;
+
     } catch (Exception e) {
+        log.warn("Failed to ensure unique sorting for entity {}: {}. Using original sort orders.",
+                entityClass.getSimpleName(), e.getMessage());
         return sortOrders;
     }
 }
@@ -440,17 +539,27 @@ private static final int MAX_IN_CLAUSE_SIZE = 500;
 
 private List<T> executeBatchedInQueries(List<Object> ids, Sort sort) {
     List<T> allResults = new ArrayList<>();
-    
+
     // Split IDs into batches
     for (int i = 0; i < ids.size(); i += MAX_IN_CLAUSE_SIZE) {
         int endIndex = Math.min(i + MAX_IN_CLAUSE_SIZE, ids.size());
         List<Object> batchIds = ids.subList(i, endIndex);
-        
+
+        log.debug("Executing batch {}/{} with {} IDs",
+            (i / MAX_IN_CLAUSE_SIZE) + 1,
+            (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE,
+            batchIds.size());
+
         // Execute query for this batch
         List<T> batchResults = executeSingleInQuery(batchIds, sort);
         allResults.addAll(batchResults);
     }
-    
+
+    log.debug("Executed {} batches, total results: {}",
+        (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE,
+        allResults.size());
+
+    // Final ordering is maintained by reorderEntitiesByIds in executeSingleInQuery
     return allResults;
 }
 ```

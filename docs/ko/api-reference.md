@@ -29,6 +29,7 @@ public @interface SearchableField {
 | `entityField` | String | `""` | 엔티티의 실제 필드명. 비어있으면 DTO 필드명 사용 |
 | `operators` | SearchOperator[] | `{}` | 허용할 검색 연산자 배열. 비어있으면 모든 연산자 허용 |
 | `sortable` | boolean | `false` | 정렬 가능 여부 |
+| `sortField` | String | `""` | 정렬 시 사용할 필드명. 비어있으면 entityField 또는 필드명 사용 |
 
 #### 사용 예제
 
@@ -76,7 +77,7 @@ public Page<User> search(
 
 ```java
 public class SearchCondition<D> {
-    private final List<Node> nodes;
+    private final List<Node> conditions;
     private Sort sort;
     private Integer page;
     private Integer size;
@@ -87,7 +88,7 @@ public class SearchCondition<D> {
 
 | 메서드 | 반환 타입 | 설명 |
 |--------|-----------|------|
-| `getNodes()` | `List<Node>` | 검색 조건 노드 목록 반환 |
+| `getConditions()` | `List<Node>` | 검색 조건 노드 목록 반환 |
 | `getSort()` | `Sort` | 정렬 조건 반환 |
 | `getPage()` | `Integer` | 페이지 번호 반환 |
 | `getSize()` | `Integer` | 페이지 크기 반환 |
@@ -250,7 +251,7 @@ public interface SearchableService<T> {
     // 집계 메서드
     long countWithSearch(@NonNull SearchCondition<?> searchCondition);
     boolean existsWithSearch(@NonNull SearchCondition<?> searchCondition);
-    
+
     // 수정/삭제 메서드
     long deleteWithSearch(@NonNull SearchCondition<?> searchCondition);
     long updateWithSearch(@NonNull SearchCondition<?> searchCondition, @NonNull Object updateData);
@@ -483,6 +484,26 @@ public class SearchableConfigurationException extends SearchableException {
 }
 ```
 
+### SearchableJoinException
+
+조인 관련 오류 시 발생하는 예외입니다.
+
+```java
+public class SearchableJoinException extends SearchableException {
+    public SearchableJoinException(String message)
+}
+```
+
+### SearchableOperationException
+
+작업 실행 중 오류가 발생할 때 사용하는 예외입니다.
+
+```java
+public class SearchableOperationException extends SearchableException {
+    public SearchableOperationException(String message)
+}
+```
+
 ## 유틸리티 클래스
 
 ### SearchableFieldUtils
@@ -518,13 +539,26 @@ public class SearchableValueParser {
 Searchable JPA의 설정 속성을 정의하는 클래스입니다.
 
 ```java
-@ConfigurationProperties(prefix = "searchable.jpa")
+@ConfigurationProperties(prefix = "searchable")
 public class SearchableProperties {
-    private int defaultPageSize = 20;
-    private int maxPageSize = 100;
-    private boolean enableCursorPagination = true;
-    
-    // getters and setters
+    private SwaggerProperties swagger = new SwaggerProperties();
+    private HibernateProperties hibernate = new HibernateProperties();
+
+    @Data
+    public static class SwaggerProperties {
+        private boolean enabled = true;
+    }
+
+    @Data
+    public static class HibernateProperties {
+        private boolean autoOptimization = true;
+        private int defaultBatchFetchSize = 100;
+        private int jdbcBatchSize = 1000;
+        private boolean batchVersionedData = true;
+        private boolean orderInserts = true;
+        private boolean orderUpdates = true;
+        private boolean inClauseParameterPadding = true;
+    }
 }
 ```
 

@@ -12,11 +12,11 @@ Searchable JPA는 OpenAPI 3.0 및 Swagger UI와의 완벽한 통합을 제공합
 
 ```gradle
 dependencies {
-    // Searchable JPA OpenAPI 모듈
-    implementation 'dev.simplecore.searchable:searchable-jpa-openapi:0.0.4-SNAPSHOT'
-    
-    // SpringDoc OpenAPI (Swagger)
-    implementation 'org.springdoc:springdoc-openapi-ui:1.7.0'
+    // Searchable JPA 스타터 (OpenAPI 기능 포함)
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.0.0-SNAPSHOT'
+
+    // SpringDoc OpenAPI (Spring Boot 3.x 버전)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 }
 ```
 
@@ -57,12 +57,10 @@ springdoc:
     operations-sorter: method
     tags-sorter: alpha
     
-# Searchable JPA OpenAPI 설정
+# Searchable JPA Swagger 설정
 searchable:
-  openapi:
+  swagger:
     enabled: true
-    generate-examples: true
-    include-search-operators: true
 ```
 
 ## @SearchableParams 어노테이션
@@ -220,40 +218,25 @@ public class PostSearchDTO {
 
 ```java
 @Configuration
-public class OpenApiCustomizer {
-    
+public class CustomOpenApiConfig {
+
     @Bean
-    public OpenApiCustomiser searchableOpenApiCustomiser() {
-        return openApi -> {
-            // 검색 예제 추가
-            openApi.getPaths().values().forEach(pathItem -> {
-                pathItem.readOperations().forEach(operation -> {
-                    if (operation.getTags().contains("post-search")) {
-                        addSearchExamples(operation);
-                    }
-                });
-            });
-        };
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+            .info(new Info()
+                .title("Searchable JPA API")
+                .version("1.0.0")
+                .description("Searchable JPA를 사용한 검색 API"))
+            .addServersItem(new Server().url("http://localhost:8080"));
     }
-    
-    private void addSearchExamples(Operation operation) {
-        // 복잡한 검색 예제 추가
-        Map<String, Example> examples = new HashMap<>();
-        
-        Example basicSearch = new Example()
-            .summary("기본 검색")
-            .description("제목으로 게시글 검색")
-            .value("title.contains=Spring&status.equals=PUBLISHED");
-            
-        Example advancedSearch = new Example()
-            .summary("고급 검색")
-            .description("여러 조건을 조합한 검색")
-            .value("title.contains=Spring&viewCount.greaterThan=100&createdAt.between=2024-01-01T00:00:00,2024-12-31T23:59:59&sort=createdAt,desc&page=0&size=10");
-            
-        examples.put("basic", basicSearch);
-        examples.put("advanced", advancedSearch);
-        
-        // 예제를 operation에 추가하는 로직
+
+    // 추가적인 커스터마이징이 필요한 경우
+    @Bean
+    public OperationCustomizer customOperationCustomizer() {
+        return (operation, handlerMethod) -> {
+            // 커스텀 작업 추가 로직
+            return operation;
+        };
     }
 }
 ```

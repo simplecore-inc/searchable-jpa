@@ -28,7 +28,7 @@ spring:
         # 쿼리 최적화
         query:
           in_clause_parameter_padding: true
-        
+
         # 연결 최적화
         connection:
           provider_disables_autocommit: true
@@ -41,19 +41,25 @@ spring:
 ```yaml
 searchable:
   hibernate:
-    # 자동 최적화 활성화/비활성화
+    # 자동 최적화 활성화/비활성화 (기본값: true)
     auto-optimization: true
-    
+
     # 배치 fetch 크기 (기본값: 100)
     default-batch-fetch-size: 150
-    
+
     # JDBC 배치 크기 (기본값: 1000)
     jdbc-batch-size: 500
-    
-    # 기타 최적화 설정들
+
+    # 버전 데이터 배치 처리 (기본값: true)
     batch-versioned-data: true
+
+    # 삽입 순서 최적화 (기본값: true)
     order-inserts: true
+
+    # 업데이트 순서 최적화 (기본값: true)
     order-updates: true
+
+    # IN 절 파라미터 패딩 (기본값: true)
     in-clause-parameter-padding: true
 ```
 
@@ -200,8 +206,7 @@ Searchable JPA는 Spring Boot의 자동 설정 기능을 활용하여 최소한�
    - SearchableParams 어노테이션 자동 인식
    - API 문서 자동 생성
 
-3. **메시지 소스 설정**
-   - 다국어 지원을 위한 메시지 소스 자동 등록
+
 
 ## 설정 속성
 
@@ -211,17 +216,17 @@ Searchable JPA는 Spring Boot의 자동 설정 기능을 활용하여 최소한�
 searchable:
   # Swagger/OpenAPI 설정
   swagger:
-    enabled: true  # 기본값: true
-  
+    enabled: true  # 기본값: true, OpenAPI/Swagger 통합 활성화
+
   # Hibernate 최적화 설정
   hibernate:
-    auto-optimization: true  # 기본값: true
-    default-batch-fetch-size: 100  # 기본값: 100
-    jdbc-batch-size: 1000  # 기본값: 1000
-    batch-versioned-data: true  # 기본값: true
-    order-inserts: true  # 기본값: true
-    order-updates: true  # 기본값: true
-    in-clause-parameter-padding: true  # 기본값: true
+    auto-optimization: true  # 기본값: true, 자동 Hibernate 최적화 활성화
+    default-batch-fetch-size: 100  # 기본값: 100, 배치 fetch 크기
+    jdbc-batch-size: 1000  # 기본값: 1000, JDBC 배치 크기
+    batch-versioned-data: true  # 기본값: true, 버전 데이터 배치 처리
+    order-inserts: true  # 기본값: true, 삽입 순서 최적화
+    order-updates: true  # 기본값: true, 업데이트 순서 최적화
+    in-clause-parameter-padding: true  # 기본값: true, IN 절 파라미터 패딩
 ```
 
 ### application.properties 설정
@@ -285,6 +290,7 @@ searchable.hibernate.in-clause-parameter-padding=true
 - **기본값**: `true`
 - **설명**: OpenAPI/Swagger 통합 기능 활성화
 - **효과**: `@SearchableParams` 어노테이션이 적용된 API의 문서가 자동으로 생성됩니다.
+- **조건**: 웹 애플리케이션 타입이 SERVLET이어야 하며, OpenAPI 및 OperationCustomizer 클래스가 클래스패스에 있어야 합니다.
 
 ## 자동 설정 비활성화
 
@@ -342,8 +348,15 @@ public class SearchableCustomConfiguration {
 
 ```
 INFO  d.s.s.a.SearchableJpaConfiguration - SearchableJpaConfiguration is being initialized
-INFO  d.s.s.a.SearchableJpaConfiguration - Hibernate optimizations applied: batch_fetch_size=100, jdbc_batch_size=1000
-INFO  d.s.s.a.SearchableJpaConfiguration - Searchable JPA auto-configuration completed successfully
+INFO  d.s.s.a.SearchableJpaConfiguration - Configuring automatic Hibernate optimizations for searchable-jpa...
+INFO  d.s.s.a.SearchableJpaConfiguration - Applied Hibernate optimizations:
+INFO  d.s.s.a.SearchableJpaConfiguration -   - default_batch_fetch_size: 100
+INFO  d.s.s.a.SearchableJpaConfiguration -   - jdbc.batch_size: 1000
+INFO  d.s.s.a.SearchableJpaConfiguration -   - order_inserts: true
+INFO  d.s.s.a.SearchableJpaConfiguration -   - order_updates: true
+INFO  d.s.s.a.SearchableJpaConfiguration -   - in_clause_parameter_padding: true
+INFO  d.s.s.a.SearchableJpaConfiguration - These settings help prevent N+1 problems and improve performance automatically.
+INFO  d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: searchable.hibernate.auto-optimization=false
 ```
 
 ## 문제 해결

@@ -8,12 +8,13 @@
 
 ### Q: Spring Boot 버전 호환성은 어떻게 되나요?
 
-**A:** Searchable JPA는 Spring Boot 2.7.x 이상을 지원합니다. 주요 호환성 정보:
+**A:** Searchable JPA는 버전별로 다른 Spring Boot 버전을 지원합니다. 주요 호환성 정보:
 
-- Spring Boot 2.7.x: 완전 지원
-- Spring Boot 3.x: 현재 개발 중 (향후 버전에서 지원 예정)
-- Java 8+: 지원
-- JPA 2.2+: 지원
+- **1.0.0+ 버전**: Spring Boot 3.2.x+만 지원 (Jakarta EE 9+)
+- **0.1.x 버전**: Spring Boot 2.7.x만 지원 (javax.* 패키지 사용)
+- Java 17+: 지원
+- JPA 3.0+: 지원 (1.0.0+ 버전)
+- JPA 2.2+: 지원 (0.1.x 버전)
 
 ### Q: 자동 설정이 작동하지 않아요.
 
@@ -22,7 +23,7 @@
 1. **의존성 확인**:
 ```gradle
 dependencies {
-    implementation 'dev.simplecore:spring-boot-starter-searchable-jpa:1.0.0'
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.0.0-SNAPSHOT'
     // spring-boot-starter-data-jpa도 필요합니다
 }
 ```
@@ -144,7 +145,7 @@ GET /search?title.contains=Spring&status.equals=PUBLISHED&authorName.contains=Jo
 2. **JSON 방식**:
 ```json
 {
-  "nodes": [
+  "conditions": [
     {
       "operator": "and",
       "field": "title",
@@ -319,27 +320,28 @@ logging:
 
 ### Q: 커스텀 연산자를 만들 수 있나요?
 
-**A:** 가능합니다:
+**A:** 현재 Searchable JPA는 enum 기반의 SearchOperator를 사용하므로, 기본 제공되는 연산자만 사용할 수 있습니다. 커스텀 연산자가 필요한 경우 다음과 같은 방법으로 확장할 수 있습니다:
+
+1. **기본 연산자 사용**: 제공되는 연산자로 대부분의 검색 요구사항을 충족할 수 있습니다
+2. **커스텀 서비스 로직**: 복잡한 검색 로직은 서비스 레이어에서 별도 구현
+3. **데이터베이스 함수**: 데이터베이스의 내장 함수를 활용한 검색
 
 ```java
-public enum CustomSearchOperator implements SearchOperator {
-    FULL_TEXT_SEARCH("fullTextSearch") {
-        @Override
-        public <T> Predicate toPredicate(Root<T> root, CriteriaBuilder cb, String field, Object value) {
-            return cb.function("MATCH", Boolean.class, 
-                root.get(field), cb.literal(value)).isTrue();
+// 권장: 기본 연산자 사용
+@SearchableField(operators = {CONTAINS, STARTS_WITH, ENDS_WITH})
+private String title;
+
+// 또는 서비스 레이어에서 별도 처리
+@Service
+public class AdvancedSearchService {
+
+    public Page<Post> searchWithCustomLogic(String query, Pageable pageable) {
+        // 복잡한 검색 로직 구현
+        if (query.startsWith("fulltext:")) {
+            return performFullTextSearch(query.substring(9), pageable);
         }
-    };
-    
-    private final String operation;
-    
-    CustomSearchOperator(String operation) {
-        this.operation = operation;
-    }
-    
-    @Override
-    public String getOperation() {
-        return operation;
+        // 일반 검색
+        return performRegularSearch(query, pageable);
     }
 }
 ```
@@ -395,18 +397,31 @@ logging:
 
 ### Q: 성능 메트릭을 수집하고 싶어요.
 
-**A:** 이벤트 리스너를 구현할 수 있습니다:
+**A:** 로그 레벨을 조정하여 성능 정보를 확인할 수 있습니다:
+
+```yaml
+logging:
+  level:
+    dev.simplecore.searchable.core.service.specification.TwoPhaseQueryExecutor: DEBUG
+```
+
+또는 AOP를 사용하여 성능 모니터링을 구현할 수 있습니다:
 
 ```java
+@Aspect
 @Component
-public class SearchPerformanceMonitor {
-    
-    @EventListener
-    public void handleSearchEvent(SearchExecutedEvent event) {
-        log.info("Search executed - Entity: {}, Duration: {}ms, Strategy: {}", 
-            event.getEntityClass().getSimpleName(),
-            event.getDuration(),
-            event.getStrategy());
+public class SearchPerformanceAspect {
+
+    @Around("execution(* dev.simplecore.searchable.core.service.SearchableService.*(..))")
+    public Object monitorSearchPerformance(ProceedingJoinPoint joinPoint) throws Throwable {
+        long startTime = System.currentTimeMillis();
+        Object result = joinPoint.proceed();
+        long duration = System.currentTimeMillis() - startTime;
+
+        log.info("Search method {} executed in {}ms",
+            joinPoint.getSignature().getName(), duration);
+
+        return result;
     }
 }
 ```

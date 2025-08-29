@@ -8,7 +8,7 @@
 
 ## 프로젝션(Projection) 지원
 
-엔티티의 일부 필드만 조회하고 싶을 때 프로젝션을 사용할 수 있습니다.
+엔티티의 일부 필드만 조회하고 싶을 때 인터페이스 기반 프로젝션을 사용할 수 있습니다.
 
 ### 인터페이스 기반 프로젝션
 
@@ -17,28 +17,10 @@ public interface PostSummary {
     String getTitle();
     String getAuthorName();
     LocalDateTime getCreatedAt();
-    
-    // 계산된 필드
+
+    // 계산된 필드 (SpEL 표현식 지원)
     @Value("#{target.title + ' by ' + target.authorName}")
     String getDisplayName();
-}
-```
-
-### 클래스 기반 프로젝션
-
-```java
-public class PostSummaryDTO {
-    private final String title;
-    private final String authorName;
-    private final LocalDateTime createdAt;
-    
-    public PostSummaryDTO(String title, String authorName, LocalDateTime createdAt) {
-        this.title = title;
-        this.authorName = authorName;
-        this.createdAt = createdAt;
-    }
-    
-    // getters
 }
 ```
 
@@ -49,18 +31,9 @@ public class PostSummaryDTO {
 public Page<PostSummary> getPostSummaries(
     @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params
 ) {
-    SearchCondition<PostSearchDTO> condition = 
+    SearchCondition<PostSearchDTO> condition =
         new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
     return postService.findAllWithSearch(condition, PostSummary.class);
-}
-
-@GetMapping("/dto-summaries")
-public Page<PostSummaryDTO> getPostSummariesAsDTO(
-    @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params
-) {
-    SearchCondition<PostSearchDTO> condition = 
-        new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
-    return postService.findAllWithSearch(condition, PostSummaryDTO.class);
 }
 ```
 
@@ -72,9 +45,9 @@ public Page<?> getDynamicSummaries(
     @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params,
     @RequestParam(defaultValue = "summary") String projection
 ) {
-    SearchCondition<PostSearchDTO> condition = 
+    SearchCondition<PostSearchDTO> condition =
         new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
-    
+
     switch (projection) {
         case "summary":
             return postService.findAllWithSearch(condition, PostSummary.class);
@@ -85,6 +58,12 @@ public Page<?> getDynamicSummaries(
     }
 }
 ```
+
+### 제한사항
+
+- **인터페이스만 지원**: 현재 구현에서는 인터페이스 기반 프로젝션만 지원됩니다
+- **클래스 기반 프로젝션**: DTO 클래스를 사용한 프로젝션은 아직 지원되지 않습니다
+- **계산된 필드**: `@Value` 어노테이션을 사용한 SpEL 표현식을 지원합니다
 
 ## 배치 업데이트
 
@@ -333,94 +312,11 @@ public Page<Post> advancedSearch(
 }
 ```
 
-## 커스텀 연산자
 
-기본 제공되는 연산자 외에 커스텀 연산자를 정의할 수 있습니다.
-
-### 커스텀 연산자 정의
-
-```java
-public enum CustomSearchOperator implements SearchOperator {
-    FULL_TEXT_SEARCH("fullTextSearch") {
-        @Override
-        public <T> Predicate toPredicate(Root<T> root, CriteriaBuilder cb, String field, Object value) {
-            // 전문 검색 로직 구현
-            return cb.function("MATCH", Boolean.class, 
-                root.get(field), cb.literal(value)).isTrue();
-        }
-    },
-    
-    REGEX_MATCH("regexMatch") {
-        @Override
-        public <T> Predicate toPredicate(Root<T> root, CriteriaBuilder cb, String field, Object value) {
-            // 정규식 매칭 로직
-            return cb.function("REGEXP", Boolean.class, 
-                root.get(field), cb.literal(value)).isTrue();
-        }
-    },
-    
-    DISTANCE_WITHIN("distanceWithin") {
-        @Override
-        public <T> Predicate toPredicate(Root<T> root, CriteriaBuilder cb, String field, Object value) {
-            // 지리적 거리 검색 로직
-            String[] parts = value.toString().split(",");
-            double lat = Double.parseDouble(parts[0]);
-            double lon = Double.parseDouble(parts[1]);
-            double distance = Double.parseDouble(parts[2]);
-            
-            return cb.lessThan(
-                cb.function("ST_Distance", Double.class, 
-                    root.get(field), 
-                    cb.function("ST_Point", Object.class, cb.literal(lat), cb.literal(lon))),
-                distance
-            );
-        }
-    };
-    
-    private final String operation;
-    
-    CustomSearchOperator(String operation) {
-        this.operation = operation;
-    }
-    
-    @Override
-    public String getOperation() {
-        return operation;
-    }
-}
-```
-
-### 커스텀 연산자 사용
-
-```java
-public class PostSearchDTO {
-    @SearchableField(operators = {CustomSearchOperator.FULL_TEXT_SEARCH})
-    private String content;
-    
-    @SearchableField(operators = {CustomSearchOperator.REGEX_MATCH})
-    private String title;
-    
-    @SearchableField(operators = {CustomSearchOperator.DISTANCE_WITHIN})
-    private String location;
-}
-```
-
-### 커스텀 연산자 검색 예제
-
-```bash
-# 전문 검색
-GET /api/posts/search?content.fullTextSearch=spring boot tutorial
-
-# 정규식 검색
-GET /api/posts/search?title.regexMatch=^Tutorial.*
-
-# 지리적 거리 검색 (위도,경도,거리(km))
-GET /api/posts/search?location.distanceWithin=37.5665,126.9780,10
-```
 
 ## 다국어 지원
 
-검색 조건의 메시지를 다국어로 제공할 수 있습니다.
+검색 조건의 에러 메시지를 다국어로 제공할 수 있습니다.
 
 ### 메시지 파일 설정
 
@@ -438,72 +334,37 @@ search.error.invalid.operator=Unsupported operator: {0}
 search.error.invalid.value=Invalid value: {0}
 search.validation.required=Required field: {0}
 search.validation.pattern=Invalid format: {0}
-
-# messages_ja.properties
-search.error.invalid.field=無効なフィールド: {0}
-search.error.invalid.operator=サポートされていない演算子: {0}
-search.error.invalid.value=無効な値: {0}
 ```
 
-### 다국어 메시지 설정
+### MessageUtils 사용
 
 ```java
-@Configuration
-public class MessageConfig {
-    
-    @Bean
-    public MessageSource messageSource() {
-        ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
-        messageSource.setBasenames("messages/search");
-        messageSource.setDefaultEncoding("UTF-8");
-        messageSource.setFallbackToSystemLocale(false);
-        return messageSource;
-    }
-    
-    @Bean
-    public LocaleResolver localeResolver() {
-        AcceptHeaderLocaleResolver localeResolver = new AcceptHeaderLocaleResolver();
-        localeResolver.setDefaultLocale(Locale.KOREAN);
-        localeResolver.setSupportedLocales(Arrays.asList(
-            Locale.KOREAN, Locale.ENGLISH, Locale.JAPANESE
-        ));
-        return localeResolver;
+import dev.simplecore.searchable.core.i18n.MessageUtils;
+
+@Service
+public class PostService extends DefaultSearchableService<Post, Long> {
+
+    public void validateAndSave(Post post) {
+        if (post.getTitle() == null || post.getTitle().trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                MessageUtils.getMessage("search.validation.required", new Object[]{"title"})
+            );
+        }
+
+        if (post.getStatus() == null) {
+            throw new IllegalArgumentException(
+                MessageUtils.getMessage("search.error.invalid.value", new Object[]{"status"})
+            );
+        }
+
+        save(post);
     }
 }
 ```
 
-### 다국어 에러 처리
+### Spring Boot 자동 구성
 
-```java
-@ControllerAdvice
-public class SearchExceptionHandler {
-    
-    @Autowired
-    private MessageSource messageSource;
-    
-    @ExceptionHandler(SearchableValidationException.class)
-    public ResponseEntity<ErrorResponse> handleValidationException(
-        SearchableValidationException ex, 
-        HttpServletRequest request
-    ) {
-        Locale locale = RequestContextUtils.getLocale(request);
-        String message = messageSource.getMessage(
-            ex.getMessageKey(), 
-            ex.getArguments(), 
-            ex.getDefaultMessage(), 
-            locale
-        );
-        
-        ErrorResponse error = new ErrorResponse(
-            "VALIDATION_ERROR", 
-            message, 
-            ex.getField()
-        );
-        
-        return ResponseEntity.badRequest().body(error);
-    }
-}
-```
+MessageUtils는 Spring Boot의 자동 구성 기능을 통해 자동으로 초기화됩니다. 별도의 설정 없이 사용할 수 있습니다.
 
 ## 복합 키 지원
 

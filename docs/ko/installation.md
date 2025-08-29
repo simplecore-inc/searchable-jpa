@@ -6,10 +6,21 @@
 
 이 문서는 Searchable JPA를 프로젝트에 설치하고 설정하는 방법을 설명합니다.
 
+## 버전 호환성
+
+| 라이브러리 버전 | Spring Boot 버전 | Java 버전 | Jakarta EE | 상태 |
+|---------------|----------------|-----------|------------|------|
+| `1.0.0+` | `3.2.x+` | `17+` | Jakarta EE 9+ | 최신 버전 |
+| `0.1.x` | `2.7.x` | `8+` | javax.* | 지원 중단 예정 |
+
+**중요**: 버전을 혼합해서 사용하지 마세요. 버전에 따라 Jakarta EE와 javax.* 패키지가 다르게 적용됩니다.
+
 ## 시스템 요구사항
 
-- Java 8 이상
-- Spring Boot 2.7.x 이상
+- **Java 17 이상** (1.0.0+ 버전)
+- **Java 8 이상** (0.1.x 버전)
+- **Spring Boot 3.2.x+** (1.0.0+ 버전, Jakarta EE 9+)
+- **Spring Boot 2.7.x** (0.1.x 버전, javax.* 패키지)
 - Spring Data JPA
 
 ## 의존성 추가
@@ -19,16 +30,16 @@
 ```gradle
 dependencies {
     // Searchable JPA 스타터
-    implementation 'dev.simplecore:spring-boot-starter-searchable-jpa:1.0.0'
-    
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.0.0-SNAPSHOT'
+
     // Spring Boot JPA 스타터 (필수)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    
+
     // 데이터베이스 드라이버 (예: H2)
     runtimeOnly 'com.h2database:h2'
-    
-    // OpenAPI 통합 (선택사항)
-    implementation 'org.springdoc:springdoc-openapi-ui:1.6.9'
+
+    // OpenAPI 통합 (선택사항) - Spring Boot 3.x 버전
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
 }
 ```
 
@@ -38,29 +49,29 @@ dependencies {
 <dependencies>
     <!-- Searchable JPA 스타터 -->
     <dependency>
-        <groupId>dev.simplecore</groupId>
+        <groupId>dev.simplecore.searchable</groupId>
         <artifactId>spring-boot-starter-searchable-jpa</artifactId>
         <version>1.0.0</version>
     </dependency>
-    
+
     <!-- Spring Boot JPA 스타터 (필수) -->
     <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-data-jpa</artifactId>
     </dependency>
-    
+
     <!-- 데이터베이스 드라이버 (예: H2) -->
     <dependency>
         <groupId>com.h2database</groupId>
         <artifactId>h2</artifactId>
         <scope>runtime</scope>
     </dependency>
-    
-    <!-- OpenAPI 통합 (선택사항) -->
+
+    <!-- OpenAPI 통합 (선택사항) - Spring Boot 3.x 버전 -->
     <dependency>
         <groupId>org.springdoc</groupId>
-        <artifactId>springdoc-openapi-ui</artifactId>
-        <version>1.6.9</version>
+        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        <version>2.6.0</version>
     </dependency>
 </dependencies>
 ```
@@ -92,12 +103,16 @@ searchable:
   # Swagger/OpenAPI 통합
   swagger:
     enabled: true
-  
+
   # Hibernate 최적화 (자동 적용)
   hibernate:
-    auto-optimization: true
-    default-batch-fetch-size: 100
-    jdbc-batch-size: 1000
+    auto-optimization: true          # 자동 최적화 활성화
+    default-batch-fetch-size: 100    # N+1 문제 방지 배치 크기
+    jdbc-batch-size: 1000            # JDBC 배치 처리 크기
+    batch-versioned-data: true       # 버전 관리 배치 처리
+    order-inserts: true              # INSERT 순서 최적화
+    order-updates: true              # UPDATE 순서 최적화
+    in-clause-parameter-padding: true # IN 절 파라미터 패딩
 ```
 
 ### application.properties
@@ -119,6 +134,10 @@ searchable.swagger.enabled=true
 searchable.hibernate.auto-optimization=true
 searchable.hibernate.default-batch-fetch-size=100
 searchable.hibernate.jdbc-batch-size=1000
+searchable.hibernate.batch-versioned-data=true
+searchable.hibernate.order-inserts=true
+searchable.hibernate.order-updates=true
+searchable.hibernate.in-clause-parameter-padding=true
 ```
 
 ## 엔티티 설정
@@ -446,13 +465,13 @@ CREATE INDEX idx_multi_tenant_name ON multi_tenant_entities(tenant_id, name);
 ```yaml
 searchable:
   hibernate:
-    auto-optimization: true
-    default-batch-fetch-size: 100  # N+1 문제 방지
-    jdbc-batch-size: 1000          # 배치 처리 최적화
-    batch-versioned-data: true     # 버전 관리 최적화
-    order-inserts: true            # INSERT 순서 최적화
-    order-updates: true            # UPDATE 순서 최적화
-    in-clause-parameter-padding: true  # 쿼리 플랜 캐싱 최적화
+    auto-optimization: true          # 자동 최적화 활성화
+    default-batch-fetch-size: 100    # N+1 문제 방지 배치 크기
+    jdbc-batch-size: 1000            # JDBC 배치 처리 크기
+    batch-versioned-data: true       # 버전 관리 배치 처리
+    order-inserts: true              # INSERT 순서 최적화
+    order-updates: true              # UPDATE 순서 최적화
+    in-clause-parameter-padding: true # IN 절 파라미터 패딩 최적화
 ```
 
 ## 설치 검증
@@ -479,6 +498,8 @@ public class TestController {
     public Page<Post> searchTest() {
         SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
             .create(PostSearchDTO.class)
+            .where(w -> w
+                .equals("status", "PUBLISHED"))
             .page(0)
             .size(10)
             .build();
@@ -493,8 +514,14 @@ public class TestController {
 
 ```
 INFO  d.s.s.a.SearchableJpaConfiguration - SearchableJpaConfiguration is being initialized
-INFO  d.s.s.a.SearchableJpaConfiguration - Hibernate optimizations applied: batch_fetch_size=100, jdbc_batch_size=1000
-INFO  d.s.s.a.SearchableJpaConfiguration - Searchable JPA auto-configuration completed successfully
+INFO  d.s.s.a.SearchableJpaConfiguration - Configuring automatic Hibernate optimizations for searchable-jpa...
+INFO  d.s.s.a.SearchableJpaConfiguration - Applied Hibernate optimizations:
+INFO  d.s.s.a.SearchableJpaConfiguration -   - default_batch_fetch_size: 100
+INFO  d.s.s.a.SearchableJpaConfiguration -   - jdbc.batch_size: 1000
+INFO  d.s.s.a.SearchableJpaConfiguration -   - order_inserts: true
+INFO  d.s.s.a.SearchableJpaConfiguration -   - order_updates: true
+INFO  d.s.s.a.SearchableJpaConfiguration -   - in_clause_parameter_padding: true
+INFO  d.s.s.a.SearchableJpaConfiguration - These settings help prevent N+1 problems and improve performance automatically.
 ```
 
 ## 문제 해결

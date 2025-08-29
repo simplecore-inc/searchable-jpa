@@ -306,15 +306,18 @@ GET /api/posts/search?title.contains=Spring&viewCount.greaterThan=100
   "conditions": [
     {
       "operator": "or",
-      "field": "status",
-      "searchOperator": "equals",
-      "value": "PUBLISHED"
-    },
-    {
-      "operator": "or",
-      "field": "status", 
-      "searchOperator": "equals",
-      "value": "FEATURED"
+      "conditions": [
+        {
+          "field": "status",
+          "searchOperator": "equals",
+          "value": "PUBLISHED"
+        },
+        {
+          "field": "status",
+          "searchOperator": "equals",
+          "value": "FEATURED"
+        }
+      ]
     }
   ]
 }
@@ -329,15 +332,19 @@ GET /api/posts/search?title.contains=Spring&viewCount.greaterThan=100
       "operator": "and",
       "conditions": [
         {
-          "field": "title",
-          "searchOperator": "contains",
-          "value": "Spring"
-        },
-        {
           "operator": "or",
-          "field": "title",
-          "searchOperator": "contains", 
-          "value": "Java"
+          "conditions": [
+            {
+              "field": "title",
+              "searchOperator": "contains",
+              "value": "Spring"
+            },
+            {
+              "field": "title",
+              "searchOperator": "contains",
+              "value": "Java"
+            }
+          ]
         }
       ]
     },

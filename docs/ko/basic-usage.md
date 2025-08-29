@@ -139,9 +139,9 @@ public class PostController {
     
     @GetMapping("/search")
     public Page<Post> searchPosts(
-        @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params
+        @RequestParam Map<String, String> params
     ) {
-        SearchCondition<PostSearchDTO> condition = 
+        SearchCondition<PostSearchDTO> condition =
             new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
         return postService.findAllWithSearch(condition);
     }
@@ -169,7 +169,7 @@ GET /api/posts/search?title.contains=Java&page=0&size=10
 ```java
 @PostMapping("/search")
 public Page<Post> searchPosts(
-    @RequestBody @Validated SearchCondition<PostSearchDTO> searchCondition
+    @RequestBody SearchCondition<PostSearchDTO> searchCondition
 ) {
     return postService.findAllWithSearch(searchCondition);
 }
@@ -179,7 +179,7 @@ public Page<Post> searchPosts(
 
 ```json
 {
-  "nodes": [
+  "conditions": [
     {
       "operator": "and",
       "field": "title",

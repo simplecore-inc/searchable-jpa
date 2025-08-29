@@ -31,7 +31,7 @@
 ### 1. 의존성 추가
 ```xml
 <dependency>
-    <groupId>dev.simplecore</groupId>
+    <groupId>dev.simplecore.searchable</groupId>
     <artifactId>spring-boot-starter-searchable-jpa</artifactId>
     <version>1.0.0</version>
 </dependency>
