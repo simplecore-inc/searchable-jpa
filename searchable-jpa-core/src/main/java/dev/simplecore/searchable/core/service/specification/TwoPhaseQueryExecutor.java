@@ -12,11 +12,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-import javax.persistence.EntityManager;
-import javax.persistence.TypedQuery;
-import javax.persistence.criteria.*;
-import javax.persistence.metamodel.EntityType;
-import javax.persistence.metamodel.SingularAttribute;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+import jakarta.persistence.criteria.*;
+import jakarta.persistence.metamodel.EntityType;
+import jakarta.persistence.metamodel.SingularAttribute;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
@@ -661,7 +661,7 @@ public class TwoPhaseQueryExecutor<T> {
                 // Use reflection to check for @EmbeddedId annotation
                 try {
                     Field field = entityClass.getDeclaredField(idAttribute.getName());
-                    return field.isAnnotationPresent(javax.persistence.EmbeddedId.class);
+                    return field.isAnnotationPresent(jakarta.persistence.EmbeddedId.class);
                 } catch (NoSuchFieldException e) {
                     return false;
                 }

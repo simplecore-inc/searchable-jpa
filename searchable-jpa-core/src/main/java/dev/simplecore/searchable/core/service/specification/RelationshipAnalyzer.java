@@ -2,12 +2,12 @@ package dev.simplecore.searchable.core.service.specification;
 
 import lombok.extern.slf4j.Slf4j;
 
-import javax.persistence.EntityManager;
-import javax.persistence.criteria.Root;
-import javax.persistence.metamodel.Attribute;
-import javax.persistence.metamodel.EntityType;
-import javax.persistence.metamodel.ManagedType;
-import javax.persistence.metamodel.PluralAttribute;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.metamodel.Attribute;
+import jakarta.persistence.metamodel.EntityType;
+import jakarta.persistence.metamodel.ManagedType;
+import jakarta.persistence.metamodel.PluralAttribute;
 import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.Set;
@@ -68,8 +68,8 @@ public class RelationshipAnalyzer<T> {
             // Fallback to reflection if metamodel fails
             Field[] fields = entityClass.getDeclaredFields();
             for (Field field : fields) {
-                if (field.isAnnotationPresent(javax.persistence.ManyToOne.class) ||
-                        field.isAnnotationPresent(javax.persistence.OneToOne.class)) {
+                if (field.isAnnotationPresent(jakarta.persistence.ManyToOne.class) ||
+                        field.isAnnotationPresent(jakarta.persistence.OneToOne.class)) {
                     commonFields.add(field.getName());
                     log.debug("DetectCommonToOneFields: Found ToOne field via reflection: {}", field.getName());
                 }
@@ -174,8 +174,8 @@ public class RelationshipAnalyzer<T> {
             // Fallback to reflection
             Field[] fields = entityClass.getDeclaredFields();
             for (Field field : fields) {
-                if (field.isAnnotationPresent(javax.persistence.ManyToOne.class) ||
-                        field.isAnnotationPresent(javax.persistence.OneToOne.class)) {
+                if (field.isAnnotationPresent(jakarta.persistence.ManyToOne.class) ||
+                        field.isAnnotationPresent(jakarta.persistence.OneToOne.class)) {
                     toOneFields.add(field.getName());
                     log.debug("DetectToOneFieldsForEntity: Found ToOne field '{}' via reflection in entity: {}",
                             field.getName(), entityClass.getSimpleName());
@@ -218,7 +218,7 @@ public class RelationshipAnalyzer<T> {
             // Fallback to reflection if metamodel fails
             Field[] fields = entityClass.getDeclaredFields();
             for (Field field : fields) {
-                if (field.isAnnotationPresent(javax.persistence.ManyToMany.class)) {
+                if (field.isAnnotationPresent(jakarta.persistence.ManyToMany.class)) {
                     manyToManyFields.add(field.getName());
                     log.debug("DetectManyToManyFields: Found ManyToMany field via reflection: {}", field.getName());
                 }

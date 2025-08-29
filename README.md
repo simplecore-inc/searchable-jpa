@@ -1,44 +1,101 @@
 # Searchable JPA
 
-[![Java](https://img.shields.io/badge/Java-8%2B-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7%2B-green.svg)](https://spring.io/projects/spring-boot)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.5-green.svg)](https://spring.io/projects/spring-boot)
+[![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-9%2B-blue.svg)](https://jakarta.ee/)
+[![License](https://img.shields.io/badge/License-SimpleCORE%201.0-blue.svg)](LICENSE)
 
-Searchable JPA는 Spring Data JPA를 확장하여 동적 검색, 정렬, 페이징 기능을 제공하는 라이브러리입니다. 복잡한 검색 조건을 간단한 어노테이션과 빌더 패턴으로 구현할 수 있으며, 대용량 데이터에서도 높은 성능을 보장하는 커서 기반 페이징을 지원합니다.
+Searchable JPA is a library that extends Spring Data JPA to provide dynamic search, sorting, and pagination functionality. It allows complex search conditions to be implemented using simple annotations and builder patterns, and supports high-performance cursor-based pagination even for large datasets.
 
-## 주요 기능
+## Version Compatibility
 
-- **동적 검색**: 20개 이상의 검색 연산자 지원 (EQUALS, CONTAINS, BETWEEN 등)
-- **유연한 정렬**: 다중 필드 정렬과 동적 정렬 조건
-- **고성능 페이징**: 커서 기반 페이징으로 대용량 데이터 처리
-- **타입 안전성**: 컴파일 타임 검증과 타입 안전한 빌더 패턴
-- **OpenAPI 통합**: Swagger 문서 자동 생성
-- **다양한 데이터 타입**: 문자열, 숫자, 날짜, Enum, 중첩 객체 지원
+### Version-Specific Spring Boot Support
 
-## 빠른 시작
+| Library Version | Spring Boot Version | Jakarta EE | Status |
+|----------------|---------------------|------------|--------|
+| `0.1.x` | `2.7.x` | javax.* | Deprecated |
+| `1.0.0+` | `3.2.x+` | jakarta.* | Latest |
 
-### 1. 의존성 추가
+### Important: Version Compatibility Notice
+
+- **1.0.0+ versions**: Only supports Spring Boot 3.2.x+ (Jakarta EE 9+)
+- **0.1.x versions**: Only supports Spring Boot 2.7.x (uses javax.* packages)
+- **No mixing with lower versions**: Using different versions simultaneously may cause classpath conflicts
+
+### Spring Boot 2.x → 3.x Migration
+
+When upgrading to Spring Boot 3.x, the following changes are required:
+
+1. **Dependency Version Changes**:
+   ```gradle
+   // 0.1.x version (Spring Boot 2.x)
+   implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:0.1.x'
+
+   // 1.0.0+ version (Spring Boot 3.x)
+   implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.0.0+'
+   ```
+
+2. **Jakarta EE Migration**:
+   - Change all `javax.*` imports to `jakarta.*`
+   - Update JPA-related imports in application code if they are used directly
+
+## System Requirements
+
+- **Java**: 17+
+- **Spring Boot**: 3.2.5+ (1.0.0+ versions)
+- **Spring Boot**: 2.7.x (0.1.x versions)
+- **Jakarta EE**: 9+ (1.0.0+ versions)
+- **javax.* support**: 2.7.x and below (0.1.x versions)
+
+## Spring Boot 3.2.5 Migration Completed
+
+
+## Key Features
+
+- **Dynamic Search**: Supports 20+ search operators (EQUALS, CONTAINS, BETWEEN, etc.)
+- **Flexible Sorting**: Multi-field sorting and dynamic sort conditions
+- **High-Performance Pagination**: Cursor-based pagination for large dataset processing
+- **Type Safety**: Compile-time validation and type-safe builder patterns
+- **OpenAPI Integration**: Automatic Swagger documentation generation
+- **Multiple Data Types**: Support for strings, numbers, dates, enums, and nested objects
+
+## Quick Start
+
+### 1. Add Dependency
 
 ```gradle
-implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:0.0.4-SNAPSHOT'
+implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.0.0-SNAPSHOT'
 ```
 
-### 2. DTO 클래스 정의
+### 2. Application Configuration (Optional)
+
+Configure `application.yml` for library usage:
+
+```yaml
+# Searchable JPA Configuration (All optional, defaults exist)
+searchable:
+  swagger:
+    enabled: true                    # Enable automatic OpenAPI documentation generation (default: true)
+  max-page-size: 1000               # Maximum page size (default: 1000)
+  default-page-size: 20             # Default page size (default: 20)
+```
+
+### 3. Define DTO Class
 
 ```java
 public class PostSearchDTO {
     @SearchableField(operators = {EQUALS, CONTAINS}, sortable = true)
     private String title;
-    
+
     @SearchableField(operators = {EQUALS}, sortable = true)
     private PostStatus status;
-    
+
     @SearchableField(operators = {GREATER_THAN, LESS_THAN}, sortable = true)
     private LocalDateTime createdAt;
 }
 ```
 
-### 3. 서비스 클래스 구현
+### 4. Implement Service Class
 
 ```java
 @Service
@@ -49,7 +106,7 @@ public class PostService extends DefaultSearchableService<Post, Long> {
 }
 ```
 
-### 4. 컨트롤러에서 사용
+### 5. Use in Controller
 
 ```java
 @RestController
@@ -58,55 +115,43 @@ public class PostController {
     public Page<Post> searchPosts(
         @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params
     ) {
-        SearchCondition<PostSearchDTO> condition = 
+        SearchCondition<PostSearchDTO> condition =
             new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
         return postService.findAllWithSearch(condition);
     }
 }
 ```
 
-### 5. API 호출
+### 6. API Call
 
 ```bash
-# 제목에 "Spring"이 포함된 게시글 검색
+# Search posts containing "Spring" in title
 GET /api/posts/search?title.contains=Spring&sort=createdAt,desc&page=0&size=10
 ```
 
-## 문서
+## Documentation
 
-### 한국어 문서
-- [설치 가이드](docs/ko/installation.md) - 시스템 요구사항 및 설치 방법
-- [기본 사용법](docs/ko/basic-usage.md) - 기본적인 사용 방법과 예제
-- [검색 연산자](docs/ko/search-operators.md) - 지원하는 모든 검색 연산자
-- [고급 기능](docs/ko/advanced-features.md) - 복잡한 검색 조건과 고급 기능
-- [커서 페이징](docs/ko/cursor-pagination.md) - 고성능 커서 기반 페이징
-- [관계형 DB와 커서 페이징](docs/ko/relationship-and-cursor-pagination.md) - JPA 관계 매핑과 N+1 문제 해결
-- [OpenAPI 통합](docs/ko/openapi-integration.md) - Swagger 문서 자동 생성
-- [API 레퍼런스](docs/ko/api-reference.md) - 전체 API 문서
-- [FAQ](docs/ko/faq.md) - 자주 묻는 질문과 문제 해결
+### Korean Documentation
+- [Installation Guide](docs/ko/installation.md) - System requirements and installation instructions
+- [Basic Usage](docs/ko/basic-usage.md) - Basic usage methods and examples
+- [Search Operators](docs/ko/search-operators.md) - All supported search operators
+- [Advanced Features](docs/ko/advanced-features.md) - Complex search conditions and advanced features
+- [Cursor Pagination](docs/ko/cursor-pagination.md) - High-performance cursor-based pagination
+- [Relational Database and Cursor Pagination](docs/ko/relationship-and-cursor-pagination.md) - JPA relationship mapping and N+1 problem resolution
+- [OpenAPI Integration](docs/ko/openapi-integration.md) - Automatic Swagger documentation generation
+- [API Reference](docs/ko/api-reference.md) - Complete API documentation
+- [FAQ](docs/ko/faq.md) - Frequently asked questions and troubleshooting
 
 ### English Documentation
-- [Installation Guide](docs/en/installation.md) - System requirements and installation
-- [Basic Usage](docs/en/basic-usage.md) - Basic usage patterns and examples
-- [Search Operators](docs/en/search-operators.md) - All supported search operators
-- [Advanced Features](docs/en/advanced-features.md) - Complex search conditions and advanced features
-- [Cursor Pagination](docs/en/cursor-pagination.md) - High-performance cursor-based pagination
-- [Relationships & Cursor Pagination](docs/en/relationship-and-cursor-pagination.md) - JPA relationships and N+1 problem solutions
-- [OpenAPI Integration](docs/en/openapi-integration.md) - Automatic Swagger documentation
-- [API Reference](docs/en/api-reference.md) - Complete API documentation
-- [FAQ](docs/en/faq.md) - Frequently asked questions and troubleshooting
+*Coming Soon* - English documentation is currently being prepared.
 
-## 시스템 요구사항
 
-- **Java**: 8 이상
-- **Spring Boot**: 2.7.x 이상
-- **Spring Data JPA**: 2.7.x 이상
-- **데이터베이스**: MySQL, PostgreSQL, H2 등 JPA 지원 DB
 
-## 라이선스
 
-이 프로젝트는 [Apache License 2.0](LICENSE) 하에 배포됩니다.
+## License
+
+This project is distributed under the [SimpleCORE License 1.0](LICENSE).
 
 ---
 
-**Searchable JPA**로 더 쉽고 빠른 검색 기능을 구현해보세요! 
+Try implementing easier and faster search functionality with **Searchable JPA**! 

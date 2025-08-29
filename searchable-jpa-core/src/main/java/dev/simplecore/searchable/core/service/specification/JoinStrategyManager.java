@@ -3,11 +3,11 @@ package dev.simplecore.searchable.core.service.specification;
 import dev.simplecore.searchable.core.condition.SearchCondition;
 import lombok.extern.slf4j.Slf4j;
 
-import javax.persistence.EntityManager;
-import javax.persistence.criteria.From;
-import javax.persistence.criteria.Join;
-import javax.persistence.criteria.JoinType;
-import javax.persistence.criteria.Root;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.From;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Root;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,7 +19,9 @@ import java.util.Set;
 @Slf4j
 public class JoinStrategyManager<T> {
 
+    @SuppressWarnings("unused")
     private final EntityManager entityManager;
+    @SuppressWarnings("unused")
     private final Class<T> entityClass;
     private final RelationshipAnalyzer<T> relationshipAnalyzer;
 
@@ -304,6 +306,7 @@ public class JoinStrategyManager<T> {
     /**
      * Applies fetch join for nested paths by building the path step by step.
      */
+    @SuppressWarnings("unused")
     private void applyNestedFetchJoin(Root<T> root, String nestedPath) {
         try {
             String[] pathParts = nestedPath.split("\\.");

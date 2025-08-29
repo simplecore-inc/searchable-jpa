@@ -6,7 +6,7 @@ import dev.simplecore.searchable.properties.SearchableProperties;
 import io.swagger.v3.oas.models.OpenAPI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springdoc.core.customizers.OpenApiCustomiser;
+import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
@@ -22,7 +22,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 @EnableConfigurationProperties(SearchableProperties.class)
 @ConditionalOnProperty(name = "searchable.swagger.enabled", havingValue = "true", matchIfMissing = true)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnClass({OpenAPI.class, OpenApiCustomiser.class})
+@ConditionalOnClass({OpenAPI.class, OperationCustomizer.class})
 @AutoConfiguration
 @AutoConfigureAfter(WebMvcAutoConfiguration.class)
 @ComponentScan(basePackages = "dev.simplecore.searchable.openapi.customiser")
@@ -32,7 +32,7 @@ public class SearchableOpenApiConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(RequestMappingHandlerMapping.class)
-    public OpenApiCustomiser searchConditionCustomizer(
+    public OperationCustomizer searchConditionCustomizer(
             @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping
     ) {
         log.info("Creating SearchConditionDocCustomiser bean");

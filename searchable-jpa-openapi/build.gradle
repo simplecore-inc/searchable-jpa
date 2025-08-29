@@ -4,11 +4,11 @@ apply plugin: 'io.spring.dependency-management'
 apply plugin: 'java-library'
 apply plugin: 'maven-publish'
 
-sourceCompatibility = JavaVersion.VERSION_1_8
-targetCompatibility = JavaVersion.VERSION_1_8
+sourceCompatibility = JavaVersion.VERSION_17
+targetCompatibility = JavaVersion.VERSION_17
 
 ext {
-    set('springBootVersion', '2.7.18')
+    set('springBootVersion', '3.2.5')
 }
 
 sourceSets {
@@ -22,17 +22,47 @@ sourceSets {
     }
 }
 
+// Version-specific Jakarta EE/Javax configuration
+configurations.all {
+    if (project.version.toString().startsWith('1.')) {
+        // 1.x versions: Jakarta EE 9+ enforced
+        resolutionStrategy {
+            force 'jakarta.persistence:jakarta.persistence-api:3.1.0'
+            force 'jakarta.validation:jakarta.validation-api:3.0.2'
+        }
+
+        // Exclude all javax persistence and validation
+        exclude group: 'javax.persistence', module: 'javax.persistence-api'
+        exclude group: 'javax.validation', module: 'validation-api'
+    } else if (project.version.toString().startsWith('0.1.')) {
+        // 0.1.x versions: Javax.* enforced
+        resolutionStrategy {
+            force 'javax.persistence:javax.persistence-api:2.2'
+            force 'javax.validation:validation-api:2.0.1.Final'
+        }
+
+        // Exclude Jakarta EE dependencies
+        exclude group: 'jakarta.persistence', module: 'jakarta.persistence-api'
+        exclude group: 'jakarta.validation', module: 'jakarta.validation-api'
+    }
+}
+
 dependencies {
     api project(':searchable-jpa-core')
-    
-    implementation 'org.springdoc:springdoc-openapi-ui:1.7.0'
-    implementation 'org.springdoc:springdoc-openapi-webmvc-core:1.7.0'
-    implementation 'org.springdoc:springdoc-openapi-javadoc:1.7.0'
-    implementation 'org.springdoc:springdoc-openapi-data-rest:1.7.0'
-    
+
+    if (project.version.toString().startsWith('1.')) {
+        // 1.x versions: Spring Boot 3.x compatible OpenAPI
+        implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+        implementation 'org.springdoc:springdoc-openapi-starter-webmvc-api:2.6.0'
+    } else if (project.version.toString().startsWith('0.1.')) {
+        // 0.1.x versions: Spring Boot 2.x compatible OpenAPI
+        implementation 'org.springdoc:springdoc-openapi-ui:1.7.0'
+        implementation 'org.springdoc:springdoc-openapi-webmvc-core:1.7.0'
+    }
+
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
-    
+
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

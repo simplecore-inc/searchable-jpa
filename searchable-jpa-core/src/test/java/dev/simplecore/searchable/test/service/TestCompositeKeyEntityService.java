@@ -5,7 +5,7 @@ import dev.simplecore.searchable.test.entity.TestCompositeKeyEntity;
 import dev.simplecore.searchable.test.repository.TestCompositeKeyEntityRepository;
 import org.springframework.stereotype.Service;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 
 @Service
 public class TestCompositeKeyEntityService extends DefaultSearchableService<TestCompositeKeyEntity, TestCompositeKeyEntity.CompositeKey> {

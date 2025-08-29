@@ -6,7 +6,7 @@ import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.core.exception.SearchableValidationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
 
-import javax.validation.ValidationException;
+import jakarta.validation.ValidationException;
 import java.lang.reflect.Field;
 import java.util.*;
 import java.util.stream.Collectors;

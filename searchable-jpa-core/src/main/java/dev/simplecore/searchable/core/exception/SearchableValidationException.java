@@ -1,6 +1,6 @@
 package dev.simplecore.searchable.core.exception;
 
-import javax.validation.ValidationException;
+import jakarta.validation.ValidationException;
 
 /**
  * Exception thrown when there is a validation error in search conditions.

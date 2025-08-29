@@ -13,11 +13,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-import javax.persistence.EntityManager;
-import javax.persistence.criteria.CriteriaBuilder;
-import javax.persistence.criteria.CriteriaQuery;
-import javax.persistence.criteria.Predicate;
-import javax.persistence.criteria.Root;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -149,7 +149,7 @@ public class SearchableSpecificationBuilder<T> {
      * Returns null if no predicates created.
      */
     private Predicate createPredicates(Root<T> root,
-                                       javax.persistence.criteria.CriteriaQuery<?> query,
+                                       jakarta.persistence.criteria.CriteriaQuery<?> query,
                                        CriteriaBuilder cb,
                                        SpecificationBuilder<T> specBuilder) {
         List<Node> nodes = condition.getNodes();

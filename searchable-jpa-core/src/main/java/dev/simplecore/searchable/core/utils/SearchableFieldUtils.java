@@ -1,11 +1,11 @@
 package dev.simplecore.searchable.core.utils;
 
 import dev.simplecore.searchable.core.annotation.SearchableField;
-import javax.persistence.Id;
-import javax.persistence.EmbeddedId;
-import javax.persistence.metamodel.EntityType;
-import javax.persistence.metamodel.SingularAttribute;
-import javax.persistence.EntityManager;
+import jakarta.persistence.Id;
+import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.metamodel.EntityType;
+import jakarta.persistence.metamodel.SingularAttribute;
+import jakarta.persistence.EntityManager;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -112,7 +112,7 @@ public class SearchableFieldUtils {
     private static boolean isEmbeddedId(Class<?> entityClass, String fieldName) {
         try {
             Field field = entityClass.getDeclaredField(fieldName);
-            return field.isAnnotationPresent(javax.persistence.EmbeddedId.class);
+            return field.isAnnotationPresent(jakarta.persistence.EmbeddedId.class);
         } catch (NoSuchFieldException e) {
             // Try superclass
             Class<?> superClass = entityClass.getSuperclass();

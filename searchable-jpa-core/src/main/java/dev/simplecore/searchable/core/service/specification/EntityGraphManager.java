@@ -2,10 +2,10 @@ package dev.simplecore.searchable.core.service.specification;
 
 import lombok.extern.slf4j.Slf4j;
 
-import javax.persistence.EntityManager;
-import javax.persistence.TypedQuery;
-import javax.persistence.metamodel.Attribute;
-import javax.persistence.metamodel.EntityType;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+import jakarta.persistence.metamodel.Attribute;
+import jakarta.persistence.metamodel.EntityType;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -29,9 +29,9 @@ public class EntityGraphManager<T> {
      * Creates dynamic EntityGraph with ToOne relationships only.
      * ToMany relationships are excluded to prevent HHH000104 warning and memory pagination.
      */
-    public javax.persistence.EntityGraph<T> createDynamicEntityGraph(Set<String> relationshipPaths) {
+    public jakarta.persistence.EntityGraph<T> createDynamicEntityGraph(Set<String> relationshipPaths) {
         try {
-            javax.persistence.EntityGraph<T> entityGraph = entityManager.createEntityGraph(entityClass);
+            jakarta.persistence.EntityGraph<T> entityGraph = entityManager.createEntityGraph(entityClass);
             Set<String> toOneOnlyPaths = new HashSet<>();
 
             for (String path : relationshipPaths) {
@@ -74,9 +74,9 @@ public class EntityGraphManager<T> {
         }
 
         try {
-            javax.persistence.EntityGraph<T> entityGraph = createDynamicEntityGraph(relationshipPaths);
+            jakarta.persistence.EntityGraph<T> entityGraph = createDynamicEntityGraph(relationshipPaths);
             if (entityGraph != null) {
-                query.setHint("javax.persistence.fetchgraph", entityGraph);
+                query.setHint("jakarta.persistence.fetchgraph", entityGraph);
                 log.info("Applied dynamic EntityGraph with {} paths to query", relationshipPaths.size());
             }
         } catch (Exception e) {
@@ -119,7 +119,7 @@ public class EntityGraphManager<T> {
     /**
      * Adds nested paths to EntityGraph using subgraphs.
      */
-    private void addNestedPathToEntityGraph(javax.persistence.EntityGraph<T> entityGraph, String nestedPath) {
+    private void addNestedPathToEntityGraph(jakarta.persistence.EntityGraph<T> entityGraph, String nestedPath) {
         String[] pathParts = nestedPath.split("\\.");
 
         if (pathParts.length < 2) {
@@ -129,7 +129,7 @@ public class EntityGraphManager<T> {
 
         // Create subgraph for the first part
         String firstPart = pathParts[0];
-        javax.persistence.Subgraph<?> subgraph;
+        jakarta.persistence.Subgraph<?> subgraph;
 
         try {
             subgraph = entityGraph.addSubgraph(firstPart);
@@ -156,7 +156,7 @@ public class EntityGraphManager<T> {
     /**
      * Recursively adds nested paths to subgraphs.
      */
-    private void addNestedPathToSubgraph(javax.persistence.Subgraph<?> parentSubgraph, String nestedPath) {
+    private void addNestedPathToSubgraph(jakarta.persistence.Subgraph<?> parentSubgraph, String nestedPath) {
         String[] pathParts = nestedPath.split("\\.");
 
         if (pathParts.length == 1) {
@@ -168,7 +168,7 @@ public class EntityGraphManager<T> {
         String remainingPath = String.join(".", Arrays.copyOfRange(pathParts, 1, pathParts.length));
 
         try {
-            javax.persistence.Subgraph<?> subgraph = parentSubgraph.addSubgraph(firstPart);
+            jakarta.persistence.Subgraph<?> subgraph = parentSubgraph.addSubgraph(firstPart);
             addNestedPathToSubgraph(subgraph, remainingPath);
         } catch (Exception e) {
             // Fallback: add as simple attribute

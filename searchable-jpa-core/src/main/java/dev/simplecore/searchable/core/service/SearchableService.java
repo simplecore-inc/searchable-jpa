@@ -4,7 +4,7 @@ import dev.simplecore.searchable.core.condition.SearchCondition;
 import org.springframework.data.domain.Page;
 import org.springframework.lang.NonNull;
 
-import javax.persistence.NonUniqueResultException;
+import jakarta.persistence.NonUniqueResultException;
 import java.util.Optional;
 
 @SuppressWarnings({"unused"})

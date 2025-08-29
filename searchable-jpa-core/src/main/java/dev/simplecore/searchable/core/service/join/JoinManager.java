@@ -3,8 +3,8 @@ package dev.simplecore.searchable.core.service.join;
 import dev.simplecore.searchable.core.exception.SearchableJoinException;
 import lombok.NonNull;
 
-import javax.persistence.EntityManager;
-import javax.persistence.criteria.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.*;
 import java.util.Objects;
 
 /**

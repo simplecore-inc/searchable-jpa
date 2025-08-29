@@ -5,7 +5,7 @@ import dev.simplecore.searchable.test.entity.TestIdClassEntity;
 import dev.simplecore.searchable.test.repository.TestIdClassEntityRepository;
 import org.springframework.stereotype.Service;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 
 @Service
 public class TestIdClassEntityService extends DefaultSearchableService<TestIdClassEntity, TestIdClassEntity.CompositeKey> {

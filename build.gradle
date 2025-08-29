@@ -1,19 +1,36 @@
 plugins {
-    id 'org.springframework.boot' version '2.7.18' apply false
-    id 'io.spring.dependency-management' version '1.0.15.RELEASE' apply false
+    id 'org.springframework.boot' version '3.2.5' apply false
+    id 'io.spring.dependency-management' version '1.1.4' apply false
     id 'java'
     id 'maven-publish'
 }
 
 ext {
-    springBootVersion = '2.7.18'
+    springBootVersion = '3.2.5'
 }
 
 allprojects {
     group = 'dev.simplecore.searchable'
-    version = '0.1.8-SNAPSHOT'
-    
+    version = '1.0.0-SNAPSHOT'
+
     System.setProperty("spring.boot.version.check.enabled", "false")
+
+    // Version compatibility validation
+    afterEvaluate {
+        def versionStr = version.toString()
+
+        if (versionStr.startsWith('1.')) {
+            // 1.x versions: Spring Boot 3.2.x+ required
+            if (!springBootVersion.startsWith('3.')) {
+                throw new GradleException("Version ${version} requires Spring Boot 3.2.x+, but current version is ${springBootVersion}")
+            }
+        } else if (versionStr.startsWith('0.1.')) {
+            // 0.1.x versions: Spring Boot 2.7.x required
+            if (!springBootVersion.startsWith('2.7')) {
+                throw new GradleException("Version ${version} requires Spring Boot 2.7.x, but current version is ${springBootVersion}")
+            }
+        }
+    }
 }
 
 subprojects {
@@ -57,7 +74,7 @@ subprojects {
                         throw new RuntimeException("No metadata found for project: ${project.name}")
                     }
                     url = 'https://github.com/simplecore-inc/searchable-jpa'
-                    
+
                     licenses {
                         license {
                             name = 'The Apache License, Version 2.0'
@@ -75,6 +92,25 @@ subprojects {
                         developerConnection = 'scm:git:ssh://github.com:simplecore-inc/searchable-jpa.git'
                         url = 'https://github.com/simplecore-inc/searchable-jpa'
                     }
+
+                    // Add version compatibility information (properties)
+                    withXml {
+                        def properties = asNode().get('properties')
+                        if (properties.isEmpty()) {
+                            properties = asNode().appendNode('properties')
+                        }
+
+                        // Spring Boot version compatibility information
+                        if (project.version.toString().startsWith('1.')) {
+                            properties.appendNode('spring-boot.version.required', '[3.2.0,4.0.0)')
+                            properties.appendNode('jakarta.version.required', '9+')
+                            properties.appendNode('javax.version.supported', 'false')
+                        } else if (project.version.toString().startsWith('0.1.')) {
+                            properties.appendNode('spring-boot.version.required', '[2.7.0,3.0.0)')
+                            properties.appendNode('jakarta.version.supported', 'false')
+                            properties.appendNode('javax.version.required', 'true')
+                        }
+                    }
                 }
             }
         }
@@ -91,8 +127,8 @@ subprojects {
         }
     }
     java {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     tasks.withType(JavaCompile).configureEach {

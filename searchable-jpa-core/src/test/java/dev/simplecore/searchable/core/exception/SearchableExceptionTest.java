@@ -87,7 +87,7 @@ class SearchableExceptionTest {
         SearchableValidationException exception = new SearchableValidationException(message);
 
         // Then
-        assertThat(exception).isInstanceOf(javax.validation.ValidationException.class);
+        assertThat(exception).isInstanceOf(jakarta.validation.ValidationException.class);
         assertThat(exception.getMessage()).isEqualTo(message);
     }
 
@@ -206,7 +206,7 @@ class SearchableExceptionTest {
         assertThat(RuntimeException.class).isAssignableFrom(SearchableParseException.class);
         
         // ValidationException hierarchy
-        assertThat(javax.validation.ValidationException.class).isAssignableFrom(SearchableValidationException.class);
+        assertThat(jakarta.validation.ValidationException.class).isAssignableFrom(SearchableValidationException.class);
     }
 
     @Test

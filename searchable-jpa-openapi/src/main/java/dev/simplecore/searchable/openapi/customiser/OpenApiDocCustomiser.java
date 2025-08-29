@@ -17,7 +17,7 @@ import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.RequestBody;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springdoc.core.customizers.OpenApiCustomiser;
+import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.MethodParameter;
 import org.springframework.stereotype.Component;
@@ -33,7 +33,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Component
-public class OpenApiDocCustomiser implements OpenApiCustomiser {
+public class OpenApiDocCustomiser implements OperationCustomizer {
     private static final Logger log = LoggerFactory.getLogger(OpenApiDocCustomiser.class);
     private static final String MEDIA_TYPE_JSON = "application/json";
 
@@ -48,10 +48,19 @@ public class OpenApiDocCustomiser implements OpenApiCustomiser {
     }
 
     @Override
-    public void customise(OpenAPI openApi) {
-        log.info("Customizing OpenAPI documentation for search conditions");
-        initializeOpenApiPaths(openApi);
-        customizeHandlerMethods(openApi);
+    public Operation customize(Operation operation, HandlerMethod handlerMethod) {
+        log.debug("Customizing OpenAPI operation for search conditions (Spring Boot 3.x)");
+
+        try {
+            Arrays.stream(handlerMethod.getMethodParameters())
+                    .filter(this::isSearchConditionParameter)
+                    .findFirst()
+                    .ifPresent(param -> customizeOperationForMethod(param, operation, handlerMethod));
+        } catch (Exception e) {
+            log.error("Error customizing OpenAPI operation for method: {}", handlerMethod.getMethod().getName(), e);
+        }
+
+        return operation;
     }
 
     private void initializeOpenApiPaths(OpenAPI openApi) {
@@ -100,6 +109,29 @@ public class OpenApiDocCustomiser implements OpenApiCustomiser {
                 param.hasParameterAnnotation(SearchableParams.class);
     }
 
+    private void customizeOperationForMethod(MethodParameter param, Operation operation, HandlerMethod handlerMethod) {
+        Class<?> dtoClass = extractDtoClass(param);
+        if (dtoClass == null) return;
+
+        boolean isPostType = isPostTypeParameter(param);
+
+        // Extract path pattern from handler method
+        String pathPattern = extractPathPattern(handlerMethod);
+
+        DescriptionGenerator.customizeOperation(
+                operation,
+                dtoClass,
+                pathPattern,
+                isPostType ? DescriptionGenerator.RequestType.POST : DescriptionGenerator.RequestType.GET
+        );
+
+        if (isPostType) {
+            customizeRequestBody(operation, dtoClass);
+        } else {
+            parameterGenerator.customizeParameters(operation, dtoClass);
+        }
+    }
+
     private void customizeOperation(MethodParameter param, Operation operation, String pattern) {
         Class<?> dtoClass = extractDtoClass(param);
         if (dtoClass == null) return;
@@ -130,6 +162,25 @@ public class OpenApiDocCustomiser implements OpenApiCustomiser {
             return annotation != null ? annotation.value() : null;
         }
         return (Class<?>) ((ParameterizedType) param.getGenericParameterType()).getActualTypeArguments()[0];
+    }
+
+    private String extractPathPattern(HandlerMethod handlerMethod) {
+        try {
+            // Extract path pattern through handler method mapping information
+            for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : handlerMapping.getHandlerMethods().entrySet()) {
+                if (entry.getValue().equals(handlerMethod)) {
+                    Set<String> patterns = entry.getKey().getPatternValues();
+                    if (!patterns.isEmpty()) {
+                        return patterns.iterator().next();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to extract path pattern from handler method: {}", handlerMethod.getMethod().getName(), e);
+        }
+
+        // Use method name as default value
+        return "/" + handlerMethod.getMethod().getName();
     }
 
     private Operation getOperation(PathItem pathItem, RequestMappingInfo requestMapping) {

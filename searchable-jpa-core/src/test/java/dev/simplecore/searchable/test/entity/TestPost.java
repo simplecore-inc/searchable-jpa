@@ -3,7 +3,7 @@ package dev.simplecore.searchable.test.entity;
 import dev.simplecore.searchable.test.enums.TestPostStatus;
 import lombok.*;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;

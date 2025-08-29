@@ -4,7 +4,9 @@ import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.exception.SearchableConfigurationException;
 import dev.simplecore.searchable.core.service.specification.SearchableSpecificationBuilder;
 import dev.simplecore.searchable.core.service.specification.SpecificationWithPageable;
+
 import org.modelmapper.ModelMapper;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -13,7 +15,7 @@ import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
 import org.springframework.data.repository.NoRepositoryBean;
 import org.springframework.lang.NonNull;
 
-import javax.persistence.EntityManager;
+import jakarta.persistence.EntityManager;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.util.Collection;
@@ -28,6 +30,8 @@ public class DefaultSearchableService<T, ID> implements SearchableService<T> {
     private final Class<T> entityClass;
     private final EntityManager entityManager;
     private final ProjectionFactory projectionFactory = new SpelAwareProxyProjectionFactory();
+
+
 
     @SuppressWarnings("unchecked")
     public DefaultSearchableService(JpaRepository<T, ID> repository, EntityManager entityManager) {

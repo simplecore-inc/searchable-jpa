@@ -3,7 +3,7 @@ package dev.simplecore.searchable.openapi.utils;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import javax.validation.constraints.Pattern;
+import jakarta.validation.constraints.Pattern;
 import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.List;
