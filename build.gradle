@@ -1,12 +1,24 @@
 plugins {
-    id 'org.springframework.boot' version '3.2.5' apply false
-    id 'io.spring.dependency-management' version '1.1.4' apply false
+    id 'org.springframework.boot' version '3.5.5' apply false
+    id 'io.spring.dependency-management' version '1.1.7' apply false
     id 'java'
     id 'maven-publish'
 }
 
 ext {
-    springBootVersion = '3.2.5'
+    springBootVersion = '3.5.5'
+    springDependencyManagementVersion = '1.1.7'
+    
+    // Dependency versions - only for dependencies not managed by Spring Boot
+    versions = [
+        // SpringDoc OpenAPI versions (not managed by Spring Boot)
+        springdocOpenapiStarter: '2.5.0',
+        springdocOpenapiLegacy: '1.7.0',
+        
+        // Other dependencies not managed by Spring Boot
+        modelmapper: '3.2.0',
+        mssqlJdbc: '12.4.2.jre11'
+    ]
 }
 
 allprojects {
@@ -41,6 +53,18 @@ subprojects {
     dependencyManagement {
         imports {
             mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+        }
+        
+        dependencies {
+            // SpringDoc OpenAPI versions (not managed by Spring Boot)
+            dependency "org.springdoc:springdoc-openapi-starter-webmvc-ui:${versions.springdocOpenapiStarter}"
+            dependency "org.springdoc:springdoc-openapi-starter-webmvc-api:${versions.springdocOpenapiStarter}"
+            dependency "org.springdoc:springdoc-openapi-ui:${versions.springdocOpenapiLegacy}"
+            dependency "org.springdoc:springdoc-openapi-webmvc-core:${versions.springdocOpenapiLegacy}"
+            
+            // Other dependencies not managed by Spring Boot
+            dependency "org.modelmapper:modelmapper:${versions.modelmapper}"
+            dependency "com.microsoft.sqlserver:mssql-jdbc:${versions.mssqlJdbc}"
         }
     }
 
