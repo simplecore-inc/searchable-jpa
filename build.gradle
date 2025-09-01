@@ -74,6 +74,16 @@ subprojects {
         publications {
             mavenJava(MavenPublication) {
                 from components.java
+                
+                // Resolve version conflicts for Maven publishing
+                versionMapping {
+                    usage('java-api') {
+                        fromResolutionOf('runtimeClasspath')
+                    }
+                    usage('java-runtime') {
+                        fromResolutionResult()
+                    }
+                }
 
                 pom {
                     def metadata = [
