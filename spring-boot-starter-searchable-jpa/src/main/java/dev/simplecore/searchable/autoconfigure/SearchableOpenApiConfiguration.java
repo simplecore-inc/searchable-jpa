@@ -29,8 +29,8 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 public class SearchableOpenApiConfiguration {
     private static final Logger log = LoggerFactory.getLogger(SearchableOpenApiConfiguration.class);
 
-    @Bean
-    @ConditionalOnMissingBean
+    @Bean(name = "searchConditionCustomizer")
+    @ConditionalOnMissingBean(name = "searchConditionCustomizer")
     @ConditionalOnBean(RequestMappingHandlerMapping.class)
     public OperationCustomizer searchConditionCustomizer(
             @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping
