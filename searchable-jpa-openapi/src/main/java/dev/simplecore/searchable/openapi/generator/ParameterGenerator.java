@@ -140,7 +140,10 @@ public class ParameterGenerator {
             schema.type("string");
             @SuppressWarnings({"unchecked"})
             Schema<Object> objSchema = (Schema<Object>) schema;
-            objSchema.setEnum(Arrays.asList(fieldType.getEnumConstants()));
+            List<String> enumNames = Arrays.stream(fieldType.getEnumConstants())
+                    .map(e -> ((Enum<?>) e).name())
+                    .collect(Collectors.toList());
+            objSchema.setEnum((List) enumNames);
         } else if (Number.class.isAssignableFrom(fieldType) || fieldType.isPrimitive()) {
             if (fieldType == Long.class || fieldType == long.class) {
                 schema.type("integer").format("int64");
