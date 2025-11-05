@@ -20,19 +20,18 @@ import org.slf4j.LoggerFactory;
 import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.MethodParameter;
-import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-@Component
 public class OpenApiDocCustomiser implements OperationCustomizer {
     private static final Logger log = LoggerFactory.getLogger(OpenApiDocCustomiser.class);
     private static final String MEDIA_TYPE_JSON = "application/json";
@@ -202,8 +201,10 @@ public class OpenApiDocCustomiser implements OperationCustomizer {
             Content content = new Content();
             MediaType mediaType = new MediaType();
 
-            // Generate schema automatically using ModelConverters
-            Schema<?> schema;
+            // Register enum types from DTO for $ref usage
+            registerEnumsFromDto(dtoClass);
+
+            // Create parameterized type for SearchCondition<DTO>
             java.lang.reflect.Type parameterizedType = new ParameterizedType() {
                 @Override
                 public java.lang.reflect.Type[] getActualTypeArguments() {
@@ -221,7 +222,8 @@ public class OpenApiDocCustomiser implements OperationCustomizer {
                 }
             };
 
-            schema = ModelConverters.getInstance().resolveAsResolvedSchema(
+            // Generate schema inline (not using $ref for complex generic types)
+            Schema<?> schema = ModelConverters.getInstance().resolveAsResolvedSchema(
                     new AnnotatedType(parameterizedType)
                             .resolveAsRef(false)
                             .skipSchemaName(true)
@@ -250,6 +252,28 @@ public class OpenApiDocCustomiser implements OperationCustomizer {
             operation.requestBody(requestBody);
         } catch (Exception e) {
             log.error("Failed to customize request body", e);
+        }
+    }
+
+    /**
+     * Registers enum types found in DTO fields as component schemas for $ref usage
+     */
+    private void registerEnumsFromDto(Class<?> dtoClass) {
+        ModelConverters modelConverters = ModelConverters.getInstance();
+
+        for (Field field : dtoClass.getDeclaredFields()) {
+            Class<?> fieldType = field.getType();
+            if (fieldType.isEnum()) {
+                try {
+                    // Register enum as component schema
+                    modelConverters.resolveAsResolvedSchema(
+                        new AnnotatedType(fieldType).resolveAsRef(true)
+                    );
+                    log.debug("Registered enum schema: {}", fieldType.getSimpleName());
+                } catch (Exception e) {
+                    log.warn("Failed to register enum schema: {}", fieldType.getSimpleName(), e);
+                }
+            }
         }
     }
 }

@@ -6,10 +6,8 @@ import dev.simplecore.searchable.openapi.utils.OpenApiDocUtils;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
-import lombok.RequiredArgsConstructor;
 
 import java.lang.reflect.Field;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -17,10 +15,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@RequiredArgsConstructor
 public class ParameterGenerator {
     private static final String DEFAULT_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(DEFAULT_DATE_FORMAT);
+    private final ParameterSchemaGenerator schemaGenerator;
+
+    public ParameterGenerator() {
+        this.schemaGenerator = new ParameterSchemaGenerator();
+    }
 
     public void customizeParameters(Operation operation, Class<?> dtoClass) {
         if (operation.getParameters() == null) {
@@ -50,7 +52,8 @@ public class ParameterGenerator {
                         fieldName,
                         OpenApiDocUtils.toCamelCase(operator.name().toLowerCase()));
 
-                Schema<?> schema = createFieldSchema(field, operator);
+                // Use ParameterSchemaGenerator for schema references
+                Schema<?> schema = schemaGenerator.createFieldParameterSchema(field, operator);
                 Object example = OpenApiDocUtils.getExampleValue(field, operator);
 
                 Parameter parameter = new Parameter()
@@ -70,7 +73,7 @@ public class ParameterGenerator {
                 .name("page")
                 .in("query")
                 .description("Page number (0-based)")
-                .schema(new Schema<Integer>().type("integer").minimum(new BigDecimal(0)))
+                .schema(schemaGenerator.createPageSchema())
                 .example(0)
                 .required(false));
 
@@ -78,12 +81,11 @@ public class ParameterGenerator {
                 .name("size")
                 .in("query")
                 .description("Items per page")
-                .schema(new Schema<Integer>().type("integer").minimum(new BigDecimal(1)))
+                .schema(schemaGenerator.createSizeSchema())
                 .example(20)
                 .required(false));
     }
 
-    @SuppressWarnings("unchecked")
     private void addSortingParameters(Operation operation, Class<?> dtoClass) {
         List<String> sortableFields = Arrays.stream(dtoClass.getDeclaredFields())
                 .filter(field -> {
@@ -99,64 +101,24 @@ public class ParameterGenerator {
                     .in("query")
                     .description("Sort fields (e.g., field.asc or field.desc). Available fields: " +
                             String.join(", ", sortableFields))
-                    .schema(new Schema<List<String>>()
-                            .type("array")
-                            .items(new Schema<String>().type("string")))
+                    .schema(schemaGenerator.createSortSchema())
                     .explode(true)
                     .required(false));
         }
     }
 
+    // These methods are no longer needed as we use ParameterSchemaGenerator
+    // Keep them for backward compatibility if needed, but marked as deprecated
+    @Deprecated
     private Schema<?> createFieldSchema(Field field, SearchOperator op) {
-        Schema<?> schema = new Schema<>();
-        Class<?> fieldType = field.getType();
-
-        if (op == SearchOperator.IS_NULL || op == SearchOperator.IS_NOT_NULL) {
-            schema.type("boolean");
-            return schema;
-        }
-
-        if (op == SearchOperator.IN || op == SearchOperator.NOT_IN) {
-            schema.type("string");
-            schema.description("Enter multiple values separated by comma");
-            return schema;
-        }
-
-        if (op == SearchOperator.BETWEEN) {
-            schema.type("string");
-            schema.description("Enter two values separated by comma");
-            return schema;
-        }
-
-        setFieldTypeSchema(schema, fieldType);
-        return schema;
+        // Delegate to ParameterSchemaGenerator
+        return schemaGenerator.createFieldParameterSchema(field, op);
     }
 
+    @Deprecated
     private void setFieldTypeSchema(Schema<?> schema, Class<?> fieldType) {
-        if (fieldType == LocalDateTime.class) {
-            schema.type("string").format("date-time");
-            schema.description("Format: " + dateFormatter);
-        } else if (fieldType.isEnum()) {
-            schema.type("string");
-            @SuppressWarnings({"unchecked"})
-            Schema<Object> objSchema = (Schema<Object>) schema;
-            List<String> enumNames = Arrays.stream(fieldType.getEnumConstants())
-                    .map(e -> ((Enum<?>) e).name())
-                    .collect(Collectors.toList());
-            objSchema.setEnum((List) enumNames);
-        } else if (Number.class.isAssignableFrom(fieldType) || fieldType.isPrimitive()) {
-            if (fieldType == Long.class || fieldType == long.class) {
-                schema.type("integer").format("int64");
-            } else if (fieldType == Integer.class || fieldType == int.class) {
-                schema.type("integer").format("int32");
-            } else if (fieldType == Double.class || fieldType == double.class ||
-                    fieldType == Float.class || fieldType == float.class) {
-                schema.type("number");
-                schema.format(fieldType == Double.class || fieldType == double.class ? "double" : "float");
-            }
-        } else {
-            schema.type("string");
-        }
+        // This method is no longer used as schema generation is handled by ParameterSchemaGenerator
+        // Keep empty for backward compatibility
     }
 
     private String getFieldDescription(Field field) {
@@ -179,8 +141,7 @@ public class ParameterGenerator {
         if (example instanceof LocalDateTime) {
             return ((LocalDateTime) example).format(dateFormatter);
         }
-        if (example instanceof List) {
-            List<?> values = (List<?>) example;
+        if (example instanceof List<?> values) {
             if (operator == SearchOperator.BETWEEN && values.size() >= 2) {
                 return values.stream()
                         .limit(2)

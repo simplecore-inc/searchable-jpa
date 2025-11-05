@@ -14,7 +14,6 @@ import org.springframework.boot.autoconfigure.condition.*;
 import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
@@ -25,7 +24,6 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 @ConditionalOnClass({OpenAPI.class, OperationCustomizer.class})
 @AutoConfiguration
 @AutoConfigureAfter(WebMvcAutoConfiguration.class)
-@ComponentScan(basePackages = "dev.simplecore.searchable.openapi.customiser")
 public class SearchableOpenApiConfiguration {
     private static final Logger log = LoggerFactory.getLogger(SearchableOpenApiConfiguration.class);
 
