@@ -48,8 +48,12 @@ jobs:
           git add build.gradle
           git commit -m "release: v${{ github.event.inputs.version }}"
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Build and Publish
         run: |
+          gradle wrapper
           chmod +x ./gradlew
           ./gradlew clean publish --info --stacktrace
         env:
