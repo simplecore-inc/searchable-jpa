@@ -78,6 +78,72 @@ public class SearchConditionBuilder<D> {
     }
 
     /**
+     * Creates a new builder initialized with an existing SearchCondition.
+     * This allows adding additional conditions to an existing search condition
+     * while maintaining immutability of the original.
+     *
+     * <p>Example usage:
+     * <pre>{@code
+     * SearchCondition<UserDTO> base = SearchConditionBuilder.create(UserDTO.class)
+     *     .where(w -> w.equals("status", "ACTIVE"))
+     *     .build();
+     *
+     * SearchCondition<UserDTO> extended = SearchConditionBuilder.from(base, UserDTO.class)
+     *     .and(a -> a.equals("tenantId", currentTenantId))
+     *     .build();
+     * }</pre>
+     *
+     * @param <D>       the type of the DTO class
+     * @param existing  the existing SearchCondition to copy from
+     * @param dtoClass  the DTO class type to validate against
+     * @return a new SearchConditionBuilder initialized with the existing condition's data
+     * @throws SearchableValidationException if existing is null
+     * @throws SearchableValidationException if dtoClass is null
+     */
+    public static <D> SearchConditionBuilder<D> from(SearchCondition<D> existing, Class<D> dtoClass) {
+        if (existing == null) {
+            throw new SearchableValidationException(MessageUtils.getMessage("builder.existing.condition.required"));
+        }
+        return new SearchConditionBuilder<>(existing, dtoClass);
+    }
+
+    /**
+     * Creates a new builder instance initialized with an existing SearchCondition.
+     * Copies all nodes, sort criteria, page, and size from the existing condition.
+     *
+     * @param existing the existing SearchCondition to copy from
+     * @param dtoClass the DTO class type to validate against
+     * @throws SearchableValidationException if dtoClass is null
+     */
+    private SearchConditionBuilder(SearchCondition<D> existing, Class<D> dtoClass) {
+        if (dtoClass == null) {
+            throw new SearchableValidationException(MessageUtils.getMessage("builder.dto.class.required"));
+        }
+        this.dtoClass = dtoClass;
+        this.condition = new SearchCondition<>();
+
+        // Copy nodes (reference copy - nodes are effectively immutable)
+        this.condition.getNodes().addAll(existing.getNodes());
+
+        // Copy pagination
+        this.condition.setPage(existing.getPage());
+        this.condition.setSize(existing.getSize());
+
+        // Copy sort (create new Sort instance)
+        if (existing.getSort() != null) {
+            SearchCondition.Sort newSort = new SearchCondition.Sort();
+            for (SearchCondition.Order order : existing.getSort().getOrders()) {
+                newSort.addOrder(new SearchCondition.Order(
+                        order.getField(),
+                        order.getDirection(),
+                        order.getEntityField()
+                ));
+            }
+            this.condition.setSort(newSort);
+        }
+    }
+
+    /**
      * Starts building the search condition with an initial group of conditions.
      * This method must be called first before any other builder methods.
      * It handles both direct conditions and nested groups.

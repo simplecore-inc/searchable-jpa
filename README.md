@@ -136,8 +136,9 @@ GET /api/posts/search?title.contains=Spring&sort=createdAt,desc&page=0&size=10
 - [Basic Usage](docs/ko/basic-usage.md) - Basic usage methods and examples
 - [Search Operators](docs/ko/search-operators.md) - All supported search operators
 - [Advanced Features](docs/ko/advanced-features.md) - Complex search conditions and advanced features
-- [Cursor Pagination](docs/ko/cursor-pagination.md) - High-performance cursor-based pagination
-- [Relational Database and Cursor Pagination](docs/ko/relationship-and-cursor-pagination.md) - JPA relationship mapping and N+1 problem resolution
+- [Two-Phase Query Optimization](docs/ko/two-phase-query-optimization.md) - High-performance cursor-based pagination
+- [Relational Data and Two-Phase Query](docs/ko/relationship-and-two-phase-query.md) - JPA relationship mapping and N+1 problem resolution
+- [Auto Configuration](docs/ko/auto-configuration.md) - Spring Boot auto-configuration settings
 - [OpenAPI Integration](docs/ko/openapi-integration.md) - Automatic Swagger documentation generation
 - [API Reference](docs/ko/api-reference.md) - Complete API documentation
 - [FAQ](docs/ko/faq.md) - Frequently asked questions and troubleshooting

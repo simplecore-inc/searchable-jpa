@@ -314,6 +314,152 @@ public Page<Post> advancedSearch(
 
 
 
+## 기존 검색 조건 확장
+
+기존 `SearchCondition` 객체를 기반으로 새로운 조건을 추가할 수 있습니다. 이 기능은 불변성을 유지하면서 검색 조건을 재사용하고 확장하는 데 유용합니다.
+
+### from() 팩토리 메서드
+
+`SearchConditionBuilder.from()` 메서드를 사용하여 기존 검색 조건을 복사하고 새 조건을 추가할 수 있습니다.
+
+```java
+// 기본 검색 조건 생성
+SearchCondition<PostSearchDTO> baseCondition = SearchConditionBuilder
+    .create(PostSearchDTO.class)
+    .where(w -> w.equals("status", PostStatus.PUBLISHED))
+    .sort(s -> s.desc("createdAt"))
+    .page(0)
+    .size(10)
+    .build();
+
+// 기존 조건 기반으로 새 조건 추가
+SearchCondition<PostSearchDTO> extendedCondition = SearchConditionBuilder
+    .from(baseCondition, PostSearchDTO.class)
+    .and(a -> a.greaterThan("viewCount", 100))
+    .build();
+
+// baseCondition은 변경되지 않음 (불변성 유지)
+```
+
+### 실용적인 활용 사례
+
+#### 1. 테넌트별 필터 추가
+
+멀티테넌트 환경에서 기본 검색 조건에 테넌트 필터를 추가합니다.
+
+```java
+@Service
+public class PostService extends DefaultSearchableService<Post, Long> {
+
+    public Page<Post> searchWithTenantFilter(
+            SearchCondition<PostSearchDTO> baseCondition,
+            Long tenantId
+    ) {
+        SearchCondition<PostSearchDTO> tenantCondition = SearchConditionBuilder
+            .from(baseCondition, PostSearchDTO.class)
+            .and(a -> a.equals("tenantId", tenantId))
+            .build();
+
+        return findAllWithSearch(tenantCondition);
+    }
+}
+```
+
+#### 2. 권한 기반 필터 추가
+
+사용자 권한에 따라 검색 조건을 동적으로 확장합니다.
+
+```java
+@Service
+public class PostService extends DefaultSearchableService<Post, Long> {
+
+    public Page<Post> searchWithSecurityFilter(
+            SearchCondition<PostSearchDTO> baseCondition,
+            User currentUser
+    ) {
+        SearchConditionBuilder<PostSearchDTO> builder = SearchConditionBuilder
+            .from(baseCondition, PostSearchDTO.class);
+
+        // 관리자가 아닌 경우 자신의 게시글만 조회
+        if (!currentUser.isAdmin()) {
+            builder = builder.and(a -> a.equals("authorId", currentUser.getId()));
+        }
+
+        // 비공개 게시글 제외 (소유자가 아닌 경우)
+        if (!currentUser.isAdmin()) {
+            builder = builder.and(a -> a
+                .notEquals("visibility", "PRIVATE")
+                .or(o -> o.equals("authorId", currentUser.getId()))
+            );
+        }
+
+        return findAllWithSearch(builder.build());
+    }
+}
+```
+
+#### 3. 컨트롤러에서 조건 확장
+
+클라이언트 요청에 서버 측 조건을 추가합니다.
+
+```java
+@RestController
+@RequestMapping("/api/posts")
+public class PostController {
+
+    private final PostService postService;
+
+    @PostMapping("/search")
+    public Page<Post> search(
+            @RequestBody SearchCondition<PostSearchDTO> clientCondition,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        // 클라이언트 조건에 서버 측 필터 추가
+        SearchCondition<PostSearchDTO> serverCondition = SearchConditionBuilder
+            .from(clientCondition, PostSearchDTO.class)
+            .and(a -> a.notEquals("status", PostStatus.DELETED))
+            .and(a -> a.in("departmentId", currentUser.getAccessibleDepartments()))
+            .build();
+
+        return postService.findAllWithSearch(serverCondition);
+    }
+}
+```
+
+### 정렬 및 페이징 오버라이드
+
+기존 조건의 정렬이나 페이징을 변경할 수 있습니다.
+
+```java
+// 기존 조건
+SearchCondition<PostSearchDTO> original = SearchConditionBuilder
+    .create(PostSearchDTO.class)
+    .where(w -> w.equals("status", PostStatus.PUBLISHED))
+    .sort(s -> s.asc("title"))
+    .page(0)
+    .size(10)
+    .build();
+
+// 정렬 변경
+SearchCondition<PostSearchDTO> withNewSort = SearchConditionBuilder
+    .from(original, PostSearchDTO.class)
+    .sort(s -> s.desc("createdAt"))  // 정렬 오버라이드
+    .build();
+
+// 페이징 변경
+SearchCondition<PostSearchDTO> withNewPage = SearchConditionBuilder
+    .from(original, PostSearchDTO.class)
+    .page(5)   // 페이지 오버라이드
+    .size(20)  // 사이즈 오버라이드
+    .build();
+```
+
+### 주의사항
+
+- **불변성**: `from()` 메서드는 항상 새로운 `SearchCondition` 객체를 생성합니다. 원본 객체는 변경되지 않습니다.
+- **DTO 클래스 필수**: `from()` 메서드에 DTO 클래스를 명시적으로 전달해야 합니다. 이는 `build()` 시점에 검증을 수행하기 위함입니다.
+- **검증 시점**: 모든 조건(기존 + 새로 추가된 조건)은 `build()` 호출 시 함께 검증됩니다.
+
 ## 다국어 지원
 
 검색 조건의 에러 메시지를 다국어로 제공할 수 있습니다.
