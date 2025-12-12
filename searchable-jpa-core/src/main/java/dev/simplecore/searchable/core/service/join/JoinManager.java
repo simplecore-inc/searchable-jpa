@@ -16,6 +16,8 @@ import java.util.Objects;
 public class JoinManager<T> {
 
     private final Root<T> root;
+    private final EntityManager entityManager;
+    private final Class<T> entityClass;
 
     /**
      * Creates a new JoinManager instance.
@@ -24,9 +26,30 @@ public class JoinManager<T> {
      * @param root          The root entity
      * @throws IllegalStateException if the EntityManager is not open
      */
+    @SuppressWarnings("unchecked")
     public JoinManager(@NonNull EntityManager entityManager, @NonNull Root<T> root) {
         validateEntityManager(entityManager);
         this.root = root;
+        this.entityManager = entityManager;
+        this.entityClass = (Class<T>) root.getJavaType();
+    }
+
+    /**
+     * Gets the entity class for this JoinManager.
+     *
+     * @return The entity class
+     */
+    public Class<T> getEntityClass() {
+        return entityClass;
+    }
+
+    /**
+     * Gets the EntityManager for this JoinManager.
+     *
+     * @return The EntityManager
+     */
+    public EntityManager getEntityManager() {
+        return entityManager;
     }
 
     /**

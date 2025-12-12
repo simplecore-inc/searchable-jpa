@@ -5,6 +5,7 @@ import dev.simplecore.searchable.core.condition.operator.LogicalOperator;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.core.exception.SearchableOperationException;
 import dev.simplecore.searchable.core.service.join.JoinManager;
+import dev.simplecore.searchable.core.utils.JsonTypeDetector;
 import dev.simplecore.searchable.core.utils.SearchableValueParser;
 import lombok.NonNull;
 
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 public class PredicateBuilder<T> {
     private final CriteriaBuilder cb;
     private final JoinManager<T> joinManager;
+    private String currentFieldPath;
 
     public PredicateBuilder(@NonNull CriteriaBuilder cb,
                             @NonNull JoinManager<T> joinManager) {
@@ -79,6 +81,8 @@ public class PredicateBuilder<T> {
         if (entityField == null || entityField.isEmpty()) {
             throw new SearchableOperationException("Field must not be null or empty");
         }
+
+        this.currentFieldPath = entityField;
 
         Path<?> path = joinManager.getJoinPath(entityField);
         SearchOperator operator = condition.getSearchOperator();
@@ -211,10 +215,21 @@ public class PredicateBuilder<T> {
 
     private Expression<String> getStringPath(Path<?> path) {
         Class<?> type = path.getJavaType();
-        if (!String.class.equals(type)) {
-            throw new SearchableOperationException("Field must be String for pattern matching operators");
+
+        if (String.class.equals(type)) {
+            return path.as(String.class);
         }
-        return path.as(String.class);
+
+        if (currentFieldPath != null &&
+            JsonTypeDetector.isJsonTypedField(
+                joinManager.getEntityManager(),
+                joinManager.getEntityClass(),
+                currentFieldPath)) {
+            return path.as(String.class);
+        }
+
+        throw new SearchableOperationException(
+            "Field must be String or JSON-typed for pattern matching operators");
     }
 
     private String escapePattern(String value) {

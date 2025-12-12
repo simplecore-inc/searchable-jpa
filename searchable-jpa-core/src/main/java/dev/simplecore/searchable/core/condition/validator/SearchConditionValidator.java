@@ -127,6 +127,13 @@ public class SearchConditionValidator<D> {
 
         validateField(pd, fieldName);
         validateOperator(condition.getSearchOperator(), fieldName);
+
+        // For JSON-typed fields (Map, Collection, Array), skip standard value validation
+        // JSON fields are searched as strings in the database
+        if (isJsonTypedFieldInDto(fieldName)) {
+            return;
+        }
+
         validateValue(pd.getPropertyType(), condition.getValue(), condition.getSearchOperator(), fieldName);
 
         // Validate constraints
@@ -161,6 +168,26 @@ public class SearchConditionValidator<D> {
             }
         } catch (ReflectiveOperationException e) {
             throw new SearchableValidationException(MessageUtils.getMessage("validator.field.validation.failed", new Object[]{fieldName}));
+        }
+    }
+
+    /**
+     * Checks if a DTO field is JSON-typed (Map or Collection stored as TEXT in DB).
+     * For DTO fields, we check if the field type is a complex type (Map, Collection, Array)
+     * since these types in DTOs typically map to JSON-stored entity fields.
+     *
+     * @param fieldName the field name
+     * @return true if the field is JSON-typed
+     */
+    private boolean isJsonTypedFieldInDto(String fieldName) {
+        try {
+            java.lang.reflect.Field field = dtoClass.getDeclaredField(fieldName);
+            Class<?> fieldType = field.getType();
+            return java.util.Map.class.isAssignableFrom(fieldType) ||
+                   Collection.class.isAssignableFrom(fieldType) ||
+                   fieldType.isArray();
+        } catch (NoSuchFieldException e) {
+            return false;
         }
     }
 
