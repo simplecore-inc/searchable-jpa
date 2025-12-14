@@ -75,6 +75,7 @@ NEVER use emojis or other Unicode symbols outside the approved list.
 - Use conventional commit format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`
 - Be clear and descriptive about what changed and why
 - Do not perform git commit/push operations unless explicitly requested
+- Do NOT add "Generated with Claude Code" or "Co-Authored-By: Claude" to commit messages
 
 ### Development Workflow
 - When the same problem occurs more than twice, consult official documentation
