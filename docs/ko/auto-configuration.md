@@ -4,7 +4,7 @@
 
 searchable-jpa 라이브러리는 **자동으로 Hibernate 최적화 설정을 구성**하여 N+1 문제를 방지하고 성능을 향상시킵니다.
 
-### 📋 **자동 적용되는 최적화 설정**
+### **자동 적용되는 최적화 설정**
 
 라이브러리를 의존성에 추가하기만 하면 다음 설정들이 **자동으로 적용**됩니다:
 
@@ -34,7 +34,7 @@ spring:
           provider_disables_autocommit: true
 ```
 
-### ⚙️ **설정 커스터마이징**
+### **설정 커스터마이징**
 
 필요에 따라 기본값을 변경할 수 있습니다:
 
@@ -84,7 +84,7 @@ spring:
         default_batch_fetch_size: 200  # 자동 설정 대신 이 값 사용
 ```
 
-### 📊 **성능 향상 효과**
+### **성능 향상 효과**
 
 #### **Before (자동 설정 없음)**
 ```sql
@@ -102,7 +102,7 @@ SELECT * FROM position WHERE id IN (?, ?, ?, ...)         -- 1번 (배치)
 SELECT * FROM organization WHERE id IN (?, ?, ?, ...)     -- 1번 (배치)
 ```
 
-### 🎯 **주요 이점**
+### **주요 이점**
 
 #### 1. **개발자 편의성**
 -  별도 설정 불필요
@@ -119,20 +119,21 @@ SELECT * FROM organization WHERE id IN (?, ?, ?, ...)     -- 1번 (배치)
 -  프로젝트별 최적화 가능
 -  단계적 비활성화 지원
 
-### 📝 **사용 예시**
+### **사용 예시**
 
 #### **기본 사용 (자동 최적화)**
 ```java
 // 의존성만 추가하면 자동으로 최적화됨
 @Service
-public class UserService {
-    
-    @Autowired
-    private DefaultSearchableService<User, UserSearchDTO> userService;
-    
-    public Page<UserSearchDTO> searchUsers(SearchCondition condition) {
+public class UserService extends DefaultSearchableService<User, Long> {
+
+    public UserService(UserRepository repository, EntityManager entityManager) {
+        super(repository, entityManager);
+    }
+
+    public Page<User> searchUsers(SearchCondition<UserSearchDTO> condition) {
         // 자동으로 배치 로딩 적용됨
-        return userService.findAllWithSearch(condition);
+        return findAllWithSearch(condition);
     }
 }
 ```
@@ -147,7 +148,7 @@ searchable:
     jdbc-batch-size: 2000          # 더 큰 JDBC 배치
 ```
 
-### 🔍 **설정 확인 방법**
+### **설정 확인 방법**
 
 애플리케이션 시작 시 로그에서 확인할 수 있습니다:
 
@@ -162,7 +163,7 @@ INFO  SearchableJpaConfiguration -   - in_clause_parameter_padding: true
 INFO  SearchableJpaConfiguration - These settings help prevent N+1 problems and improve performance automatically.
 ```
 
-### ⚠️ **주의사항**
+### **주의사항**
 
 1. **기존 설정과의 충돌**
    - 기존에 `spring.jpa.properties.hibernate.*` 설정이 있다면 기존 설정이 우선됩니다
@@ -176,7 +177,7 @@ INFO  SearchableJpaConfiguration - These settings help prevent N+1 problems and 
    - 일부 설정은 특정 데이터베이스에서만 효과적일 수 있습니다
    - 성능 테스트를 통해 검증하는 것을 권장합니다
 
-### 🎉 **결론**
+### **결론**
 
 searchable-jpa의 자동 Hibernate 최적화 기능으로:
 
@@ -185,11 +186,7 @@ searchable-jpa의 자동 Hibernate 최적화 기능으로:
 - **유연한 커스터마이징**: 필요시 세부 조정 가능
 - **실수 방지**: 최적화 설정 누락으로 인한 성능 문제 예방
 
-이제 **`batch_fetch_size`를 수동으로 설정할 필요가 없습니다!** 
-
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 관계형 데이터와 2단계 쿼리](relationship-and-two-phase-query.md) | [다음: OpenAPI 통합](openapi-integration.md)
-
----
+이제 **`batch_fetch_size`를 수동으로 설정할 필요가 없습니다!**
 
 Searchable JPA는 Spring Boot의 자동 설정 기능을 활용하여 최소한의 설정으로 사용할 수 있습니다.
 
