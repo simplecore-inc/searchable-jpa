@@ -1,9 +1,5 @@
 # 검색 연산자
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 기본 사용법](basic-usage.md) | [다음: 2단계 쿼리 최적화](two-phase-query-optimization.md)
-
----
-
 Searchable JPA는 다양한 검색 연산자를 제공하여 복잡한 검색 조건을 구성할 수 있습니다. 이 문서는 모든 검색 연산자의 사용법과 예제를 설명합니다.
 
 > **참고**: 기본적인 DTO 설정과 SearchableField 어노테이션 사용법은 [기본 사용법](basic-usage.md) 문서를 참조하세요.
@@ -415,7 +411,3 @@ JSON에서 특수 문자 사용 시 이스케이프 처리가 필요합니다.
 - [2단계 쿼리 최적화](two-phase-query-optimization.md) - 고성능 페이징 시스템
 - [고급 기능](advanced-features.md) - 복잡한 검색 조건과 중첩 쿼리
 - [API 레퍼런스](api-reference.md) - 전체 API 문서
-
----
-
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 기본 사용법](basic-usage.md) | [다음: 2단계 쿼리 최적화](two-phase-query-optimization.md) 

@@ -1,9 +1,5 @@
 # JPA 관계형 매핑과 2단계 쿼리 최적화
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 고급 기능](advanced-features.md) | [다음: 자동 설정](auto-configuration.md)
-
----
-
 ## 목차
 
 1. [N+1 문제와 해결 방법](#n-1-문제와-해결책)
@@ -360,10 +356,10 @@ WHERE p.title LIKE '%Spring%';
 ```
 
 **EntityGraph의 장점:**
-- ✅ N+1 문제 자동 방지
-- ✅ 메모리 효율성 향상
-- ✅ 쿼리 수 최소화
-- ✅ ToMany 관계에 의한 카티시안 곱 방지
+- ✔ N+1 문제 자동 방지
+- ✔ 메모리 효율성 향상
+- ✔ 쿼리 수 최소화
+- ✔ ToMany 관계에 의한 카티시안 곱 방지
 
 ---
 
@@ -563,9 +559,3 @@ private List<T> executeBatchedInQueries(List<Object> ids, Sort sort) {
     return allResults;
 }
 ```
-
-
-
----
-
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 고급 기능](advanced-features.md) | [다음: 자동 설정](auto-configuration.md)

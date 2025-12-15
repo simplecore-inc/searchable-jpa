@@ -1,9 +1,5 @@
 # 고성능 페이징
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 검색 연산자](search-operators.md) | [다음: 고급 기능](advanced-features.md)
-
----
-
 Searchable JPA는 대용량 데이터에서 높은 성능을 제공하는 **2단계 쿼리 최적화**를 지원합니다. 기존의 단일 쿼리 방식의 성능 문제를 해결하고, 복잡한 조인이 포함된 검색에서도 일관된 성능을 제공합니다.
 
 ## 2단계 쿼리 최적화란?
@@ -528,7 +524,3 @@ return new PageImpl<>(entities, pageable, totalCount);
 | 구현 복잡도 | 간단 | 자동화됨 |
 
 이러한 2단계 쿼리 최적화를 통해 복잡한 검색 조건에서도 일관된 고성능을 보장할 수 있습니다.
-
----
-
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 검색 연산자](search-operators.md) | [다음: 고급 기능](advanced-features.md) 
