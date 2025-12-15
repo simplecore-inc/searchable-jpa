@@ -1,9 +1,5 @@
 # 설치 가이드
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [다음: 기본 사용법](basic-usage.md)
-
----
-
 이 문서는 Searchable JPA를 프로젝트에 설치하고 설정하는 방법을 설명합니다.
 
 ## 버전 호환성
@@ -30,7 +26,7 @@
 ```gradle
 dependencies {
     // Searchable JPA 스타터
-    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.0.0-SNAPSHOT'
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:${version}'
 
     // Spring Boot JPA 스타터 (필수)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -39,7 +35,7 @@ dependencies {
     runtimeOnly 'com.h2database:h2'
 
     // OpenAPI 통합 (선택사항) - Spring Boot 3.x 버전
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
 }
 ```
 
@@ -51,7 +47,7 @@ dependencies {
     <dependency>
         <groupId>dev.simplecore.searchable</groupId>
         <artifactId>spring-boot-starter-searchable-jpa</artifactId>
-        <version>1.0.0</version>
+        <version>${searchable-jpa.version}</version>
     </dependency>
 
     <!-- Spring Boot JPA 스타터 (필수) -->
@@ -71,7 +67,7 @@ dependencies {
     <dependency>
         <groupId>org.springdoc</groupId>
         <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-        <version>2.6.0</version>
+        <version>2.5.0</version>
     </dependency>
 </dependencies>
 ```
@@ -522,6 +518,7 @@ INFO  d.s.s.a.SearchableJpaConfiguration -   - order_inserts: true
 INFO  d.s.s.a.SearchableJpaConfiguration -   - order_updates: true
 INFO  d.s.s.a.SearchableJpaConfiguration -   - in_clause_parameter_padding: true
 INFO  d.s.s.a.SearchableJpaConfiguration - These settings help prevent N+1 problems and improve performance automatically.
+INFO  d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: searchable.hibernate.auto-optimization=false
 ```
 
 ## 문제 해결
@@ -544,7 +541,3 @@ INFO  d.s.s.a.SearchableJpaConfiguration - These settings help prevent N+1 probl
    - `Serializable` 인터페이스 구현 확인
 
 이제 Searchable JPA가 성공적으로 설치되었습니다! [기본 사용법](basic-usage.md)으로 넘어가서 첫 번째 검색 기능을 구현해보세요.
-
----
-
-[메인으로](../../README.md) | [문서 홈](README.md) | [다음: 기본 사용법](basic-usage.md) 

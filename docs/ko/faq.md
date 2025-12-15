@@ -1,9 +1,5 @@
 # 자주 묻는 질문 (FAQ)
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: API 레퍼런스](api-reference.md)
-
----
-
 ## 설치 및 설정
 
 ### Q: Spring Boot 버전 호환성은 어떻게 되나요?
@@ -23,7 +19,7 @@
 1. **의존성 확인**:
 ```gradle
 dependencies {
-    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.0.0-SNAPSHOT'
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:${version}'
     // spring-boot-starter-data-jpa도 필요합니다
 }
 ```
@@ -442,10 +438,4 @@ public class SearchPerformanceAspect {
 // 서비스 마이그레이션 예제는 기본 사용법 문서 참조
 ```
 
----
-
-더 궁금한 점이 있으시면 [GitHub Issues](https://github.com/simplecore-inc/searchable-jpa/issues)에 문의해주세요.
-
----
-
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: API 레퍼런스](api-reference.md) 
+더 궁금한 점이 있으시면 [GitHub Issues](https://github.com/simplecore-inc/searchable-jpa/issues)에 문의해주세요. 

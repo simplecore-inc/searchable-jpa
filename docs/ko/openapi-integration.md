@@ -1,9 +1,5 @@
 # OpenAPI 통합
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 2단계 쿼리 최적화](two-phase-query-optimization.md) | [다음: API 레퍼런스](api-reference.md)
-
----
-
 Searchable JPA는 OpenAPI 3.0 및 Swagger UI와의 완벽한 통합을 제공합니다. 검색 API에 대한 문서를 자동으로 생성하고, 인터랙티브한 API 테스트 환경을 제공합니다.
 
 ## 설정
@@ -13,10 +9,10 @@ Searchable JPA는 OpenAPI 3.0 및 Swagger UI와의 완벽한 통합을 제공합
 ```gradle
 dependencies {
     // Searchable JPA 스타터 (OpenAPI 기능 포함)
-    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.0.0-SNAPSHOT'
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:${version}'
 
     // SpringDoc OpenAPI (Spring Boot 3.x 버전)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
 }
 ```
 
@@ -590,8 +586,4 @@ public class OpenApiConfig {
 ## 다음 단계
 
 - [API 레퍼런스](api-reference.md) - 전체 API 문서
-- [FAQ](faq.md) - 자주 묻는 질문들
-
----
-
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 2단계 쿼리 최적화](two-phase-query-optimization.md) | [다음: API 레퍼런스](api-reference.md) 
+- [FAQ](faq.md) - 자주 묻는 질문들 
