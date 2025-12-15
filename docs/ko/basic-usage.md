@@ -1,9 +1,5 @@
 # 기본 사용법
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 설치 가이드](installation.md) | [다음: 검색 연산자](search-operators.md)
-
----
-
 이 문서는 Searchable JPA의 기본적인 사용 방법을 단계별로 설명합니다.
 
 ## 1. 엔티티 정의
@@ -96,11 +92,12 @@ public class PostSearchDTO {
 
 ## 3. Repository 정의
 
-표준 JPA Repository를 정의합니다.
+표준 JPA Repository를 정의합니다. **JpaSpecificationExecutor 상속이 필수입니다.**
 
 ```java
 @Repository
-public interface PostRepository extends JpaRepository<Post, Long> {
+public interface PostRepository extends JpaRepository<Post, Long>, JpaSpecificationExecutor<Post> {
+    // JpaSpecificationExecutor 상속 필수
     // 추가 메서드가 필요한 경우 정의
 }
 ```
@@ -203,7 +200,7 @@ public Page<Post> searchPosts(
     "orders": [
       {
         "field": "createdAt",
-        "direction": "DESC"
+        "direction": "desc"
       }
     ]
   },
@@ -289,11 +286,11 @@ GET /api/posts/search?sort=status.asc,createdAt.desc
     "orders": [
       {
         "field": "status",
-        "direction": "ASC"
+        "direction": "asc"
       },
       {
         "field": "createdAt",
-        "direction": "DESC"
+        "direction": "desc"
       }
     ]
   }
@@ -337,7 +334,3 @@ GET /api/posts/search?authorEmail.endsWith=@company.com
 - [고급 기능](advanced-features.md) - 복잡한 검색 조건과 중첩 쿼리
 - [검색 연산자](search-operators.md) - 모든 검색 연산자 상세 설명
 - [OpenAPI 통합](openapi-integration.md) - Swagger 문서 자동 생성
-
----
-
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 설치 가이드](installation.md) | [다음: 검색 연산자](search-operators.md) 

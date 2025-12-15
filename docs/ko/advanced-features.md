@@ -1,9 +1,5 @@
 # 고급 기능
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 2단계 쿼리 최적화](two-phase-query-optimization.md) | [다음: 관계형 데이터와 2단계 쿼리](relationship-and-two-phase-query.md)
-
----
-
 이 문서는 Searchable JPA의 고급 기능들을 설명합니다.
 
 ## 프로젝션(Projection) 지원
@@ -126,13 +122,15 @@ Content-Type: application/json
 
 {
   "searchCondition": {
-    "nodes": [
+    "conditions": [
       {
+        "operator": "and",
         "field": "status",
         "searchOperator": "equals",
         "value": "DRAFT"
       },
       {
+        "operator": "and",
         "field": "createdAt",
         "searchOperator": "lessThan",
         "value": "2024-01-01T00:00:00"
@@ -204,8 +202,9 @@ GET /api/posts/search?sort=status.asc,createdAt.desc,id.asc
 
 ```json
 {
-  "nodes": [
+  "conditions": [
     {
+      "operator": "and",
       "field": "status",
       "searchOperator": "equals",
       "value": "PUBLISHED"
@@ -215,15 +214,15 @@ GET /api/posts/search?sort=status.asc,createdAt.desc,id.asc
     "orders": [
       {
         "field": "priority",
-        "direction": "DESC"
+        "direction": "desc"
       },
       {
         "field": "createdAt",
-        "direction": "ASC"
+        "direction": "asc"
       },
       {
         "field": "id",
-        "direction": "ASC"
+        "direction": "asc"
       }
     ]
   }
@@ -535,8 +534,4 @@ public class EmbeddedIdService extends DefaultSearchableService<TestCompositeKey
 }
 ```
 
-이러한 고급 기능들을 통해 복잡한 검색 요구사항도 효율적으로 처리할 수 있습니다.
-
----
-
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: 2단계 쿼리 최적화](two-phase-query-optimization.md) | [다음: 관계형 데이터와 2단계 쿼리](relationship-and-two-phase-query.md) 
+이러한 고급 기능들을 통해 복잡한 검색 요구사항도 효율적으로 처리할 수 있습니다. 
