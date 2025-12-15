@@ -1,9 +1,5 @@
 # API 레퍼런스
 
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: OpenAPI 통합](openapi-integration.md) | [다음: FAQ](faq.md)
-
----
-
 이 문서는 Searchable JPA의 모든 API와 클래스에 대한 상세한 레퍼런스를 제공합니다.
 
 ## 핵심 어노테이션
@@ -19,6 +15,7 @@ public @interface SearchableField {
     String entityField() default "";
     SearchOperator[] operators() default {};
     boolean sortable() default false;
+    String sortField() default "";
 }
 ```
 
@@ -341,11 +338,9 @@ public interface FirstCondition {
     // 범위 연산자
     ChainedCondition between(String field, Object start, Object end);
     ChainedCondition notBetween(String field, Object start, Object end);
-    
+
     // 그룹 조건
     ChainedCondition where(Consumer<FirstCondition> consumer);
-    ChainedCondition and(Consumer<FirstCondition> consumer);
-    ChainedCondition or(Consumer<FirstCondition> consumer);
 }
 ```
 
@@ -356,6 +351,10 @@ public interface FirstCondition {
 ```java
 public interface ChainedCondition extends FirstCondition {
     // FirstCondition의 모든 메서드를 상속받아 체이닝 가능
+    // 그룹 조건 (and/or)
+    ChainedCondition and(Consumer<FirstCondition> consumer);
+    ChainedCondition or(Consumer<FirstCondition> consumer);
+
     // 추가로 OR 연산자들 제공
     ChainedCondition orEquals(String field, Object value);
     ChainedCondition orNotEquals(String field, Object value);
@@ -380,12 +379,12 @@ public interface ChainedCondition extends FirstCondition {
 
 ### SortBuilder
 
-정렬 조건을 구성하는 빌더입니다.
+정렬 조건을 구성하는 빌더 클래스입니다.
 
 ```java
-public interface SortBuilder {
-    SortBuilder asc(String field);
-    SortBuilder desc(String field);
+public class SortBuilder {
+    public SortBuilder asc(String field);
+    public SortBuilder desc(String field);
 }
 ```
 
@@ -588,8 +587,4 @@ public class SearchableProperties {
 
 ## 다음 단계
 
-- [FAQ](faq.md) - 자주 묻는 질문들
-
----
-
-[메인으로](../../README.md) | [문서 홈](README.md) | [이전: OpenAPI 통합](openapi-integration.md) | [다음: FAQ](faq.md) 
+- [FAQ](faq.md) - 자주 묻는 질문들 
