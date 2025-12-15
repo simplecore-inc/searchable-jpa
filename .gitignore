@@ -63,3 +63,6 @@ bin/
 .cursor
 test-data
 *.log
+
+### Documentation Build ###
+build-docs/

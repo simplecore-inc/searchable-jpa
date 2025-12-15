@@ -1,0 +1,140 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**'
+      - 'scripts/build-docs.sh'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version to build (e.g., 1.0.3). Leave empty for SNAPSHOT.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      INPUT_VERSION: ${{ github.event.inputs.version }}
+    steps:
+      - name: Determine checkout ref
+        id: checkout-ref
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "ref=v${INPUT_VERSION}" >> $GITHUB_OUTPUT
+          else
+            echo "ref=master" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+            IS_RELEASE="true"
+          else
+            VERSION=$(grep "version = " build.gradle | head -1 | sed "s/.*version = '\([^']*\)'.*/\1/")
+            IS_RELEASE="false"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+          echo "Building documentation for version: $VERSION (release: $IS_RELEASE)"
+
+      - name: Build documentation
+        env:
+          DOCS_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          chmod +x scripts/build-docs.sh
+          ./scripts/build-docs.sh
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
+
+      - name: Prepare deployment
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Create deployment directory
+          mkdir -p deploy
+
+          # Copy existing versions if gh-pages exists (skip all SNAPSHOT versions)
+          if [ -d "gh-pages" ]; then
+            for dir in gh-pages/*/; do
+              if [ -d "$dir" ]; then
+                dirname=$(basename "$dir")
+                # Skip SNAPSHOT versions (only keep releases)
+                if [[ ! "$dirname" =~ SNAPSHOT ]]; then
+                  cp -r "$dir" "deploy/"
+                fi
+              fi
+            done
+          fi
+
+          # Copy new version
+          cp -r build-docs "deploy/$VERSION"
+
+          # Generate versions.json from folders
+          node -e "
+            const fs = require('fs');
+            const dirs = fs.readdirSync('deploy', { withFileTypes: true })
+              .filter(d => d.isDirectory())
+              .map(d => d.name);
+
+            const versions = { releases: [], snapshot: null };
+
+            dirs.forEach(dir => {
+              if (dir.includes('SNAPSHOT')) {
+                versions.snapshot = dir;
+              } else if (/^\d+\.\d+/.test(dir)) {
+                versions.releases.push(dir);
+              }
+            });
+
+            // Sort releases descending
+            versions.releases.sort((a, b) => {
+              const partsA = a.split('.').map(Number);
+              const partsB = b.split('.').map(Number);
+              for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+                if ((partsA[i] || 0) !== (partsB[i] || 0)) return (partsB[i] || 0) - (partsA[i] || 0);
+              }
+              return 0;
+            });
+
+            fs.writeFileSync('deploy/versions.json', JSON.stringify(versions, null, 2));
+            console.log('Generated versions.json:', versions);
+
+            // Create root redirect
+            const defaultVersion = versions.releases[0] || versions.snapshot;
+            const html = '<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta http-equiv=\"refresh\" content=\"0; url=./' + defaultVersion + '/\"><script>window.location.href=\"./' + defaultVersion + '/\";</script></head><body><p>Redirecting...</p></body></html>';
+            fs.writeFileSync('deploy/index.html', html);
+            console.log('Root redirect to:', defaultVersion);
+          "
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./deploy
+          keep_files: false
