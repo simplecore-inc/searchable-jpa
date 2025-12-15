@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Searchable JPA Documentation</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="description" content="Searchable JPA - Dynamic Search, Sorting, and Pagination for Spring Data JPA">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+  <meta name="keywords" content="Searchable JPA, Spring Boot, Spring Data JPA, Dynamic Search, Cursor Pagination">
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>S</text></svg>">
+
+  <!-- Theme -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+
+  <!-- Prism syntax highlighting -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1/themes/prism-tomorrow.min.css">
+
+  <style>
+    :root {
+      --theme-color: #ea580c;
+      --sidebar-width: 280px;
+    }
+
+    /* Korean font optimization */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   "Noto Sans KR", "Malgun Gothic", sans-serif;
+    }
+
+    /* Sidebar styling */
+    .sidebar {
+      padding-left: 20px;
+    }
+
+    .sidebar-nav li {
+      margin: 6px 0;
+    }
+
+    .app-sub-sidebar {
+      margin-left: 1em;
+    }
+
+    /* Code block styling */
+    .markdown-section code {
+      border-radius: 4px;
+    }
+
+    .markdown-section pre {
+      border-radius: 8px;
+    }
+
+    /* Table styling */
+    .markdown-section table {
+      display: table;
+      width: 100%;
+    }
+
+    .markdown-section th {
+      background-color: #f8f8f8;
+    }
+
+    /* Cover page styling */
+    section.cover {
+      background: linear-gradient(to bottom, #fdba74 0%, #fdba74 50%, #ffffff 100%) !important;
+      background-color: #fdba74 !important;
+    }
+
+    section.cover.show {
+      background: linear-gradient(to bottom, #fdba74 0%, #fdba74 50%, #ffffff 100%) !important;
+    }
+
+    .cover-main {
+      background: transparent !important;
+    }
+
+    section.cover h1 {
+      color: #9a3412 !important;
+    }
+
+    section.cover p {
+      color: #7c2d12 !important;
+    }
+
+    section.cover ul li {
+      color: #7c2d12 !important;
+    }
+
+    section.cover .cover-main > p:last-child a {
+      border-radius: 4px;
+      color: #fff !important;
+      border-color: #ea580c;
+      background-color: #ea580c;
+    }
+
+    section.cover .cover-main > p:last-child a:hover {
+      background-color: #c2410c;
+    }
+
+    section.cover a.github-corner {
+      fill: #ea580c !important;
+    }
+
+    /* Search styling */
+    .search input {
+      border-radius: 4px;
+    }
+
+    /* Responsive sidebar */
+    @media screen and (max-width: 768px) {
+      :root {
+        --sidebar-width: 240px;
+      }
+    }
+
+    /* Version selector styling */
+    .version-selector {
+      padding: 10px 20px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .version-selector select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      color: #333;
+    }
+
+    .version-selector select:hover {
+      border-color: var(--theme-color);
+    }
+
+    .version-selector select:focus {
+      outline: none;
+      border-color: var(--theme-color);
+      box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.2);
+    }
+
+    .version-selector label {
+      display: block;
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 4px;
+    }
+
+    .version-snapshot {
+      color: #e67e22;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">Loading...</div>
+
+  <script>
+    window.$docsify = {
+      name: '<img src="https://img.shields.io/badge/Searchable-JPA-ea580c?style=for-the-badge" alt="Searchable JPA">',
+      nameLink: '#/',
+      repo: 'https://github.com/simplecore-inc/searchable-jpa',
+      loadSidebar: true,
+      loadNavbar: true,
+      coverpage: true,
+      onlyCover: false,
+      auto2top: true,
+      maxLevel: 4,
+      subMaxLevel: 3,
+
+      // Default to Korean (relative paths for versioned folders)
+      homepage: 'ko/README.md',
+
+      // Alias for sidebar/navbar loading (relative paths)
+      alias: {
+        '/.*/_sidebar.md': 'ko/_sidebar.md',
+        '/.*/_navbar.md': '_navbar.md'
+      },
+
+      // Search configuration
+      search: {
+        maxAge: 86400000,
+        paths: 'auto',
+        placeholder: {
+          '/ko/': '검색...',
+          '/en/': 'Search...',
+          '/': '검색...'
+        },
+        noData: {
+          '/ko/': '결과 없음',
+          '/en/': 'No results',
+          '/': '결과 없음'
+        },
+        depth: 3,
+        hideOtherSidebarContent: false,
+        namespace: 'searchable-jpa-docs'
+      },
+
+      // Pagination - will be set dynamically based on language
+      pagination: {
+        previousText: 'Prev',
+        nextText: 'Next',
+        crossChapter: true,
+        crossChapterText: true
+      },
+
+      // Copy code button - will be set dynamically based on language
+      copyCode: {
+        buttonText: 'Copy',
+        errorText: 'Error',
+        successText: 'Copied'
+      },
+
+      // Tab support
+      tabs: {
+        persist: true,
+        sync: true,
+        theme: 'classic'
+      },
+
+      // Theme color
+      themeColor: '#ea580c',
+
+      // Markdown configuration
+      markdown: {
+        smartypants: true
+      },
+
+      // Plugins configuration
+      plugins: [
+        // Language-aware UI text
+        function(hook, vm) {
+          var i18n = {
+            ko: {
+              pagination: { previousText: '이전', nextText: '다음' },
+              copyCode: { buttonText: '복사', errorText: '오류', successText: '완료' },
+              editText: 'GitHub에서 편집'
+            },
+            en: {
+              pagination: { previousText: 'Prev', nextText: 'Next' },
+              copyCode: { buttonText: 'Copy', errorText: 'Error', successText: 'Copied' },
+              editText: 'Edit on GitHub'
+            }
+          };
+
+          function getLang(path) {
+            if (path && path.startsWith('/en/')) return 'en';
+            return 'ko'; // default
+          }
+
+          hook.init(function() {
+            var lang = getLang(window.location.hash.replace('#', ''));
+            var texts = i18n[lang] || i18n.ko;
+
+            // Update pagination text
+            if (window.$docsify.pagination) {
+              window.$docsify.pagination.previousText = texts.pagination.previousText;
+              window.$docsify.pagination.nextText = texts.pagination.nextText;
+            }
+
+            // Update copyCode text
+            if (window.$docsify.copyCode) {
+              window.$docsify.copyCode.buttonText = texts.copyCode.buttonText;
+              window.$docsify.copyCode.errorText = texts.copyCode.errorText;
+              window.$docsify.copyCode.successText = texts.copyCode.successText;
+            }
+          });
+
+          hook.doneEach(function() {
+            var lang = getLang(vm.route.path);
+            var texts = i18n[lang] || i18n.ko;
+
+            // Update pagination buttons after each page load
+            var prevBtn = document.querySelector('.pagination-item--previous .pagination-item-title');
+            var nextBtn = document.querySelector('.pagination-item--next .pagination-item-title');
+            if (prevBtn) prevBtn.textContent = texts.pagination.previousText;
+            if (nextBtn) nextBtn.textContent = texts.pagination.nextText;
+          });
+        },
+        // Footer with edit link
+        function(hook, vm) {
+          var editTexts = { ko: 'GitHub에서 편집', en: 'Edit on GitHub' };
+
+          hook.beforeEach(function(html) {
+            if (/githubusercontent\.com/.test(vm.route.file)) {
+              return html;
+            }
+            var lang = (vm.route.path && vm.route.path.startsWith('/en/')) ? 'en' : 'ko';
+            var editText = editTexts[lang] || editTexts.ko;
+            var url = 'https://github.com/simplecore-inc/searchable-jpa/blob/master/' + vm.route.file;
+            var editHtml = '\n\n---\n\n' +
+              '<div style="text-align: right; font-size: 0.9em; color: #999;">' +
+              '<a href="' + url + '" target="_blank" style="color: #999;">' + editText + '</a>' +
+              '</div>';
+            return html + editHtml;
+          });
+        }
+      ]
+    }
+  </script>
+
+  <!-- Docsify core -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4"></script>
+
+  <!-- Plugins -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-pagination/dist/docsify-pagination.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-tabs@1"></script>
+
+  <!-- Syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-java.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-groovy.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-properties.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-sql.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-kotlin.min.js"></script>
+
+  <!-- Mermaid diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: false });
+    window.$docsify.markdown = {
+      renderer: {
+        code: function(code, lang) {
+          if (lang === 'mermaid') {
+            return '<div class="mermaid">' + code + '</div>';
+          }
+          return this.origin.code.apply(this, arguments);
+        }
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-mermaid@2/dist/docsify-mermaid.js"></script>
+
+  <!-- Version selector -->
+  <script>
+    (function() {
+      // Get current version from URL path
+      function getCurrentVersion() {
+        var path = window.location.pathname;
+        var match = path.match(/^\/([^\/]+)\//);
+        return match ? match[1] : null;
+      }
+
+      // Load versions and create selector
+      function initVersionSelector() {
+        var currentVersion = getCurrentVersion();
+        if (!currentVersion) return;
+
+        fetch('../versions.json')
+          .then(function(response) {
+            if (!response.ok) throw new Error('versions.json not found');
+            return response.json();
+          })
+          .then(function(versions) {
+            createVersionSelector(versions, currentVersion);
+          })
+          .catch(function(err) {
+            console.log('Version selector not available:', err.message);
+          });
+      }
+
+      function createVersionSelector(versions, currentVersion) {
+        var sidebar = document.querySelector('.sidebar');
+        if (!sidebar) {
+          setTimeout(function() { createVersionSelector(versions, currentVersion); }, 100);
+          return;
+        }
+
+        // Check if already exists
+        if (document.querySelector('.version-selector')) return;
+
+        var container = document.createElement('div');
+        container.className = 'version-selector';
+
+        var label = document.createElement('label');
+        label.textContent = 'Version';
+
+        var select = document.createElement('select');
+        select.id = 'version-select';
+
+        // Add SNAPSHOT first if exists
+        if (versions.snapshot) {
+          var opt = document.createElement('option');
+          opt.value = versions.snapshot;
+          opt.textContent = versions.snapshot + ' (SNAPSHOT)';
+          opt.className = 'version-snapshot';
+          if (versions.snapshot === currentVersion) opt.selected = true;
+          select.appendChild(opt);
+        }
+
+        // Add releases (already sorted newest first)
+        if (versions.releases && versions.releases.length > 0) {
+          versions.releases.forEach(function(version) {
+            var opt = document.createElement('option');
+            opt.value = version;
+            opt.textContent = version;
+            if (version === currentVersion) opt.selected = true;
+            select.appendChild(opt);
+          });
+        }
+
+        select.addEventListener('change', function() {
+          var newVersion = this.value;
+          var currentPath = window.location.hash || '#/';
+          window.location.href = '../' + newVersion + '/' + currentPath;
+        });
+
+        container.appendChild(label);
+        container.appendChild(select);
+
+        // Insert after app-name
+        var appName = sidebar.querySelector('.app-name');
+        if (appName) {
+          appName.parentNode.insertBefore(container, appName.nextSibling);
+        } else {
+          sidebar.insertBefore(container, sidebar.firstChild);
+        }
+      }
+
+      // Initialize when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initVersionSelector);
+      } else {
+        setTimeout(initVersionSelector, 500);
+      }
+    })();
+  </script>
+</body>
+</html>
