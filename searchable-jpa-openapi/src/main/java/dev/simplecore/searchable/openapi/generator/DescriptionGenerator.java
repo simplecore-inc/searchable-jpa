@@ -12,6 +12,7 @@ import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
@@ -170,10 +171,13 @@ public class DescriptionGenerator {
         } else if (op == SearchOperator.IN || op == SearchOperator.NOT_IN) {
             if (exampleValue instanceof List) {
                 String values = ((List<?>) exampleValue).stream()
+                        .filter(Objects::nonNull)
                         .map(Object::toString)
                         .limit(2)
                         .collect(Collectors.joining(","));
-                example.append(String.format("%s=%s", paramName, values));
+                if (!values.isEmpty()) {
+                    example.append(String.format("%s=%s", paramName, values));
+                }
             }
         } else if (exampleValue instanceof LocalDateTime) {
             example.append(String.format("%s=%s",

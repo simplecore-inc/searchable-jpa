@@ -5,8 +5,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import jakarta.validation.constraints.Pattern;
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 public class OpenApiDocUtils {
 
@@ -72,8 +77,26 @@ public class OpenApiDocUtils {
         if (type == Float.class || type == float.class) return 1.0f;
         if (type == Boolean.class || type == boolean.class) return true;
         if (type == LocalDateTime.class) return LocalDateTime.now();
+        if (type == Instant.class) return Instant.now();
         if (type.isEnum()) return type.getEnumConstants()[0];
-        return null;
+        if (Collection.class.isAssignableFrom(type) || Set.class.isAssignableFrom(type)) {
+            return getCollectionElementExampleValue(field);
+        }
+        return "example";
+    }
+
+    private static Object getCollectionElementExampleValue(Field field) {
+        Type genericType = field.getGenericType();
+        if (genericType instanceof ParameterizedType parameterizedType) {
+            Type[] typeArgs = parameterizedType.getActualTypeArguments();
+            if (typeArgs.length > 0 && typeArgs[0] instanceof Class<?> elementType) {
+                if (elementType == String.class) return "example";
+                if (elementType == Integer.class) return 1;
+                if (elementType == Long.class) return 1L;
+                if (elementType.isEnum()) return elementType.getEnumConstants()[0];
+            }
+        }
+        return "example";
     }
 
     public static String toCamelCase(String input) {
