@@ -10,17 +10,6 @@
 
 ### 2024-12
 
-#### CI/CD 개선
-- **릴리즈 워크플로우 자동화** [`daa6676`](https://github.com/simplecore-inc/searchable-jpa/commit/daa6676)
-  - SNAPSHOT 버전 자동 감지 및 릴리즈 버전 변환
-  - 수동 버전 입력 제거
-  - SNAPSHOT이 아닌 버전에서 릴리즈 시도 시 자동 중단
-  - 보안 강화를 위한 환경 변수 사용
-
-- **문서 빌드 워크플로우 개선** [`daa6676`](https://github.com/simplecore-inc/searchable-jpa/commit/daa6676)
-  - SNAPSHOT 문서 폴더명을 `snapshot`으로 고정
-  - 버전별 폴더 변경 방지
-
 #### 새로운 기능
 - **명시적 fetchFields 지원** [`9a177a7`](https://github.com/simplecore-inc/searchable-jpa/commit/9a177a7)
   - SearchCondition에 `fetchFields` 속성 추가
@@ -28,21 +17,6 @@
   - 중첩 경로 지원 (예: `author.profile`)
   - 보안을 위해 `@JsonIgnore` 적용 (서버 측에서만 설정 가능)
   - [상세 문서](/ko/relationship-and-two-phase-query.md#명시적-fetch-join-fetchfields)
-
-#### 버그 수정
-- **OpenAPI 예제 값 생성 개선** [`ac01315`](https://github.com/simplecore-inc/searchable-jpa/commit/ac01315)
-  - 엣지 케이스에서 예제 값 생성 오류 수정
-
-#### 문서화
-- **문서 빌드 및 배포 시스템 추가** [`4723c7a`](https://github.com/simplecore-inc/searchable-jpa/commit/4723c7a)
-  - GitHub Actions 기반 자동 문서 배포
-  - 버전별 문서 관리 지원
-
-- **한국어 문서 사이드바 추가** [`2c9bb11`](https://github.com/simplecore-inc/searchable-jpa/commit/2c9bb11)
-  - 한국어 문서 네비게이션 개선
-
-- **Docsify 설정 추가** [`147597b`](https://github.com/simplecore-inc/searchable-jpa/commit/147597b)
-  - 문서 사이트 기본 설정 구성
 
 ---
 
