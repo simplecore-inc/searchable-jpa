@@ -8,6 +8,7 @@
 4. [2단계 쿼리 최적화 시스템](#2단계-쿼리-최적화-시스템)
 5. [자동 Primary Key 정렬의 이유](#자동-primary-key-정렬의-이유)
 6. [구현 상세](#구현-상세)
+7. [명시적 Fetch Join (fetchFields)](#명시적-fetch-join-fetchfields)
 
 ## 자동화된 최적화 전략
 
@@ -559,3 +560,334 @@ private List<T> executeBatchedInQueries(List<Object> ids, Sort sort) {
     return allResults;
 }
 ```
+
+---
+
+## 명시적 Fetch Join (fetchFields)
+
+### 문제 상황: Lazy 로딩과 결과 데이터 누락
+
+JPA에서 연관 관계는 기본적으로 **Lazy Loading**으로 설정됩니다. 이는 성능 최적화를 위한 것이지만, 검색 결과를 클라이언트에 반환할 때 문제가 발생합니다.
+
+#### Lazy Loading 문제 예시
+
+```java
+@Entity
+public class Post {
+    @Id
+    private Long id;
+    private String title;
+
+    @ManyToOne(fetch = FetchType.LAZY)  // 기본값: LAZY
+    private Author author;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Category category;
+}
+```
+
+**문제 1: LazyInitializationException**
+
+```java
+@GetMapping("/posts")
+public List<Post> getPosts() {
+    List<Post> posts = postService.findAll();
+
+    // 트랜잭션 종료 후 Lazy 필드 접근 시 예외 발생!
+    return posts;  // Jackson이 author.name 접근 시 LazyInitializationException
+}
+```
+
+**문제 2: JSON 직렬화 시 null 반환**
+
+Hibernate proxy가 초기화되지 않으면 JSON 응답에서 해당 필드가 `null`로 나타납니다:
+
+```json
+{
+  "id": 1,
+  "title": "Spring Boot 가이드",
+  "author": null,  // 실제로는 데이터가 있지만 Lazy 로딩 미초기화
+  "category": null
+}
+```
+
+**문제 3: Open Session In View (OSIV) 의존성**
+
+OSIV를 활성화하면 문제가 해결되지만, 성능과 데이터베이스 커넥션 관리 측면에서 권장되지 않습니다:
+
+```yaml
+# 권장하지 않음
+spring:
+  jpa:
+    open-in-view: true  # 요청 전체에서 세션 유지 - 리소스 낭비
+```
+
+### 해결 방법: fetchFields
+
+searchable-jpa는 **명시적으로 Fetch Join할 필드를 지정**할 수 있는 `fetchFields` 기능을 제공합니다.
+
+#### 핵심 원리
+
+```
+검색 쿼리 실행
+    ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 1단계: ID만 조회 (일반 JOIN)                                  │
+│   - 조건 필터링, 정렬, 페이징                                  │
+├─────────────────────────────────────────────────────────────┤
+│ 2단계: 전체 엔티티 조회 (Fetch JOIN)                          │
+│   - 명시적 fetchFields에 대해 Fetch Join 적용                 │
+│   - 자동 감지된 ToOne 필드도 Fetch Join 적용                  │
+│   - Lazy 필드가 즉시 로딩되어 프록시가 초기화됨                  │
+└─────────────────────────────────────────────────────────────┘
+    ↓
+완전히 초기화된 엔티티 반환 (Lazy 필드 포함)
+```
+
+### 사용 방법
+
+#### 기본 사용법
+
+```java
+@PostMapping("/posts/search")
+public Page<Post> search(@RequestBody SearchCondition<PostSearchDTO> clientCondition) {
+    // 클라이언트 요청에 서버 측에서 fetchFields 추가
+    SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
+        .from(clientCondition, PostSearchDTO.class)
+        .fetchFields("author", "category")  // 명시적 Fetch Join 지정
+        .build();
+
+    return postService.findAllWithSearch(condition);
+}
+```
+
+#### 중첩 관계 Fetch
+
+```java
+// 중첩된 관계도 점(.)으로 연결하여 지정
+SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
+    .from(clientCondition, PostSearchDTO.class)
+    .fetchFields("author", "author.profile", "category")
+    .build();
+
+// 생성되는 SQL (2단계 쿼리)
+// SELECT p.*, a.*, ap.*, c.*
+// FROM post p
+// LEFT JOIN author a ON p.author_id = a.id
+// LEFT JOIN author_profile ap ON a.profile_id = ap.id
+// LEFT JOIN category c ON p.category_id = c.id
+// WHERE p.id IN (1, 2, 3, ...)
+```
+
+#### Set을 사용한 지정
+
+```java
+Set<String> fetchFields = new HashSet<>(Arrays.asList(
+    "author",
+    "author.department",
+    "category"
+));
+
+SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
+    .from(clientCondition, PostSearchDTO.class)
+    .fetchFields(fetchFields)
+    .build();
+```
+
+### 보안 고려사항
+
+**fetchFields는 서버 측에서만 설정할 수 있습니다.**
+
+클라이언트가 임의로 fetch할 필드를 지정하면 다음과 같은 문제가 발생할 수 있습니다:
+
+1. **성능 공격**: 깊은 중첩 관계를 무분별하게 fetch하여 서버 부하 유발
+2. **데이터 노출**: 접근 권한이 없는 관계 데이터 노출
+3. **메모리 과부하**: ToMany 관계를 과도하게 fetch하여 메모리 문제 유발
+
+따라서 `fetchFields`는 `@JsonIgnore`로 처리되어 **JSON 역직렬화 시 무시**됩니다:
+
+```java
+// SearchCondition.java
+@Setter
+@Getter
+@JsonIgnore  // 클라이언트 요청에서 무시됨
+private Set<String> fetchFields = new HashSet<>();
+```
+
+**악의적인 클라이언트 요청 예시:**
+
+```json
+{
+  "conditions": [...],
+  "fetchFields": ["author", "comments", "comments.author", "..."],  // 무시됨!
+  "page": 0,
+  "size": 10
+}
+```
+
+위 요청에서 `fetchFields`는 완전히 무시되고, 서버 코드에서 명시적으로 설정한 값만 적용됩니다.
+
+### 자동 감지와의 통합
+
+searchable-jpa는 ToOne 관계(`@ManyToOne`, `@OneToOne`)를 **자동으로 감지하여 Fetch Join**합니다. `fetchFields`는 이 자동 감지 기능과 **합집합으로 동작**합니다:
+
+```
+최종 Fetch 필드 = 명시적 fetchFields + 자동 감지된 ToOne 필드
+```
+
+**예시:**
+
+```java
+@Entity
+public class Post {
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Author author;  // 자동 감지됨 (ToOne)
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Category category;  // 자동 감지됨 (ToOne)
+
+    @OneToMany(mappedBy = "post")
+    private List<Comment> comments;  // 자동 감지 안됨 (ToMany)
+}
+```
+
+```java
+// 사용자가 지정한 fetchFields
+SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
+    .create(PostSearchDTO.class)
+    .fetchFields("comments")  // ToMany 관계 명시적 지정
+    .build();
+
+// 최종 적용되는 Fetch 필드:
+// - author (자동 감지)
+// - category (자동 감지)
+// - comments (명시적 지정)
+```
+
+### 실용적인 활용 예시
+
+#### 1. 권한별 Fetch 전략
+
+```java
+@Service
+public class PostService extends DefaultSearchableService<Post, Long> {
+
+    public Page<Post> searchWithFetch(
+            SearchCondition<PostSearchDTO> clientCondition,
+            User currentUser
+    ) {
+        SearchConditionBuilder<PostSearchDTO> builder = SearchConditionBuilder
+            .from(clientCondition, PostSearchDTO.class);
+
+        // 기본 fetch 필드
+        builder.fetchFields("author", "category");
+
+        // 관리자는 추가 정보 조회 가능
+        if (currentUser.isAdmin()) {
+            builder.fetchFields("author", "category", "author.department", "auditLogs");
+        }
+
+        return findAllWithSearch(builder.build());
+    }
+}
+```
+
+#### 2. API 엔드포인트별 Fetch 전략
+
+```java
+@RestController
+@RequestMapping("/api/posts")
+public class PostController {
+
+    // 목록 조회 - 기본 정보만
+    @PostMapping("/search")
+    public Page<Post> search(@RequestBody SearchCondition<PostSearchDTO> condition) {
+        return postService.findAllWithSearch(
+            SearchConditionBuilder.from(condition, PostSearchDTO.class)
+                .fetchFields("author")  // 작성자만 fetch
+                .build()
+        );
+    }
+
+    // 상세 조회 - 전체 정보
+    @PostMapping("/search/detail")
+    public Page<Post> searchDetail(@RequestBody SearchCondition<PostSearchDTO> condition) {
+        return postService.findAllWithSearch(
+            SearchConditionBuilder.from(condition, PostSearchDTO.class)
+                .fetchFields("author", "author.profile", "category", "tags")
+                .build()
+        );
+    }
+}
+```
+
+#### 3. 조건부 Fetch
+
+```java
+@Service
+public class PostService extends DefaultSearchableService<Post, Long> {
+
+    public Page<Post> searchWithConditionalFetch(
+            SearchCondition<PostSearchDTO> clientCondition,
+            boolean includeAuthorProfile,
+            boolean includeComments
+    ) {
+        Set<String> fetchFields = new HashSet<>();
+        fetchFields.add("author");
+        fetchFields.add("category");
+
+        if (includeAuthorProfile) {
+            fetchFields.add("author.profile");
+        }
+
+        if (includeComments) {
+            fetchFields.add("comments");
+            fetchFields.add("comments.author");
+        }
+
+        SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
+            .from(clientCondition, PostSearchDTO.class)
+            .fetchFields(fetchFields)
+            .build();
+
+        return findAllWithSearch(condition);
+    }
+}
+```
+
+### 주의사항
+
+#### ToMany 관계 Fetch 시 주의
+
+ToMany 관계(`@OneToMany`, `@ManyToMany`)를 Fetch Join하면 **카티시안 곱**이 발생할 수 있습니다:
+
+```java
+// 주의: 여러 ToMany 관계를 동시에 fetch하면 문제 발생 가능
+.fetchFields("comments", "tags")  // MultipleBagFetchException 위험!
+```
+
+searchable-jpa는 이를 방지하기 위해 **2단계 쿼리**를 사용하지만, 다수의 ToMany 관계를 fetch할 때는 성능에 주의해야 합니다.
+
+#### 권장 사항
+
+1. **ToOne 관계**: 자유롭게 fetchFields에 추가 가능
+2. **ToMany 관계**: 하나만 추가하거나, 필요한 경우에만 추가
+3. **깊은 중첩**: 3단계 이상의 중첩은 성능 영향 고려
+
+```java
+// 권장: ToOne 위주 + 필요한 경우 하나의 ToMany
+.fetchFields("author", "author.profile", "category", "tags")
+
+// 주의: 다수의 ToMany 동시 fetch
+.fetchFields("comments", "tags", "likes", "shares")  // 성능 저하 가능
+```
+
+### 요약
+
+| 구분 | 설명 |
+|------|------|
+| **문제** | Lazy 로딩된 필드가 검색 결과에서 null로 반환됨 |
+| **원인** | 트랜잭션 종료 후 Hibernate 프록시 초기화 실패 |
+| **해결책** | `fetchFields`로 명시적 Fetch Join 지정 |
+| **보안** | 클라이언트 요청에서 무시됨 (서버 측에서만 설정 가능) |
+| **동작** | 자동 감지된 ToOne 필드와 합집합으로 처리 |
