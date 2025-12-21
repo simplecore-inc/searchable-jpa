@@ -49,14 +49,17 @@ jobs:
         run: |
           if [ -n "$INPUT_VERSION" ]; then
             VERSION="$INPUT_VERSION"
+            FOLDER_NAME="$INPUT_VERSION"
             IS_RELEASE="true"
           else
             VERSION=$(grep "version = " build.gradle | head -1 | sed "s/.*version = '\([^']*\)'.*/\1/")
+            FOLDER_NAME="snapshot"
             IS_RELEASE="false"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "folder_name=$FOLDER_NAME" >> $GITHUB_OUTPUT
           echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
-          echo "Building documentation for version: $VERSION (release: $IS_RELEASE)"
+          echo "Building documentation for version: $VERSION (folder: $FOLDER_NAME, release: $IS_RELEASE)"
 
       - name: Build documentation
         env:
@@ -74,26 +77,26 @@ jobs:
 
       - name: Prepare deployment
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          FOLDER_NAME: ${{ steps.version.outputs.folder_name }}
         run: |
           # Create deployment directory
           mkdir -p deploy
 
-          # Copy existing versions if gh-pages exists (skip all SNAPSHOT versions)
+          # Copy existing versions if gh-pages exists (skip snapshot folders)
           if [ -d "gh-pages" ]; then
             for dir in gh-pages/*/; do
               if [ -d "$dir" ]; then
                 dirname=$(basename "$dir")
-                # Skip SNAPSHOT versions (only keep releases)
-                if [[ ! "$dirname" =~ SNAPSHOT ]]; then
+                # Skip snapshot folder and legacy SNAPSHOT versions (e.g., 1.0.3-SNAPSHOT)
+                if [[ "$dirname" != "snapshot" && ! "$dirname" =~ SNAPSHOT ]]; then
                   cp -r "$dir" "deploy/"
                 fi
               fi
             done
           fi
 
-          # Copy new version
-          cp -r build-docs "deploy/$VERSION"
+          # Copy new version to folder
+          cp -r build-docs "deploy/$FOLDER_NAME"
 
           # Generate versions.json from folders
           node -e "
@@ -105,7 +108,7 @@ jobs:
             const versions = { releases: [], snapshot: null };
 
             dirs.forEach(dir => {
-              if (dir.includes('SNAPSHOT')) {
+              if (dir === 'snapshot') {
                 versions.snapshot = dir;
               } else if (/^\d+\.\d+/.test(dir)) {
                 versions.releases.push(dir);

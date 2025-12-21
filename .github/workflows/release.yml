@@ -7,9 +7,6 @@ on:
         description: 'Release branch'
         required: true
         default: 'master'
-      version:
-        description: 'Release version (e.g. 1.0.0)'
-        required: true
 
 jobs:
   release:
@@ -23,6 +20,27 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch }}
           fetch-depth: 0
+
+      - name: Extract and validate version
+        id: version
+        run: |
+          # Extract current version from build.gradle
+          CURRENT_VERSION=$(grep -oP "version = '\K[^']+" build.gradle | head -1)
+          echo "Current version: $CURRENT_VERSION"
+
+          # Check if it's a SNAPSHOT version
+          if [[ ! "$CURRENT_VERSION" == *-SNAPSHOT ]]; then
+            echo "::error::Current version '$CURRENT_VERSION' is not a SNAPSHOT version. Release aborted."
+            exit 1
+          fi
+
+          # Remove -SNAPSHOT suffix to get release version
+          RELEASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
+          echo "Release version: $RELEASE_VERSION"
+
+          # Export versions for subsequent steps
+          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "release=$RELEASE_VERSION" >> $GITHUB_OUTPUT
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -41,12 +59,14 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Update version in build.gradle
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.release }}
         run: |
-          sed -i "s/version = '.*'/version = '${{ github.event.inputs.version }}'/" build.gradle
+          sed -i "s/version = '.*'/version = '$RELEASE_VERSION'/" build.gradle
           git config --global user.email "thk@simplecore.kr"
           git config --global user.name "Taehwan Kwag"
           git add build.gradle
-          git commit -m "release: v${{ github.event.inputs.version }}"
+          git commit -m "release: v$RELEASE_VERSION"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -63,26 +83,33 @@ jobs:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Release Tag
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.release }}
         run: |
-          git tag -a "v${{ github.event.inputs.version }}" -m "v${{ github.event.inputs.version }}"
-          git push origin "v${{ github.event.inputs.version }}"
+          git tag -a "v$RELEASE_VERSION" -m "v$RELEASE_VERSION"
+          git push origin "v$RELEASE_VERSION"
 
       - name: Update to Next Development Version
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.release }}
+          BRANCH: ${{ github.event.inputs.branch }}
         run: |
-          NEXT_VERSION=$(echo ${{ github.event.inputs.version }} | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')-SNAPSHOT
+          NEXT_VERSION=$(echo "$RELEASE_VERSION" | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')-SNAPSHOT
           sed -i "s/version = '.*'/version = '$NEXT_VERSION'/" build.gradle
           git add build.gradle
           git commit -m "chore: prepare for next development version $NEXT_VERSION"
-          git push origin ${{ github.event.inputs.branch }}
+          git push origin "$BRANCH"
 
       - name: Generate Release Notes
         id: release_notes
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.release }}
         run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 "v${{ github.event.inputs.version }}^" 2>/dev/null || echo "")
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 "v$RELEASE_VERSION^" 2>/dev/null || echo "")
           if [ -z "$PREVIOUS_TAG" ]; then
-            NOTES=$(git log --pretty=format:"* %s" --no-merges --perl-regexp --author='^((?!github-actions).*)$' "v${{ github.event.inputs.version }}")
+            NOTES=$(git log --pretty=format:"* %s" --no-merges --perl-regexp --author='^((?!github-actions).*)$' "v$RELEASE_VERSION")
           else
-            NOTES=$(git log --pretty=format:"* %s" --no-merges --perl-regexp --author='^((?!github-actions).*)$' "$PREVIOUS_TAG..v${{ github.event.inputs.version }}")
+            NOTES=$(git log --pretty=format:"* %s" --no-merges --perl-regexp --author='^((?!github-actions).*)$' "$PREVIOUS_TAG..v$RELEASE_VERSION")
           fi
           echo "notes<<EOF" >> $GITHUB_OUTPUT
           echo "$NOTES" >> $GITHUB_OUTPUT
@@ -91,8 +118,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: Release v${{ github.event.inputs.version }}
+          tag_name: v${{ steps.version.outputs.release }}
+          name: Release v${{ steps.version.outputs.release }}
           body: ${{ steps.release_notes.outputs.notes }}
           draft: false
           prerelease: false 
