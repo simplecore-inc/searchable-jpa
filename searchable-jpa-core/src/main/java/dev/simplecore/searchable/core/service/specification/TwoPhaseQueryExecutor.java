@@ -73,21 +73,34 @@ public class TwoPhaseQueryExecutor<T> {
 
     /**
      * Executes optimized two-phase query with automatic IN clause batching.
+     *
+     * @deprecated Use {@link #executeWithTwoPhaseOptimization(PageRequest, Set)} instead
      */
+    @Deprecated
     public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest) {
+        return executeWithTwoPhaseOptimization(pageRequest, Collections.emptySet());
+    }
+
+    /**
+     * Executes optimized two-phase query with automatic IN clause batching.
+     *
+     * @param pageRequest the pagination request
+     * @param fetchFields the fields to explicitly fetch join in Phase 2
+     */
+    public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest, Set<String> fetchFields) {
         // Phase 1: Get IDs only
         List<Object> ids = executePhaseOneQuery(pageRequest);
-        
+
         if (ids.isEmpty()) {
             return new PageImpl<>(Collections.emptyList(), pageRequest, 0);
         }
 
-        // Phase 2: Get full entities using batched IN clauses
-        List<T> entities = executePhaseTwoQuery(ids, pageRequest.getSort());
-        
+        // Phase 2: Get full entities using batched IN clauses with fetch joins
+        List<T> entities = executePhaseTwoQuery(ids, pageRequest.getSort(), fetchFields);
+
         // Phase 3: Get total count for accurate pagination
         long totalCount = executeCountQuery();
-        
+
         return new PageImpl<>(entities, pageRequest, totalCount);
     }
 
@@ -323,43 +336,136 @@ public class TwoPhaseQueryExecutor<T> {
     /**
      * Phase 2: Execute batched queries to get full entities using IN clauses.
      * Automatically splits large ID lists into smaller batches to prevent database limitations.
+     *
+     * @deprecated Use {@link #executePhaseTwoQuery(List, Sort, Set)} instead
      */
+    @Deprecated
     private List<T> executePhaseTwoQuery(List<Object> ids, Sort sort) {
+        return executePhaseTwoQuery(ids, sort, Collections.emptySet());
+    }
+
+    /**
+     * Phase 2: Execute batched queries to get full entities using IN clauses.
+     * Automatically splits large ID lists into smaller batches to prevent database limitations.
+     *
+     * @param ids the entity IDs from Phase 1
+     * @param sort the sort criteria
+     * @param fetchFields the fields to explicitly fetch join
+     */
+    private List<T> executePhaseTwoQuery(List<Object> ids, Sort sort, Set<String> fetchFields) {
         if (ids.isEmpty()) {
             return Collections.emptyList();
         }
 
         // If ID count is within safe limit, execute single query
         if (ids.size() <= MAX_IN_CLAUSE_SIZE) {
-            return executeSingleInQuery(ids, sort);
+            return executeSingleInQuery(ids, sort, fetchFields);
         }
 
         // Split into batches and execute multiple queries
-        return executeBatchedInQueries(ids, sort);
+        return executeBatchedInQueries(ids, sort, fetchFields);
     }
 
     /**
      * Execute single IN query for small ID lists.
+     *
+     * @deprecated Use {@link #executeSingleInQuery(List, Sort, Set)} instead
      */
+    @Deprecated
     private List<T> executeSingleInQuery(List<Object> ids, Sort sort) {
+        return executeSingleInQuery(ids, sort, Collections.emptySet());
+    }
+
+    /**
+     * Execute single IN query for small ID lists with fetch joins.
+     *
+     * @param ids the entity IDs to query
+     * @param sort the sort criteria
+     * @param fetchFields the fields to explicitly fetch join
+     */
+    private List<T> executeSingleInQuery(List<Object> ids, Sort sort, Set<String> fetchFields) {
         String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-        
+
         // Handle composite key entities
         if ("__COMPOSITE_KEY__".equals(primaryKeyField)) {
-            return executeSingleInQueryWithCompositeKey(ids, sort);
+            return executeSingleInQueryWithCompositeKey(ids, sort, fetchFields);
         }
-        
-        Specification<T> spec = (root, query, cb) -> 
-            root.get(primaryKeyField).in(ids);
+
+        // Build specification with fetch joins
+        Specification<T> spec = (root, query, cb) -> {
+            // Apply fetch joins for explicitly specified fields
+            if (fetchFields != null && !fetchFields.isEmpty() && !Long.class.equals(query.getResultType())) {
+                for (String fetchField : fetchFields) {
+                    try {
+                        if (fetchField.contains(".")) {
+                            // Handle nested paths
+                            applyNestedFetchJoin(root, fetchField);
+                        } else {
+                            // Simple path - check if not already fetched
+                            boolean alreadyFetched = root.getFetches().stream()
+                                .anyMatch(fetch -> fetch.getAttribute().getName().equals(fetchField));
+                            if (!alreadyFetched) {
+                                root.fetch(fetchField, JoinType.LEFT);
+                            }
+                        }
+                        log.debug("Applied fetch join for field: {}", fetchField);
+                    } catch (Exception e) {
+                        log.warn("Failed to apply fetch join for field '{}': {}", fetchField, e.getMessage());
+                    }
+                }
+            }
+
+            return root.get(primaryKeyField).in(ids);
+        };
 
         List<T> entities = specificationExecutor.findAll(spec, sort);
         return reorderEntitiesByIds(entities, ids);
     }
+
+    /**
+     * Applies fetch join for nested paths by building the path step by step.
+     */
+    private void applyNestedFetchJoin(Root<T> root, String nestedPath) {
+        String[] pathParts = nestedPath.split("\\.");
+        From<?, ?> currentFrom = root;
+
+        for (String part : pathParts) {
+            // Check if this part is already fetched
+            boolean alreadyFetched = currentFrom.getFetches().stream()
+                .anyMatch(fetch -> fetch.getAttribute().getName().equals(part));
+
+            if (!alreadyFetched) {
+                currentFrom = (From<?, ?>) currentFrom.fetch(part, JoinType.LEFT);
+                log.debug("Applied nested fetch join for path part: {}", part);
+            } else {
+                // Find existing fetch to continue the path
+                currentFrom = (From<?, ?>) currentFrom.getFetches().stream()
+                    .filter(fetch -> fetch.getAttribute().getName().equals(part))
+                    .findFirst()
+                    .orElse(null);
+                if (currentFrom == null) {
+                    log.warn("Expected fetch not found for path part: {}", part);
+                    return;
+                }
+                log.debug("Reusing existing fetch for path part: {}", part);
+            }
+        }
+    }
     
     /**
      * Execute single IN query for composite key entities.
+     *
+     * @deprecated Use {@link #executeSingleInQueryWithCompositeKey(List, Sort, Set)} instead
      */
+    @Deprecated
     private List<T> executeSingleInQueryWithCompositeKey(List<Object> ids, Sort sort) {
+        return executeSingleInQueryWithCompositeKey(ids, sort, Collections.emptySet());
+    }
+
+    /**
+     * Execute single IN query for composite key entities with fetch joins.
+     */
+    private List<T> executeSingleInQueryWithCompositeKey(List<Object> ids, Sort sort, Set<String> fetchFields) {
         List<String> idFields = SearchableFieldUtils.getCompositeKeyFieldNames(entityManager, entityClass);
         boolean isEmbeddedId = isEmbeddedIdEntity();
         
@@ -375,8 +481,28 @@ public class TwoPhaseQueryExecutor<T> {
         
         // Build specification for composite key matching
         Specification<T> spec = (root, query, cb) -> {
+            // Apply fetch joins for explicitly specified fields
+            if (fetchFields != null && !fetchFields.isEmpty() && !Long.class.equals(query.getResultType())) {
+                for (String fetchField : fetchFields) {
+                    try {
+                        if (fetchField.contains(".")) {
+                            applyNestedFetchJoin(root, fetchField);
+                        } else {
+                            boolean alreadyFetched = root.getFetches().stream()
+                                .anyMatch(fetch -> fetch.getAttribute().getName().equals(fetchField));
+                            if (!alreadyFetched) {
+                                root.fetch(fetchField, JoinType.LEFT);
+                            }
+                        }
+                        log.debug("Applied fetch join for field: {}", fetchField);
+                    } catch (Exception e) {
+                        log.warn("Failed to apply fetch join for field '{}': {}", fetchField, e.getMessage());
+                    }
+                }
+            }
+
             List<Predicate> orPredicates = new ArrayList<>();
-            
+
             log.debug("Building composite key conditions for {} IDs, fields: {}", ids.size(), idFields);
             
             for (Object id : ids) {
@@ -431,27 +557,42 @@ public class TwoPhaseQueryExecutor<T> {
     /**
      * Execute multiple batched IN queries for large ID lists.
      * Combines results while preserving original order.
+     *
+     * @deprecated Use {@link #executeBatchedInQueries(List, Sort, Set)} instead
      */
+    @Deprecated
     private List<T> executeBatchedInQueries(List<Object> ids, Sort sort) {
+        return executeBatchedInQueries(ids, sort, Collections.emptySet());
+    }
+
+    /**
+     * Execute multiple batched IN queries for large ID lists with fetch joins.
+     * Combines results while preserving original order.
+     *
+     * @param ids the entity IDs from Phase 1
+     * @param sort the sort criteria
+     * @param fetchFields the fields to explicitly fetch join
+     */
+    private List<T> executeBatchedInQueries(List<Object> ids, Sort sort, Set<String> fetchFields) {
         List<T> allResults = new ArrayList<>();
-        
+
         // Split IDs into batches
         for (int i = 0; i < ids.size(); i += MAX_IN_CLAUSE_SIZE) {
             int endIndex = Math.min(i + MAX_IN_CLAUSE_SIZE, ids.size());
             List<Object> batchIds = ids.subList(i, endIndex);
-            
-            log.debug("Executing batch {}/{} with {} IDs", 
-                (i / MAX_IN_CLAUSE_SIZE) + 1, 
+
+            log.debug("Executing batch {}/{} with {} IDs",
+                (i / MAX_IN_CLAUSE_SIZE) + 1,
                 (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE,
                 batchIds.size());
-            
-            // Execute query for this batch
-            List<T> batchResults = executeSingleInQuery(batchIds, sort);
+
+            // Execute query for this batch with fetch joins
+            List<T> batchResults = executeSingleInQuery(batchIds, sort, fetchFields);
             allResults.addAll(batchResults);
         }
 
-        log.debug("Executed {} batches, total results: {}", 
-            (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE, 
+        log.debug("Executed {} batches, total results: {}",
+            (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE,
             allResults.size());
 
         // Final ordering is maintained by reorderEntitiesByIds in executeSingleInQuery

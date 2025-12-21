@@ -1,6 +1,7 @@
 package dev.simplecore.searchable.core.condition;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonGenerator;
@@ -25,7 +26,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Core class representing a complete search condition with filtering, sorting, and pagination capabilities.
@@ -112,6 +115,23 @@ public class SearchCondition<D> {
     @Schema(description = "Page size", example = "10")
     @JsonProperty("size")
     private Integer size;
+
+    /**
+     * Entity fields to explicitly fetch join.
+     * This property is server-side only and ignored during JSON deserialization.
+     * Use this to eagerly load lazy relationships when needed.
+     *
+     * <p>Example paths:
+     * <ul>
+     *   <li>"author" - fetch the author relationship</li>
+     *   <li>"author.profile" - fetch nested author.profile relationship</li>
+     *   <li>"category" - fetch the category relationship</li>
+     * </ul>
+     */
+    @Setter
+    @Getter
+    @JsonIgnore
+    private Set<String> fetchFields = new HashSet<>();
 
     /**
      * Default constructor for Jackson deserialization.

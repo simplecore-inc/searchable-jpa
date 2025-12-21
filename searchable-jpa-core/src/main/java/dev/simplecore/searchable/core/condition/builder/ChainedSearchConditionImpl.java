@@ -4,6 +4,7 @@ import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.SearchConditionBuilder;
 import dev.simplecore.searchable.core.condition.operator.LogicalOperator;
 
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -74,6 +75,24 @@ public class ChainedSearchConditionImpl<D> implements ChainedSearchCondition<D> 
     @Override
     public ChainedSearchCondition<D> size(int size) {
         return builder.size(size);
+    }
+
+    /**
+     * {@inheritDoc}
+     * Delegates to the underlying builder to set fetch fields.
+     */
+    @Override
+    public ChainedSearchCondition<D> fetchFields(String... fields) {
+        return builder.fetchFields(fields);
+    }
+
+    /**
+     * {@inheritDoc}
+     * Delegates to the underlying builder to set fetch fields.
+     */
+    @Override
+    public ChainedSearchCondition<D> fetchFields(Set<String> fields) {
+        return builder.fetchFields(fields);
     }
 
     /**

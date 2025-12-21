@@ -281,14 +281,30 @@ public class SearchableSpecificationBuilder<T> {
      * Execute query with two-phase optimization.
      * Phase 1: Get IDs only (regular joins to avoid memory paging)
      * Phase 2: Load complete entities with smart fetch joins
-     * 
+     *
      * This method now applies two-phase optimization to ALL queries for consistent performance.
      */
     public Page<T> buildAndExecuteWithTwoPhaseOptimization() {
         PageRequest pageRequest = buildPageRequest();
 
+        // Collect all fetch fields (explicit + auto-detected)
+        Set<String> allFetchFields = new HashSet<>();
+
+        // Add explicitly specified fetch fields from SearchCondition
+        Set<String> explicitFetchFields = condition.getFetchFields();
+        if (explicitFetchFields != null && !explicitFetchFields.isEmpty()) {
+            allFetchFields.addAll(explicitFetchFields);
+            log.debug("Explicit fetch fields from SearchCondition: {}", explicitFetchFields);
+        }
+
+        // Add auto-detected common ToOne fields
+        Set<String> commonToOneFields = getCachedCommonToOneFields();
+        allFetchFields.addAll(commonToOneFields);
+
+        log.debug("All fetch fields for two-phase query: {}", allFetchFields);
+
         // Always use two-phase optimization for all queries
-        return twoPhaseQueryExecutor.executeWithTwoPhaseOptimization(pageRequest);
+        return twoPhaseQueryExecutor.executeWithTwoPhaseOptimization(pageRequest, allFetchFields);
     }
 
 

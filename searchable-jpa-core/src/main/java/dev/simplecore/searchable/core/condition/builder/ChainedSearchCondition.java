@@ -2,6 +2,7 @@ package dev.simplecore.searchable.core.condition.builder;
 
 import dev.simplecore.searchable.core.condition.SearchCondition;
 
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -51,6 +52,24 @@ public interface ChainedSearchCondition<D> {
      * @return this instance for method chaining
      */
     ChainedSearchCondition<D> size(int size);
+
+    /**
+     * Specifies entity fields to explicitly fetch join.
+     * This is a server-side only feature for eagerly loading lazy relationships.
+     *
+     * @param fields the entity field paths to fetch (e.g., "author", "author.profile")
+     * @return this instance for method chaining
+     */
+    ChainedSearchCondition<D> fetchFields(String... fields);
+
+    /**
+     * Specifies entity fields to explicitly fetch join.
+     * This is a server-side only feature for eagerly loading lazy relationships.
+     *
+     * @param fields the set of entity field paths to fetch
+     * @return this instance for method chaining
+     */
+    ChainedSearchCondition<D> fetchFields(Set<String> fields);
 
     /**
      * Builds and returns the final SearchCondition object.

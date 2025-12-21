@@ -8,7 +8,10 @@ import dev.simplecore.searchable.core.exception.SearchableValidationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -141,6 +144,11 @@ public class SearchConditionBuilder<D> {
             }
             this.condition.setSort(newSort);
         }
+
+        // Copy fetchFields
+        if (existing.getFetchFields() != null && !existing.getFetchFields().isEmpty()) {
+            this.condition.setFetchFields(new HashSet<>(existing.getFetchFields()));
+        }
     }
 
     /**
@@ -252,6 +260,38 @@ public class SearchConditionBuilder<D> {
      */
     public ChainedSearchCondition<D> size(int size) {
         condition.setSize(size);
+        return new ChainedSearchConditionImpl<>(this);
+    }
+
+    /**
+     * Specifies entity fields to explicitly fetch join.
+     * This is a server-side only feature for eagerly loading lazy relationships.
+     *
+     * <p>Example usage:
+     * <pre>{@code
+     * SearchCondition<PostDTO> condition = SearchConditionBuilder.create(PostDTO.class)
+     *     .where(w -> w.equals("status", "PUBLISHED"))
+     *     .fetchFields("author", "author.profile", "category")
+     *     .build();
+     * }</pre>
+     *
+     * @param fields the entity field paths to fetch (e.g., "author", "author.profile")
+     * @return a chained builder for additional configuration
+     */
+    public ChainedSearchCondition<D> fetchFields(String... fields) {
+        condition.setFetchFields(new HashSet<>(Arrays.asList(fields)));
+        return new ChainedSearchConditionImpl<>(this);
+    }
+
+    /**
+     * Specifies entity fields to explicitly fetch join.
+     * This is a server-side only feature for eagerly loading lazy relationships.
+     *
+     * @param fields the set of entity field paths to fetch
+     * @return a chained builder for additional configuration
+     */
+    public ChainedSearchCondition<D> fetchFields(Set<String> fields) {
+        condition.setFetchFields(new HashSet<>(fields));
         return new ChainedSearchConditionImpl<>(this);
     }
 

@@ -21,7 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -500,6 +502,136 @@ class SearchConditionTest {
             assertThat(extended.getNodes()).hasSize(1);
             SearchCondition.Condition idCondition = (SearchCondition.Condition) extended.getNodes().get(0);
             assertThat(idCondition.getField()).isEqualTo("id");
+        }
+
+        @Test
+        @DisplayName("from() preserves fetchFields from original condition")
+        void fromPreservesFetchFieldsTest() {
+            // given
+            SearchCondition<TestDTO> original = SearchConditionBuilder.create(TestDTO.class)
+                    .where(w -> w.equals("id", 1L))
+                    .fetchFields("author", "category")
+                    .build();
+
+            // when
+            SearchCondition<TestDTO> extended = SearchConditionBuilder.from(original, TestDTO.class)
+                    .and(a -> a.equals("name", "test"))
+                    .build();
+
+            // then
+            assertThat(extended.getFetchFields()).containsExactlyInAnyOrder("author", "category");
+        }
+    }
+
+    @Nested
+    @DisplayName("FetchFields Tests")
+    class FetchFieldsTests {
+
+        @Test
+        @DisplayName("fetchFields with varargs sets fields correctly")
+        void fetchFieldsVarargsTest() {
+            // given & when
+            SearchCondition<TestDTO> condition = SearchConditionBuilder.create(TestDTO.class)
+                    .where(w -> w.equals("id", 1L))
+                    .fetchFields("author", "author.profile", "category")
+                    .build();
+
+            // then
+            assertThat(condition.getFetchFields())
+                    .containsExactlyInAnyOrder("author", "author.profile", "category");
+        }
+
+        @Test
+        @DisplayName("fetchFields with Set sets fields correctly")
+        void fetchFieldsSetTest() {
+            // given
+            Set<String> fields = new HashSet<>(Arrays.asList("author", "category"));
+
+            // when
+            SearchCondition<TestDTO> condition = SearchConditionBuilder.create(TestDTO.class)
+                    .where(w -> w.equals("id", 1L))
+                    .fetchFields(fields)
+                    .build();
+
+            // then
+            assertThat(condition.getFetchFields())
+                    .containsExactlyInAnyOrder("author", "category");
+        }
+
+        @Test
+        @DisplayName("fetchFields is ignored during JSON deserialization")
+        void fetchFieldsJsonIgnoreTest() throws JsonProcessingException {
+            // given - JSON with fetchFields (simulating malicious client input)
+            String jsonWithFetchFields = """
+                    {
+                      "conditions": [
+                        {
+                          "field": "id",
+                          "searchOperator": "EQUALS",
+                          "value": 1
+                        }
+                      ],
+                      "fetchFields": ["author", "category"],
+                      "page": 0,
+                      "size": 10
+                    }
+                    """;
+
+            // when
+            SearchCondition<TestDTO> deserialized = SearchCondition.fromJson(jsonWithFetchFields, TestDTO.class);
+
+            // then - fetchFields should be empty (ignored during deserialization)
+            assertThat(deserialized.getFetchFields()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("fetchFields is not included in JSON serialization")
+        void fetchFieldsNotSerializedTest() throws JsonProcessingException {
+            // given
+            SearchCondition<TestDTO> condition = SearchConditionBuilder.create(TestDTO.class)
+                    .where(w -> w.equals("id", 1L))
+                    .fetchFields("author", "category")
+                    .build();
+
+            // when
+            String json = condition.toJson();
+
+            // then - fetchFields should not appear in JSON
+            assertThat(json).doesNotContain("fetchFields");
+            assertThat(json).doesNotContain("author");
+            assertThat(json).doesNotContain("category");
+        }
+
+        @Test
+        @DisplayName("fetchFields can be set after other builder methods")
+        void fetchFieldsMethodChainingTest() {
+            // given & when
+            SearchCondition<TestDTO> condition = SearchConditionBuilder.create(TestDTO.class)
+                    .where(w -> w.equals("id", 1L))
+                    .sort(s -> s.asc("name"))
+                    .page(0)
+                    .size(10)
+                    .fetchFields("author")
+                    .build();
+
+            // then
+            assertThat(condition.getFetchFields()).containsExactly("author");
+            assertThat(condition.getSort()).isNotNull();
+            assertThat(condition.getPage()).isEqualTo(0);
+            assertThat(condition.getSize()).isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("empty fetchFields returns empty set")
+        void emptyFetchFieldsTest() {
+            // given & when
+            SearchCondition<TestDTO> condition = SearchConditionBuilder.create(TestDTO.class)
+                    .where(w -> w.equals("id", 1L))
+                    .build();
+
+            // then
+            assertThat(condition.getFetchFields()).isNotNull();
+            assertThat(condition.getFetchFields()).isEmpty();
         }
     }
 
