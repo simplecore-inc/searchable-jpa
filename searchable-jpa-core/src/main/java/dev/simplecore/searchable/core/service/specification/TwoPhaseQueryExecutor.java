@@ -133,7 +133,7 @@ public class TwoPhaseQueryExecutor<T> {
         
         // Check if this is @EmbeddedId or @IdClass
         boolean isEmbeddedId = isEmbeddedIdEntity();
-        log.debug("Composite key type for {}: {}", entityClass.getSimpleName(), 
+        log.trace("Composite key type for {}: {}", entityClass.getSimpleName(),
             isEmbeddedId ? "@EmbeddedId" : "@IdClass");
         
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
@@ -307,7 +307,7 @@ public class TwoPhaseQueryExecutor<T> {
             countQuery.select(cb.count(root));
         } else {
             String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-            log.debug("Count query - Entity: {}, Primary key field: {}, Join paths: {}", 
+            log.trace("Count query - Entity: {}, Primary key field: {}, Join paths: {}",
                 entityClass.getSimpleName(), primaryKeyField, joinPaths);
             
             // Handle composite key entities for count query
@@ -315,11 +315,11 @@ public class TwoPhaseQueryExecutor<T> {
                 // For composite keys, use simple count(root) instead of countDistinct
                 // This is because SQL Server doesn't support COUNT(DISTINCT col1, col2) syntax
                 // and we're already applying joins to avoid duplicates at the specification level
-                log.debug("Using simple count for composite key entity to avoid SQL Server limitations");
+                log.trace("Using simple count for composite key entity to avoid SQL Server limitations");
                 countQuery.select(cb.count(root));
             } else {
                 // Regular single primary key
-                log.debug("Using countDistinct for single primary key: {}", primaryKeyField);
+                log.trace("Using countDistinct for single primary key: {}", primaryKeyField);
                 countQuery.select(cb.countDistinct(root.get(primaryKeyField)));
             }
         }
@@ -408,7 +408,7 @@ public class TwoPhaseQueryExecutor<T> {
                                 root.fetch(fetchField, JoinType.LEFT);
                             }
                         }
-                        log.debug("Applied fetch join for field: {}", fetchField);
+                        log.trace("Applied fetch join for field: {}", fetchField);
                     } catch (Exception e) {
                         log.warn("Failed to apply fetch join for field '{}': {}", fetchField, e.getMessage());
                     }
@@ -436,7 +436,7 @@ public class TwoPhaseQueryExecutor<T> {
 
             if (!alreadyFetched) {
                 currentFrom = (From<?, ?>) currentFrom.fetch(part, JoinType.LEFT);
-                log.debug("Applied nested fetch join for path part: {}", part);
+                log.trace("Applied nested fetch join for path part: {}", part);
             } else {
                 // Find existing fetch to continue the path
                 currentFrom = (From<?, ?>) currentFrom.getFetches().stream()
@@ -447,7 +447,7 @@ public class TwoPhaseQueryExecutor<T> {
                     log.warn("Expected fetch not found for path part: {}", part);
                     return;
                 }
-                log.debug("Reusing existing fetch for path part: {}", part);
+                log.trace("Reusing existing fetch for path part: {}", part);
             }
         }
     }
@@ -474,9 +474,9 @@ public class TwoPhaseQueryExecutor<T> {
             return Collections.emptyList();
         }
         
-        log.debug("Entity {} is using {} composite key with fields: {}", 
-            entityClass.getSimpleName(), 
-            isEmbeddedId ? "@EmbeddedId" : "@IdClass", 
+        log.trace("Entity {} is using {} composite key with fields: {}",
+            entityClass.getSimpleName(),
+            isEmbeddedId ? "@EmbeddedId" : "@IdClass",
             idFields);
         
         // Build specification for composite key matching
@@ -494,7 +494,7 @@ public class TwoPhaseQueryExecutor<T> {
                                 root.fetch(fetchField, JoinType.LEFT);
                             }
                         }
-                        log.debug("Applied fetch join for field: {}", fetchField);
+                        log.trace("Applied fetch join for field: {}", fetchField);
                     } catch (Exception e) {
                         log.warn("Failed to apply fetch join for field '{}': {}", fetchField, e.getMessage());
                     }
@@ -503,19 +503,19 @@ public class TwoPhaseQueryExecutor<T> {
 
             List<Predicate> orPredicates = new ArrayList<>();
 
-            log.debug("Building composite key conditions for {} IDs, fields: {}", ids.size(), idFields);
+            log.trace("Building composite key conditions for {} IDs, fields: {}", ids.size(), idFields);
             
             for (Object id : ids) {
                 if (id instanceof Object[]) {
                     Object[] compositeKey = (Object[]) id;
-                    log.debug("Processing composite key: {}", Arrays.toString(compositeKey));
+                    log.trace("Processing composite key: {}", Arrays.toString(compositeKey));
                     
                     if (compositeKey.length == idFields.size()) {
                         List<Predicate> andPredicates = new ArrayList<>();
                         for (int i = 0; i < idFields.size(); i++) {
                             String fieldName = idFields.get(i);
                             Object fieldValue = compositeKey[i];
-                            log.debug("Adding condition: {} = {}", fieldName, fieldValue);
+                            log.trace("Adding condition: {} = {}", fieldName, fieldValue);
                             
                             // For @EmbeddedId, access fields through the embedded id object
                             // For @IdClass, access fields directly on the root
@@ -529,7 +529,7 @@ public class TwoPhaseQueryExecutor<T> {
                 } else {
                     // Single ID field case
                     if (idFields.size() == 1) {
-                        log.debug("Processing single ID: {}", id);
+                        log.trace("Processing single ID: {}", id);
                         String fieldName = idFields.get(0);
                         Path<?> fieldPath = isEmbeddedId ? root.get("id").get(fieldName) : root.get(fieldName);
                         orPredicates.add(cb.equal(fieldPath, id));
@@ -539,7 +539,7 @@ public class TwoPhaseQueryExecutor<T> {
                 }
             }
             
-            log.debug("Built {} OR predicates", orPredicates.size());
+            log.trace("Built {} OR predicates", orPredicates.size());
             return orPredicates.isEmpty() ? cb.disjunction() : cb.or(orPredicates.toArray(new Predicate[0]));
         };
 
@@ -581,7 +581,7 @@ public class TwoPhaseQueryExecutor<T> {
             int endIndex = Math.min(i + MAX_IN_CLAUSE_SIZE, ids.size());
             List<Object> batchIds = ids.subList(i, endIndex);
 
-            log.debug("Executing batch {}/{} with {} IDs",
+            log.trace("Executing batch {}/{} with {} IDs",
                 (i / MAX_IN_CLAUSE_SIZE) + 1,
                 (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE,
                 batchIds.size());
@@ -591,7 +591,7 @@ public class TwoPhaseQueryExecutor<T> {
             allResults.addAll(batchResults);
         }
 
-        log.debug("Executed {} batches, total results: {}",
+        log.trace("Executed {} batches, total results: {}",
             (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE,
             allResults.size());
 
@@ -629,7 +629,7 @@ public class TwoPhaseQueryExecutor<T> {
             }
         }
         
-        log.debug("Reordered {} entities out of {} ordered IDs", reorderedEntities.size(), orderedIds.size());
+        log.trace("Reordered {} entities out of {} ordered IDs", reorderedEntities.size(), orderedIds.size());
         return reorderedEntities;
     }
     

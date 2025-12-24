@@ -84,7 +84,7 @@ public class SearchableFieldUtils {
                 
                 // Check if this is an @EmbeddedId (composite key embedded in a single object)
                 if (isEmbeddedId(entityClass, idAttribute.getName())) {
-                    log.debug("@EmbeddedId composite key detected for entity {}: using special handling", entityClass.getSimpleName());
+                    log.trace("@EmbeddedId composite key detected for entity {}: using special handling", entityClass.getSimpleName());
                     return handleCompositeKey(entityType, entityClass);
                 } else {
                     // Simple @Id
@@ -92,7 +92,7 @@ public class SearchableFieldUtils {
                 }
             } else {
                 // Handle composite key with @IdClass
-                log.debug("@IdClass composite key detected for entity {}: using special handling", entityClass.getSimpleName());
+                log.trace("@IdClass composite key detected for entity {}: using special handling", entityClass.getSimpleName());
                 return handleCompositeKey(entityType, entityClass);
             }
             
@@ -150,7 +150,7 @@ public class SearchableFieldUtils {
                 }
             }
             
-            log.debug("Found fields in @EmbeddedId class {}: {}", embeddedIdClass.getSimpleName(), fieldNames);
+            log.trace("Found fields in @EmbeddedId class {}: {}", embeddedIdClass.getSimpleName(), fieldNames);
             
         } catch (Exception e) {
             log.warn("Failed to get fields from @EmbeddedId class for entity {}: {}", 
@@ -189,14 +189,14 @@ public class SearchableFieldUtils {
                 for (SingularAttribute<?, ?> idAttribute : idAttributes) {
                     idFields.add(idAttribute.getName());
                 }
-                log.debug("Found @IdClass composite key fields for {}: {}", entityClass.getSimpleName(), idFields);
+                log.trace("Found @IdClass composite key fields for {}: {}", entityClass.getSimpleName(), idFields);
             } else {
                 // Check if it's @EmbeddedId
                 SingularAttribute<?, ?> idAttribute = entityType.getId(entityType.getIdType().getJavaType());
                 if (isEmbeddedId(entityClass, idAttribute.getName())) {
                     // For @EmbeddedId, get fields from the embedded class
                     idFields = getEmbeddedIdFieldNames(entityClass, idAttribute.getName());
-                    log.debug("Found @EmbeddedId composite key fields for {}: {}", entityClass.getSimpleName(), idFields);
+                    log.trace("Found @EmbeddedId composite key fields for {}: {}", entityClass.getSimpleName(), idFields);
                 }
             }
             
@@ -221,7 +221,7 @@ public class SearchableFieldUtils {
             }
         }
         
-        log.debug("Found ID fields by reflection for {}: {}", entityClass.getSimpleName(), idFields);
+        log.trace("Found ID fields by reflection for {}: {}", entityClass.getSimpleName(), idFields);
         return idFields;
     }
     

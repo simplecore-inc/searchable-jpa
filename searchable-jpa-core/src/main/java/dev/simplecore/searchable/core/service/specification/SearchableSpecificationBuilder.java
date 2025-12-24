@@ -114,7 +114,7 @@ public class SearchableSpecificationBuilder<T> {
                     sortOrders = new java.util.ArrayList<>(sortOrders);
                     sortOrders.add(Sort.Order.by(primaryKeyField));
 
-                    log.debug("Automatically added primary key field '{}' to sort criteria for cursor-based pagination uniqueness",
+                    log.trace("Automatically added primary key field '{}' to sort criteria for cursor-based pagination uniqueness",
                             primaryKeyField);
                 }
             } else {
@@ -221,14 +221,14 @@ public class SearchableSpecificationBuilder<T> {
             // Always extract join paths from conditions (needed for filtering)
             Set<String> conditionJoinPaths = extractJoinPaths(condition.getNodes());
 
-            log.debug("Applying joins - condition paths: {}, query type: {}, isCountQuery: {}",
+            log.trace("Applying joins - condition paths: {}, query type: {}, isCountQuery: {}",
                     conditionJoinPaths, query.getResultType(), isCountQuery);
 
             // For non-count queries, add common ToOne fields to prevent N+1 problems
             Set<String> allJoinPaths = new HashSet<>(conditionJoinPaths);
             if (!isCountQuery) {
                 Set<String> commonToOneFields = getCachedCommonToOneFields();
-                log.debug("Adding common ToOne fields for non-count query: {}", commonToOneFields);
+                log.trace("Adding common ToOne fields for non-count query: {}", commonToOneFields);
                 allJoinPaths.addAll(commonToOneFields);
             }
 
@@ -294,14 +294,14 @@ public class SearchableSpecificationBuilder<T> {
         Set<String> explicitFetchFields = condition.getFetchFields();
         if (explicitFetchFields != null && !explicitFetchFields.isEmpty()) {
             allFetchFields.addAll(explicitFetchFields);
-            log.debug("Explicit fetch fields from SearchCondition: {}", explicitFetchFields);
+            log.trace("Explicit fetch fields from SearchCondition: {}", explicitFetchFields);
         }
 
         // Add auto-detected common ToOne fields
         Set<String> commonToOneFields = getCachedCommonToOneFields();
         allFetchFields.addAll(commonToOneFields);
 
-        log.debug("All fetch fields for two-phase query: {}", allFetchFields);
+        log.trace("All fetch fields for two-phase query: {}", allFetchFields);
 
         // Always use two-phase optimization for all queries
         return twoPhaseQueryExecutor.executeWithTwoPhaseOptimization(pageRequest, allFetchFields);
@@ -329,7 +329,7 @@ public class SearchableSpecificationBuilder<T> {
                 if (result == null) {
                     result = relationshipAnalyzer.detectCommonToOneFields();
                     cachedCommonToOneFields = result;
-                    log.debug("Cached common ToOne fields: {}", result);
+                    log.trace("Cached common ToOne fields: {}", result);
                 }
             }
         }

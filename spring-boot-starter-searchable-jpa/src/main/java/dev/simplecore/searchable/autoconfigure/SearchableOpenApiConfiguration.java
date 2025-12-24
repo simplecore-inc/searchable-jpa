@@ -34,7 +34,7 @@ public class SearchableOpenApiConfiguration {
             @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping
     ) {
         log.info("Creating SearchConditionDocCustomiser bean");
-        log.debug("RequestMappingHandlerMapping available: {}", handlerMapping != null);
+        log.trace("RequestMappingHandlerMapping available: {}", handlerMapping != null);
         return new OpenApiDocCustomiser(handlerMapping);
     }
 }

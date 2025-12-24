@@ -50,22 +50,22 @@ public class JoinStrategyManager<T> {
             }
         }
 
-        log.debug("Detected ToOne paths: {}", toOnePaths);
-        log.debug("Detected ToMany paths: {}", toManyPaths);
+        log.trace("Detected ToOne paths: {}", toOnePaths);
+        log.trace("Detected ToMany paths: {}", toManyPaths);
 
         // Apply ToOne joins
         for (String path : toOnePaths) {
             try {
                 if (isCountQuery) {
                     // For count queries, use regular join to avoid fetch join errors
-                    log.debug("ApplyJoins: Using regular join for ToOne path (count query): {}", path);
+                    log.trace("ApplyJoins: Using regular join for ToOne path (count query): {}", path);
                     root.join(path, JoinType.LEFT);
                 } else {
                     // For select queries, use fetch join to prevent N+1
-                    log.debug("ApplyJoins: Using fetch join for ToOne path (select query): {}", path);
+                    log.trace("ApplyJoins: Using fetch join for ToOne path (select query): {}", path);
                     root.fetch(path, JoinType.LEFT);
                 }
-                log.debug("Successfully applied join for ToOne path: {}", path);
+                log.trace("Successfully applied join for ToOne path: {}", path);
             } catch (Exception e) {
                 log.warn("Join failed for ToOne path '{}', using regular join as fallback: {}", path, e.getMessage());
                 root.join(path, JoinType.LEFT);
@@ -75,9 +75,9 @@ public class JoinStrategyManager<T> {
         // Apply ToMany joins (always regular join to prevent memory pagination)
         for (String path : toManyPaths) {
             try {
-                log.debug("ApplyJoins: Using regular join for ToMany path: {}", path);
+                log.trace("ApplyJoins: Using regular join for ToMany path: {}", path);
                 root.join(path, JoinType.LEFT);
-                log.debug("Successfully applied regular join for ToMany path: {}", path);
+                log.trace("Successfully applied regular join for ToMany path: {}", path);
             } catch (Exception e) {
                 log.warn("Join failed for ToMany path '{}': {}", path, e.getMessage());
             }
@@ -85,7 +85,7 @@ public class JoinStrategyManager<T> {
 
         Set<String> finalToOneFields = relationshipAnalyzer.detectCommonToOneFields();
         finalToOneFields.removeAll(toOnePaths); // Remove already processed paths
-        log.debug("Final ToOne fields to add: {}", finalToOneFields);
+        log.trace("Final ToOne fields to add: {}", finalToOneFields);
 
         // Apply additional ToOne fields for N+1 prevention (only for select queries)
         if (!isCountQuery) {
@@ -94,21 +94,21 @@ public class JoinStrategyManager<T> {
                     // Handle nested paths with safety validation
                     if (field.contains(".")) {
                         if (relationshipAnalyzer.isNestedPathSafeForJoin(root, field)) {
-                            log.debug("ApplyJoins: Attempting safe nested join for validated path: {}", field);
+                            log.trace("ApplyJoins: Attempting safe nested join for validated path: {}", field);
                             if (safelyApplyNestedJoin(root, field, true)) {
-                                log.debug("Successfully applied safe nested join for path: {}", field);
+                                log.trace("Successfully applied safe nested join for path: {}", field);
                             } else {
-                                log.debug("Safe nested join failed for path: {}", field);
+                                log.trace("Safe nested join failed for path: {}", field);
                             }
                         } else {
-                            log.debug("ApplyJoins: Nested path '{}' failed safety validation, skipping", field);
+                            log.trace("ApplyJoins: Nested path '{}' failed safety validation, skipping", field);
                         }
                         continue;
                     }
 
-                    log.debug("ApplyJoins: Attempting fetch join for common ToOne field: {}", field);
+                    log.trace("ApplyJoins: Attempting fetch join for common ToOne field: {}", field);
                     root.fetch(field, JoinType.LEFT);
-                    log.debug("Successfully applied fetch join for common ToOne field: {}", field);
+                    log.trace("Successfully applied fetch join for common ToOne field: {}", field);
                 } catch (Exception e) {
                     log.warn("Fetch join failed for common ToOne field '{}', using regular join as fallback: {}", field, e.getMessage());
                     try {
@@ -127,7 +127,7 @@ public class JoinStrategyManager<T> {
      * Other ToMany relationships will be loaded lazily or via batch fetching.
      */
     public void applySmartFetchJoins(Root<T> root, Set<String> paths) {
-        log.debug("ApplySmartFetchJoins: Starting with paths: {}", paths);
+        log.trace("ApplySmartFetchJoins: Starting with paths: {}", paths);
 
         root.getJoins().clear();
 
@@ -143,22 +143,22 @@ public class JoinStrategyManager<T> {
             }
         }
 
-        log.debug("ApplySmartFetchJoins: ToOne paths from conditions: {}", toOnePaths);
-        log.debug("ApplySmartFetchJoins: ToMany paths from conditions: {}", toManyPaths);
+        log.trace("ApplySmartFetchJoins: ToOne paths from conditions: {}", toOnePaths);
+        log.trace("ApplySmartFetchJoins: ToMany paths from conditions: {}", toManyPaths);
 
         // CRITICAL: Add commonly accessed ToOne relationships even if not in search conditions
         // This prevents N+1 problems for frequently accessed fields like 'position'
         Set<String> commonToOneFields = relationshipAnalyzer.detectCommonToOneFields();
-        log.debug("ApplySmartFetchJoins: Common ToOne fields detected: {}", commonToOneFields);
+        log.trace("ApplySmartFetchJoins: Common ToOne fields detected: {}", commonToOneFields);
 
         // Add all common ToOne fields to prevent N+1
         toOnePaths.addAll(commonToOneFields);
-        log.debug("ApplySmartFetchJoins: Final ToOne paths to fetch: {}", toOnePaths);
+        log.trace("ApplySmartFetchJoins: Final ToOne paths to fetch: {}", toOnePaths);
 
         // Strategy 1: Always fetch join ALL ToOne relationships (safe and efficient)
         for (String path : toOnePaths) {
             try {
-                log.debug("ApplySmartFetchJoins: Attempting fetch join for ToOne path: {}", path);
+                log.trace("ApplySmartFetchJoins: Attempting fetch join for ToOne path: {}", path);
                 root.fetch(path, JoinType.LEFT);
                 log.info("ApplySmartFetchJoins: Successfully applied fetch join for ToOne: {}", path);
             } catch (Exception e) {
@@ -166,7 +166,7 @@ public class JoinStrategyManager<T> {
                 // If fetch join fails, use regular join as fallback
                 try {
                     root.join(path, JoinType.LEFT);
-                    log.debug("ApplySmartFetchJoins: Successfully applied regular join fallback for: {}", path);
+                    log.trace("ApplySmartFetchJoins: Successfully applied regular join fallback for: {}", path);
                 } catch (Exception joinException) {
                     log.error("ApplySmartFetchJoins: Both fetch join and regular join failed for path '{}': {}", path, joinException.getMessage());
                 }
@@ -177,7 +177,7 @@ public class JoinStrategyManager<T> {
         if (toManyPaths.size() == 1) {
             // Single ToMany: Safe to fetch join
             String toManyPath = toManyPaths.iterator().next();
-            log.debug("ApplySmartFetchJoins: Single ToMany path, applying fetch join: {}", toManyPath);
+            log.trace("ApplySmartFetchJoins: Single ToMany path, applying fetch join: {}", toManyPath);
             try {
                 root.fetch(toManyPath, JoinType.LEFT);
                 log.info("ApplySmartFetchJoins: Successfully applied fetch join for single ToMany: {}", toManyPath);
@@ -188,7 +188,7 @@ public class JoinStrategyManager<T> {
         } else if (toManyPaths.size() > 1) {
             // Multiple ToMany: Select the most important one for fetch join
             String primaryToMany = selectPrimaryToManyForFetch(toManyPaths);
-            log.debug("ApplySmartFetchJoins: Multiple ToMany paths, selected primary: {}", primaryToMany);
+            log.trace("ApplySmartFetchJoins: Multiple ToMany paths, selected primary: {}", primaryToMany);
             if (primaryToMany != null) {
                 try {
                     root.fetch(primaryToMany, JoinType.LEFT);
@@ -201,10 +201,10 @@ public class JoinStrategyManager<T> {
             // Other ToMany relationships: Use regular joins to enable lazy loading
             for (String path : toManyPaths) {
                 if (!path.equals(primaryToMany)) {
-                    log.debug("ApplySmartFetchJoins: Applying regular join for secondary ToMany: {}", path);
+                    log.trace("ApplySmartFetchJoins: Applying regular join for secondary ToMany: {}", path);
                     try {
                         root.join(path, JoinType.LEFT);
-                        log.debug("ApplySmartFetchJoins: Successfully applied regular join for secondary ToMany: {}", path);
+                        log.trace("ApplySmartFetchJoins: Successfully applied regular join for secondary ToMany: {}", path);
                     } catch (Exception e) {
                         log.error("ApplySmartFetchJoins: Regular join failed for secondary ToMany '{}': {}", path, e.getMessage());
                     }
@@ -233,7 +233,7 @@ public class JoinStrategyManager<T> {
                     } else {
                         root.join(path, JoinType.LEFT);
                     }
-                    log.debug("ApplyRegularJoinsOnly: Successfully applied join for path: {}", path);
+                    log.trace("ApplyRegularJoinsOnly: Successfully applied join for path: {}", path);
                 } catch (Exception e) {
                     log.warn("ApplyRegularJoinsOnly: Failed to apply join for path '{}': {}", path, e.getMessage());
                 }
@@ -319,14 +319,14 @@ public class JoinStrategyManager<T> {
 
                 if (!alreadyFetched) {
                     currentFrom = (From<?, ?>) currentFrom.fetch(part, JoinType.LEFT);
-                    log.debug("Applied fetch join for path part: {}", part);
+                    log.trace("Applied fetch join for path part: {}", part);
                 } else {
                     // Find existing fetch to continue the path
                     currentFrom = (From<?, ?>) currentFrom.getFetches().stream()
                             .filter(fetch -> fetch.getAttribute().getName().equals(part))
                             .findFirst()
                             .orElseThrow(() -> new IllegalStateException("Expected fetch not found"));
-                    log.debug("Reusing existing fetch for path part: {}", part);
+                    log.trace("Reusing existing fetch for path part: {}", part);
                 }
             }
 
@@ -347,7 +347,7 @@ public class JoinStrategyManager<T> {
             
             // Validate the complete path first
             if (!relationshipAnalyzer.isValidPath(root, nestedPath)) {
-                log.debug("Path validation failed for nested path: {}", nestedPath);
+                log.trace("Path validation failed for nested path: {}", nestedPath);
                 return false;
             }
 
@@ -368,11 +368,11 @@ public class JoinStrategyManager<T> {
                     if (useFetchJoin && i == pathParts.length - 1) {
                         // Only use fetch join for the final part if requested
                         currentFrom = (From<?, ?>) currentFrom.fetch(part, JoinType.LEFT);
-                        log.debug("Applied fetch join for final path part: {}", currentPath);
+                        log.trace("Applied fetch join for final path part: {}", currentPath);
                     } else {
                         // Use regular join for intermediate parts
                         currentFrom = (From<?, ?>) currentFrom.join(part, JoinType.LEFT);
-                        log.debug("Applied regular join for path part: {}", currentPath);
+                        log.trace("Applied regular join for path part: {}", currentPath);
                     }
                 } else {
                     // Find existing join to continue the path
@@ -382,7 +382,7 @@ public class JoinStrategyManager<T> {
                             .orElse(null);
                     if (existingJoin != null) {
                         currentFrom = (From<?, ?>) existingJoin;
-                        log.debug("Reusing existing join for path part: {}", currentPath);
+                        log.trace("Reusing existing join for path part: {}", currentPath);
                     }
                 }
             }

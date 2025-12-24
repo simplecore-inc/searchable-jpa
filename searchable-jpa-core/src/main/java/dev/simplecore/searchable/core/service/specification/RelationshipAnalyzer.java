@@ -36,7 +36,7 @@ public class RelationshipAnalyzer<T> {
         Set<String> commonFields = new HashSet<>();
 
         try {
-            log.debug("DetectCommonToOneFields: Analyzing entity class: {}", entityClass.getSimpleName());
+            log.trace("DetectCommonToOneFields: Analyzing entity class: {}", entityClass.getSimpleName());
 
             // Use JPA metamodel to find ToOne relationships
             EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
@@ -46,7 +46,7 @@ public class RelationshipAnalyzer<T> {
                 if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_ONE ||
                         attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_ONE) {
                     commonFields.add(attr.getName());
-                    log.debug("DetectCommonToOneFields: Found {} relationship: {}",
+                    log.trace("DetectCommonToOneFields: Found {} relationship: {}",
                             attr.getPersistentAttributeType(), attr.getName());
                 }
             });
@@ -71,7 +71,7 @@ public class RelationshipAnalyzer<T> {
                 if (field.isAnnotationPresent(jakarta.persistence.ManyToOne.class) ||
                         field.isAnnotationPresent(jakarta.persistence.OneToOne.class)) {
                     commonFields.add(field.getName());
-                    log.debug("DetectCommonToOneFields: Found ToOne field via reflection: {}", field.getName());
+                    log.trace("DetectCommonToOneFields: Found ToOne field via reflection: {}", field.getName());
                 }
             }
 
@@ -90,7 +90,7 @@ public class RelationshipAnalyzer<T> {
         Set<String> nestedToOneFields = new HashSet<>();
 
         try {
-            log.debug("DetectNestedToOneRelationships: Analyzing nested relationships for entity: {}", entityClass.getSimpleName());
+            log.trace("DetectNestedToOneRelationships: Analyzing nested relationships for entity: {}", entityClass.getSimpleName());
 
             EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
 
@@ -100,7 +100,7 @@ public class RelationshipAnalyzer<T> {
                     String relationshipName = attr.getName();
                     Class<?> targetEntityClass = attr.getElementType().getJavaType();
 
-                    log.debug("DetectNestedToOneRelationships: Analyzing ManyToMany relationship '{}' with target entity: {}",
+                    log.trace("DetectNestedToOneRelationships: Analyzing ManyToMany relationship '{}' with target entity: {}",
                             relationshipName, targetEntityClass.getSimpleName());
 
                     // Find ToOne relationships in the target entity
@@ -110,7 +110,7 @@ public class RelationshipAnalyzer<T> {
                     for (String targetToOneField : targetToOneFields) {
                         String nestedPath = relationshipName + "." + targetToOneField;
                         nestedToOneFields.add(nestedPath);
-                        log.debug("DetectNestedToOneRelationships: Found nested ToOne path: {}", nestedPath);
+                        log.trace("DetectNestedToOneRelationships: Found nested ToOne path: {}", nestedPath);
                     }
                 }
             });
@@ -121,7 +121,7 @@ public class RelationshipAnalyzer<T> {
                     String relationshipName = attr.getName();
                     Class<?> targetEntityClass = attr.getElementType().getJavaType();
 
-                    log.debug("DetectNestedToOneRelationships: Analyzing OneToMany relationship '{}' with target entity: {}",
+                    log.trace("DetectNestedToOneRelationships: Analyzing OneToMany relationship '{}' with target entity: {}",
                             relationshipName, targetEntityClass.getSimpleName());
 
                     // Find ToOne relationships in the target entity
@@ -131,7 +131,7 @@ public class RelationshipAnalyzer<T> {
                     for (String targetToOneField : targetToOneFields) {
                         String nestedPath = relationshipName + "." + targetToOneField;
                         nestedToOneFields.add(nestedPath);
-                        log.debug("DetectNestedToOneRelationships: Found nested ToOne path: {}", nestedPath);
+                        log.trace("DetectNestedToOneRelationships: Found nested ToOne path: {}", nestedPath);
                     }
                 }
             });
@@ -162,13 +162,13 @@ public class RelationshipAnalyzer<T> {
                 if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_ONE ||
                         attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.ONE_TO_ONE) {
                     toOneFields.add(attr.getName());
-                    log.debug("DetectToOneFieldsForEntity: Found {} relationship '{}' in entity: {}",
+                    log.trace("DetectToOneFieldsForEntity: Found {} relationship '{}' in entity: {}",
                             attr.getPersistentAttributeType(), attr.getName(), entityClass.getSimpleName());
                 }
             });
 
         } catch (Exception e) {
-            log.debug("DetectToOneFieldsForEntity: Metamodel analysis failed for entity {}, falling back to reflection: {}",
+            log.trace("DetectToOneFieldsForEntity: Metamodel analysis failed for entity {}, falling back to reflection: {}",
                     entityClass.getSimpleName(), e.getMessage());
 
             // Fallback to reflection
@@ -177,7 +177,7 @@ public class RelationshipAnalyzer<T> {
                 if (field.isAnnotationPresent(jakarta.persistence.ManyToOne.class) ||
                         field.isAnnotationPresent(jakarta.persistence.OneToOne.class)) {
                     toOneFields.add(field.getName());
-                    log.debug("DetectToOneFieldsForEntity: Found ToOne field '{}' via reflection in entity: {}",
+                    log.trace("DetectToOneFieldsForEntity: Found ToOne field '{}' via reflection in entity: {}",
                             field.getName(), entityClass.getSimpleName());
                 }
             }
@@ -194,7 +194,7 @@ public class RelationshipAnalyzer<T> {
         Set<String> manyToManyFields = new HashSet<>();
 
         try {
-            log.debug("DetectManyToManyFields: Analyzing entity class: {}", entityClass.getSimpleName());
+            log.trace("DetectManyToManyFields: Analyzing entity class: {}", entityClass.getSimpleName());
 
             // Use JPA metamodel to find ManyToMany relationships
             EntityType<T> entityType = entityManager.getMetamodel().entity(entityClass);
@@ -203,7 +203,7 @@ public class RelationshipAnalyzer<T> {
             entityType.getPluralAttributes().forEach(attr -> {
                 if (attr.getPersistentAttributeType() == Attribute.PersistentAttributeType.MANY_TO_MANY) {
                     manyToManyFields.add(attr.getName());
-                    log.debug("DetectManyToManyFields: Found ManyToMany relationship: {}", attr.getName());
+                    log.trace("DetectManyToManyFields: Found ManyToMany relationship: {}", attr.getName());
                 }
             });
 
@@ -220,7 +220,7 @@ public class RelationshipAnalyzer<T> {
             for (Field field : fields) {
                 if (field.isAnnotationPresent(jakarta.persistence.ManyToMany.class)) {
                     manyToManyFields.add(field.getName());
-                    log.debug("DetectManyToManyFields: Found ManyToMany field via reflection: {}", field.getName());
+                    log.trace("DetectManyToManyFields: Found ManyToMany field via reflection: {}", field.getName());
                 }
             }
 
@@ -298,7 +298,7 @@ public class RelationshipAnalyzer<T> {
             String[] pathParts = nestedPath.split("\\.");
             if (pathParts.length > 3) {
                 // Limit nesting depth to prevent performance issues
-                log.debug("Nested path '{}' exceeds maximum depth (3), skipping for safety", nestedPath);
+                log.trace("Nested path '{}' exceeds maximum depth (3), skipping for safety", nestedPath);
                 return false;
             }
 
@@ -311,7 +311,7 @@ public class RelationshipAnalyzer<T> {
                 // Only allow ToOne relationships in nested paths for safety
                 if (attribute.getPersistentAttributeType() != Attribute.PersistentAttributeType.MANY_TO_ONE &&
                         attribute.getPersistentAttributeType() != Attribute.PersistentAttributeType.ONE_TO_ONE) {
-                    log.debug("Nested path '{}' contains ToMany relationship at '{}', not safe for fetch join", nestedPath, part);
+                    log.trace("Nested path '{}' contains ToMany relationship at '{}', not safe for fetch join", nestedPath, part);
                     return false;
                 }
 
@@ -319,16 +319,16 @@ public class RelationshipAnalyzer<T> {
 
                 // Prevent circular references
                 if (currentType.equals(root.getJavaType())) {
-                    log.debug("Nested path '{}' contains circular reference, not safe for fetch join", nestedPath);
+                    log.trace("Nested path '{}' contains circular reference, not safe for fetch join", nestedPath);
                     return false;
                 }
             }
 
-            log.debug("Nested path '{}' passed safety validation", nestedPath);
+            log.trace("Nested path '{}' passed safety validation", nestedPath);
             return true;
 
         } catch (Exception e) {
-            log.debug("Safety validation failed for nested path '{}': {}", nestedPath, e.getMessage());
+            log.trace("Safety validation failed for nested path '{}': {}", nestedPath, e.getMessage());
             return false;
         }
     }
@@ -366,14 +366,14 @@ public class RelationshipAnalyzer<T> {
                         currentType = attribute.getJavaType();
                     }
                 } catch (IllegalArgumentException e) {
-                    log.debug("Path validation failed: attribute '{}' not found in entity '{}'", part, currentType.getSimpleName());
+                    log.trace("Path validation failed: attribute '{}' not found in entity '{}'", part, currentType.getSimpleName());
                     return false;
                 }
             }
 
             return true;
         } catch (Exception e) {
-            log.debug("Path validation failed for '{}': {}", path, e.getMessage());
+            log.trace("Path validation failed for '{}': {}", path, e.getMessage());
             return false;
         }
     }

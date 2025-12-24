@@ -57,7 +57,7 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
     @SuppressWarnings({"unchecked"})
     public SearchCondition<?> deserialize(JsonParser p, DeserializationContext ctxt) 
             throws IOException {
-        log.debug("SearchConditionDeserializer.deserialize called");
+        log.trace("SearchConditionDeserializer.deserialize called");
         
         ObjectMapper mapper = (ObjectMapper) p.getCodec();
         JsonNode jsonNode = mapper.readTree(p);

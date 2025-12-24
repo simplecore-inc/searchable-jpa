@@ -48,7 +48,7 @@ public class OpenApiDocCustomiser implements OperationCustomizer {
 
     @Override
     public Operation customize(Operation operation, HandlerMethod handlerMethod) {
-        log.debug("Customizing OpenAPI operation for search conditions (Spring Boot 3.x)");
+        log.trace("Customizing OpenAPI operation for search conditions (Spring Boot 3.x)");
 
         try {
             Arrays.stream(handlerMethod.getMethodParameters())
@@ -64,7 +64,7 @@ public class OpenApiDocCustomiser implements OperationCustomizer {
 
     private void initializeOpenApiPaths(OpenAPI openApi) {
         if (openApi.getPaths() == null) {
-            log.debug("OpenAPI paths is null, initializing new Paths");
+            log.trace("OpenAPI paths is null, initializing new Paths");
             openApi.setPaths(new io.swagger.v3.oas.models.Paths());
         }
     }
@@ -269,7 +269,7 @@ public class OpenApiDocCustomiser implements OperationCustomizer {
                     modelConverters.resolveAsResolvedSchema(
                         new AnnotatedType(fieldType).resolveAsRef(true)
                     );
-                    log.debug("Registered enum schema: {}", fieldType.getSimpleName());
+                    log.trace("Registered enum schema: {}", fieldType.getSimpleName());
                 } catch (Exception e) {
                     log.warn("Failed to register enum schema: {}", fieldType.getSimpleName(), e);
                 }

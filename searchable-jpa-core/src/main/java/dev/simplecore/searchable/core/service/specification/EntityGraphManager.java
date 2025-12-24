@@ -44,11 +44,11 @@ public class EntityGraphManager<T> {
                         } else {
                             // Simple path
                             entityGraph.addAttributeNodes(path);
-                            log.debug("Added ToOne attribute '{}' to EntityGraph", path);
+                            log.trace("Added ToOne attribute '{}' to EntityGraph", path);
                         }
                         toOneOnlyPaths.add(path);
                     } else {
-                        log.debug("Skipped ToMany path '{}' from EntityGraph to prevent memory pagination", path);
+                        log.trace("Skipped ToMany path '{}' from EntityGraph to prevent memory pagination", path);
                     }
                 } catch (Exception e) {
                     log.warn("Failed to add path '{}' to EntityGraph: {}", path, e.getMessage());
@@ -110,7 +110,7 @@ public class EntityGraphManager<T> {
 
             return false;
         } catch (Exception e) {
-            log.debug("Error analyzing path '{}' for ToMany check: {}", path, e.getMessage());
+            log.trace("Error analyzing path '{}' for ToMany check: {}", path, e.getMessage());
             // If we can't determine, assume it's ToMany to be safe
             return true;
         }
@@ -136,7 +136,7 @@ public class EntityGraphManager<T> {
         } catch (Exception e) {
             // If subgraph creation fails, try adding as simple attribute
             entityGraph.addAttributeNodes(firstPart);
-            log.debug("Added '{}' as simple attribute instead of subgraph", firstPart);
+            log.trace("Added '{}' as simple attribute instead of subgraph", firstPart);
             return;
         }
 
@@ -149,7 +149,7 @@ public class EntityGraphManager<T> {
         } else {
             // Final part, add as attribute
             subgraph.addAttributeNodes(remainingPath);
-            log.debug("Added nested path '{}' to EntityGraph", nestedPath);
+            log.trace("Added nested path '{}' to EntityGraph", nestedPath);
         }
     }
 
@@ -173,7 +173,7 @@ public class EntityGraphManager<T> {
         } catch (Exception e) {
             // Fallback: add as simple attribute
             parentSubgraph.addAttributeNodes(firstPart);
-            log.debug("Added '{}' as simple attribute in subgraph", firstPart);
+            log.trace("Added '{}' as simple attribute in subgraph", firstPart);
         }
     }
 } 
