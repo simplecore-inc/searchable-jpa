@@ -7,8 +7,10 @@ import jakarta.validation.constraints.Pattern;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.time.LocalDateTime;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -77,6 +79,8 @@ public class OpenApiDocUtils {
         if (type == Float.class || type == float.class) return 1.0f;
         if (type == Boolean.class || type == boolean.class) return true;
         if (type == LocalDateTime.class) return LocalDateTime.now();
+        if (type == LocalDate.class) return LocalDate.now();
+        if (type == LocalTime.class) return LocalTime.now();
         if (type == Instant.class) return Instant.now();
         if (type.isEnum()) return type.getEnumConstants()[0];
         if (Collection.class.isAssignableFrom(type) || Set.class.isAssignableFrom(type)) {
