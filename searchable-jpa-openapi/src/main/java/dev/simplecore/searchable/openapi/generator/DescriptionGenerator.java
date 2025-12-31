@@ -39,7 +39,7 @@ public class DescriptionGenerator {
     }
 
     private static void appendSearchFields(Class<?> dtoClass, StringBuilder description) {
-        description.append("### 🔍 Searchable Fields\n\n");
+        description.append("### Searchable Fields\n\n");
         description.append("| Field | Type | Description | Available Operators | Example |\n");
         description.append("|-------|------|-------------|-------------------|----------|\n");
 
@@ -73,7 +73,7 @@ public class DescriptionGenerator {
     }
 
     private static void appendSorting(Class<?> dtoClass, StringBuilder description) {
-        description.append("### 📊 Sorting\n\n");
+        description.append("### Sorting\n\n");
         description.append("| Field | Ascending | Descending |\n");
         description.append("|-------|-----------|------------|\n");
 
@@ -92,7 +92,7 @@ public class DescriptionGenerator {
     }
 
     private static void appendPagination(StringBuilder description) {
-        description.append("### 📄 Pagination\n\n");
+        description.append("### Pagination\n\n");
         description.append("| Parameter | Description | Default | Example |\n");
         description.append("|-----------|-------------|---------|----------|\n");
         description.append("| page | Page number (0-based) | 0 | page=1 |\n");
@@ -100,7 +100,7 @@ public class DescriptionGenerator {
     }
 
     private static void appendExamples(Class<?> dtoClass, StringBuilder description, String pattern) {
-        description.append("### 🔍 Examples\n\n");
+        description.append("### Examples\n\n");
         description.append("| Type | Link |\n");
         description.append("|------|------|\n");
 

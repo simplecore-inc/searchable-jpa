@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * This test demonstrates the performance characteristics of optimized ROW_NUMBER() pagination
  * with SQL Server dialect optimizations, testing 5 different page positions (0%, 25%, 50%, 75%, 100%).
  * 
- * ⚠️  MANUAL EXECUTION ONLY ⚠️
+ * ⚠ MANUAL EXECUTION ONLY ⚠
  * This test is tagged as 'performance' and excluded from regular test runs.
  * It requires large datasets and can take significant time to complete.
  * 
@@ -89,7 +89,7 @@ class PaginationPerformanceTest {
         log.info("  - Page size: {}", PAGE_SIZE);
         
         if (totalElements < PAGE_SIZE * 5) {
-            log.warn("  ⚠️  WARNING: Not enough data for meaningful performance test");
+            log.warn("  ⚠ WARNING: Not enough data for meaningful performance test");
             log.warn("  - Required: {} records", PAGE_SIZE * 5);
             log.warn("  - Available: {} records", totalElements);
             log.warn("  - Continuing with available data for testing");
@@ -139,7 +139,7 @@ class PaginationPerformanceTest {
                 performPageQuery(pageNumber);
             }
         }
-        log.info("  ✅ Warmup completed");
+        log.info("  ✔ Warmup completed");
 
         // Test performance for each page position
         Map<String, List<Long>> performanceResults = new LinkedHashMap<>();
@@ -227,13 +227,13 @@ class PaginationPerformanceTest {
         // Overall performance assessment
         log.info("STEP 8: OVERALL PERFORMANCE ASSESSMENT");
         if (maxRatio < 2.0) {
-            log.info("  ✅ EXCELLENT: Maximum slowdown is less than 2x");
+            log.info("  ✔ EXCELLENT: Maximum slowdown is less than 2x");
         } else if (maxRatio < 5.0) {
-            log.info("  ✅ GOOD: Maximum slowdown is less than 5x");
+            log.info("  ✔ GOOD: Maximum slowdown is less than 5x");
         } else if (maxRatio < 10.0) {
-            log.warn("  ⚠️  MODERATE: Maximum slowdown is {}x", String.format("%.2f", maxRatio));
+            log.warn("  ⚠ MODERATE: Maximum slowdown is {}x", String.format("%.2f", maxRatio));
         } else {
-            log.warn("  ❌ POOR: Maximum slowdown is {}x", String.format("%.2f", maxRatio));
+            log.warn("  ✖ POOR: Maximum slowdown is {}x", String.format("%.2f", maxRatio));
         }
 
         // Assertions

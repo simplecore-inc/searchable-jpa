@@ -53,7 +53,7 @@ class TwoPhaseQueryPerformanceTest {
         // Initialize test data for performance testing
         testDataManager.initializeTestData();
         
-        log.info("  ✅ Performance test data setup completed");
+        log.info("  ✔ Performance test data setup completed");
     }
 
     @Test
@@ -97,8 +97,8 @@ class TwoPhaseQueryPerformanceTest {
         assertTrue(duration < 3000, "Regular query should complete within 3 seconds, but took " + duration + " ms");
         
         log.info("SUMMARY: Regular query performance test - PASSED");
-        log.info("  ✅ Two-phase query execution verified");
-        log.info("  ✅ Performance within acceptable limits");
+        log.info("  ✔ Two-phase query execution verified");
+        log.info("  ✔ Performance within acceptable limits");
     }
 
     @Test
@@ -139,8 +139,8 @@ class TwoPhaseQueryPerformanceTest {
         assertTrue(duration < 5000, "ManyToMany query should complete within 5 seconds, but took " + duration + " ms");
         
         log.info("SUMMARY: ManyToMany query performance test - PASSED");
-        log.info("  ✅ Two-phase query execution verified");
-        log.info("  ✅ Performance within acceptable limits");
+        log.info("  ✔ Two-phase query execution verified");
+        log.info("  ✔ Performance within acceptable limits");
     }
 
     @Test
@@ -188,8 +188,8 @@ class TwoPhaseQueryPerformanceTest {
         assertTrue(duration < 8000, "Complex query should complete within 8 seconds, but took " + duration + " ms");
         
         log.info("SUMMARY: Complex multi-relationship query performance test - PASSED");
-        log.info("  ✅ Two-phase query execution verified");
-        log.info("  ✅ Performance within acceptable limits");
+        log.info("  ✔ Two-phase query execution verified");
+        log.info("  ✔ Performance within acceptable limits");
     }
 
     @Test
@@ -232,8 +232,8 @@ class TwoPhaseQueryPerformanceTest {
         assertTrue(duration < 10000, "Large page query should complete within 10 seconds, but took " + duration + " ms");
         
         log.info("SUMMARY: Large page size performance test - PASSED");
-        log.info("  ✅ Two-phase query execution verified");
-        log.info("  ✅ Performance within acceptable limits");
+        log.info("  ✔ Two-phase query execution verified");
+        log.info("  ✔ Performance within acceptable limits");
     }
 
     @Test
@@ -276,8 +276,8 @@ class TwoPhaseQueryPerformanceTest {
         assertTrue(duration < 6000, "Deep pagination query should complete within 6 seconds, but took " + duration + " ms");
         
         log.info("SUMMARY: Deep pagination performance test - PASSED");
-        log.info("  ✅ Two-phase query execution verified");
-        log.info("  ✅ Performance within acceptable limits");
+        log.info("  ✔ Two-phase query execution verified");
+        log.info("  ✔ Performance within acceptable limits");
     }
 
     @Test
@@ -323,8 +323,8 @@ class TwoPhaseQueryPerformanceTest {
         assertTrue(duration < 15000, "IN clause batching query should complete within 15 seconds, but took " + duration + " ms");
         
         log.info("SUMMARY: IN clause batching simulation performance test - PASSED");
-        log.info("  ✅ Two-phase query execution verified");
-        log.info("  ✅ IN clause batching handled efficiently");
+        log.info("  ✔ Two-phase query execution verified");
+        log.info("  ✔ IN clause batching handled efficiently");
     }
 
     @Test
@@ -378,14 +378,14 @@ class TwoPhaseQueryPerformanceTest {
         log.info("  - Average execution time: {} ms", String.format("%.2f", averageDuration));
         log.info("  - Total iterations: {}", iterations);
         log.info("  - Total elements: {}", lastResult.getTotalElements());
-        log.info("  - Results consistency: ✅ VERIFIED");
+        log.info("  - Results consistency: ✔ VERIFIED");
         
         // Performance assertion (average should be reasonable)
         assertTrue(averageDuration < 3000, "Average query time should be under 3 seconds, but was " + averageDuration + " ms");
         
         log.info("SUMMARY: Query consistency verification performance test - PASSED");
-        log.info("  ✅ Two-phase query execution verified");
-        log.info("  ✅ Query results consistency verified");
-        log.info("  ✅ Performance stability confirmed");
+        log.info("  ✔ Two-phase query execution verified");
+        log.info("  ✔ Query results consistency verified");
+        log.info("  ✔ Performance stability confirmed");
     }
 } 

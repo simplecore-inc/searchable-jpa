@@ -46,16 +46,16 @@ class AutoConfigurationDemoTest {
         log.info("");
         
         if (batchFetchSize != null) {
-            log.info("🎉 SUCCESS: Auto-configuration is working!");
+            log.info("✔ SUCCESS: Auto-configuration is working!");
             log.info("   Your application now has optimized Hibernate settings automatically.");
         } else {
-            log.info("ℹ️  Auto-configuration not detected in test environment.");
+            log.info("ℹ Auto-configuration not detected in test environment.");
             log.info("   In a real Spring Boot application with searchable-jpa starter,");
             log.info("   these settings would be automatically applied.");
         }
         
         log.info("");
-        log.info("💡 To customize these settings, add to your application.yml:");
+        log.info("ℹ To customize these settings, add to your application.yml:");
         log.info("   searchable:");
         log.info("     hibernate:");
         log.info("       default-batch-fetch-size: 150  # Custom batch size");
