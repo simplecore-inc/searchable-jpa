@@ -91,7 +91,7 @@ public class CompositeKeyPaginationTest {
         Long tenant1EmbeddedIdCount = entityManager.createQuery("SELECT COUNT(e) FROM TestCompositeKeyEntity e WHERE e.id.tenantId = 'tenant1'", Long.class).getSingleResult();
         log.info("  - tenant1 @IdClass records: {}", tenant1IdClassCount);
         log.info("  - tenant1 @EmbeddedId records: {}", tenant1EmbeddedIdCount);
-        log.info("  ✅ Test data setup completed");
+        log.info("  ✔ Test data setup completed");
     }
     
     @Test
@@ -142,7 +142,7 @@ public class CompositeKeyPaginationTest {
         assertThat(page1.getContent()).hasSize(10); // Second page: 10 records
         assertThat(page2.getContent()).hasSize(5);  // Last page: 5 records
         
-        log.info("  ✅ PAGINATION ASSERTIONS: All passed");
+        log.info("  ✔ PAGINATION ASSERTIONS: All passed");
         
         // Detailed data content verification
         log.info("STEP 6: DATA CONTENT VERIFICATION");
@@ -210,11 +210,11 @@ public class CompositeKeyPaginationTest {
         log.info("  - Duplicate check: PASSED");
         
         log.info("SUMMARY: @IdClass Composite Key Test Results");
-        log.info("  ✅ Two-Phase Query Execution: SUCCESS");
-        log.info("  ✅ Pagination (25 records → 3 pages): SUCCESS");
-        log.info("  ✅ Data Content Verification: SUCCESS");
-        log.info("  ✅ Duplicate Check: SUCCESS");
-        log.info("  ✅ Overall Result: ALL TESTS PASSED");
+        log.info("  ✔ Two-Phase Query Execution: SUCCESS");
+        log.info("  ✔ Pagination (25 records → 3 pages): SUCCESS");
+        log.info("  ✔ Data Content Verification: SUCCESS");
+        log.info("  ✔ Duplicate Check: SUCCESS");
+        log.info("  ✔ Overall Result: ALL TESTS PASSED");
     }
     
     @Test
@@ -265,7 +265,7 @@ public class CompositeKeyPaginationTest {
         assertThat(page1.getContent()).hasSize(10); // Second page: 10 records
         assertThat(page2.getContent()).hasSize(5);  // Last page: 5 records
         
-        log.info("  ✅ PAGINATION ASSERTIONS: All passed");
+        log.info("  ✔ PAGINATION ASSERTIONS: All passed");
         
         // Detailed data content verification
         log.info("STEP 6: DATA CONTENT VERIFICATION");
@@ -346,10 +346,10 @@ public class CompositeKeyPaginationTest {
         log.info("  - Duplicate check: PASSED");
         
         log.info("SUMMARY: @EmbeddedId Composite Key Test Results");
-        log.info("  ✅ Two-Phase Query Execution: SUCCESS");
-        log.info("  ✅ Pagination (25 records → 3 pages): SUCCESS");
-        log.info("  ✅ Data Content Verification: SUCCESS");
-        log.info("  ✅ Duplicate Check: SUCCESS");
-        log.info("  ✅ Overall Result: ALL TESTS PASSED");
+        log.info("  ✔ Two-Phase Query Execution: SUCCESS");
+        log.info("  ✔ Pagination (25 records → 3 pages): SUCCESS");
+        log.info("  ✔ Data Content Verification: SUCCESS");
+        log.info("  ✔ Duplicate Check: SUCCESS");
+        log.info("  ✔ Overall Result: ALL TESTS PASSED");
     }
 } 
