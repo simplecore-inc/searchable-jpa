@@ -17,6 +17,11 @@ import java.util.Set;
 
 public class OpenApiDocUtils {
 
+    private static final LocalDateTime FIXED_DATE_TIME = LocalDateTime.of(2025, 5, 1, 0, 0, 0);
+    private static final LocalDate FIXED_DATE = LocalDate.of(2025, 5, 1);
+    private static final LocalTime FIXED_TIME = LocalTime.of(0, 0, 0);
+    private static final Instant FIXED_INSTANT = FIXED_DATE_TIME.toInstant(java.time.ZoneOffset.UTC);
+
     private OpenApiDocUtils() {
         throw new IllegalStateException("Utility class");
     }
@@ -78,10 +83,10 @@ public class OpenApiDocUtils {
         if (type == Double.class || type == double.class) return 1.0;
         if (type == Float.class || type == float.class) return 1.0f;
         if (type == Boolean.class || type == boolean.class) return true;
-        if (type == LocalDateTime.class) return LocalDateTime.now();
-        if (type == LocalDate.class) return LocalDate.now();
-        if (type == LocalTime.class) return LocalTime.now();
-        if (type == Instant.class) return Instant.now();
+        if (type == LocalDateTime.class) return FIXED_DATE_TIME;
+        if (type == LocalDate.class) return FIXED_DATE;
+        if (type == LocalTime.class) return FIXED_TIME;
+        if (type == Instant.class) return FIXED_INSTANT;
         if (type.isEnum()) return type.getEnumConstants()[0];
         if (Collection.class.isAssignableFrom(type) || Set.class.isAssignableFrom(type)) {
             return getCollectionElementExampleValue(field);
