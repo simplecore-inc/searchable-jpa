@@ -1,6 +1,7 @@
 package dev.simplecore.searchable.core.utils;
 
 import dev.simplecore.searchable.core.annotation.SearchableField;
+import dev.simplecore.searchable.core.condition.SearchCondition;
 import jakarta.persistence.Id;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.metamodel.EntityType;
@@ -9,13 +10,31 @@ import jakarta.persistence.EntityManager;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class SearchableFieldUtils {
     private static final Logger log = LoggerFactory.getLogger(SearchableFieldUtils.class);
+
+    // Static caches for entity metadata to avoid repeated metamodel/reflection calls
+    private static final ConcurrentHashMap<String, String> PRIMARY_KEY_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, List<String>> COMPOSITE_KEY_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Boolean> EMBEDDED_ID_CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * Clears all static caches. Use this method in test setup when using @DirtiesContext
+     * to ensure test isolation.
+     */
+    public static void clearCache() {
+        PRIMARY_KEY_CACHE.clear();
+        COMPOSITE_KEY_CACHE.clear();
+        EMBEDDED_ID_CACHE.clear();
+        log.trace("SearchableFieldUtils caches cleared");
+    }
 
     public static String getEntityFieldFromDto(Class<?> dtoClass, String field) {
         if (dtoClass == null) {
@@ -69,19 +88,29 @@ public class SearchableFieldUtils {
     /**
      * Gets the primary key field name from the entity class.
      * This is used for cursor-based pagination to ensure unique ordering.
-     * 
+     * Results are cached per entity class to avoid repeated metamodel/reflection calls.
+     *
      * @param entityManager the entity manager
      * @param entityClass the entity class
      * @return the primary key field name, or null if not found
      */
     public static String getPrimaryKeyFieldName(EntityManager entityManager, Class<?> entityClass) {
+        String cacheKey = entityClass.getName();
+        return PRIMARY_KEY_CACHE.computeIfAbsent(cacheKey, k ->
+            computePrimaryKeyFieldName(entityManager, entityClass));
+    }
+
+    /**
+     * Internal method that computes the primary key field name without caching.
+     */
+    private static String computePrimaryKeyFieldName(EntityManager entityManager, Class<?> entityClass) {
         try {
             EntityType<?> entityType = entityManager.getMetamodel().entity(entityClass);
-            
+
             // Check if it's a single ID attribute (@EmbeddedId or simple @Id)
             if (entityType.hasSingleIdAttribute()) {
                 SingularAttribute<?, ?> idAttribute = entityType.getId(entityType.getIdType().getJavaType());
-                
+
                 // Check if this is an @EmbeddedId (composite key embedded in a single object)
                 if (isEmbeddedId(entityClass, idAttribute.getName())) {
                     log.trace("@EmbeddedId composite key detected for entity {}: using special handling", entityClass.getSimpleName());
@@ -95,7 +124,7 @@ public class SearchableFieldUtils {
                 log.trace("@IdClass composite key detected for entity {}: using special handling", entityClass.getSimpleName());
                 return handleCompositeKey(entityType, entityClass);
             }
-            
+
         } catch (Exception e) {
             log.warn("Failed to get primary key field name for entity {}: {}", entityClass.getSimpleName(), e.getMessage());
             return findIdFieldByReflection(entityClass);
@@ -103,8 +132,39 @@ public class SearchableFieldUtils {
     }
     
     /**
+     * Checks if the entity uses @EmbeddedId composite key.
+     * Results are cached per entity class to avoid repeated reflection calls.
+     *
+     * @param entityManager the entity manager
+     * @param entityClass the entity class
+     * @return true if the entity uses @EmbeddedId, false otherwise
+     */
+    public static boolean isEmbeddedIdEntity(EntityManager entityManager, Class<?> entityClass) {
+        String cacheKey = entityClass.getName();
+        return EMBEDDED_ID_CACHE.computeIfAbsent(cacheKey, k ->
+            computeIsEmbeddedIdEntity(entityManager, entityClass));
+    }
+
+    /**
+     * Internal method that computes whether entity uses @EmbeddedId without caching.
+     */
+    private static boolean computeIsEmbeddedIdEntity(EntityManager entityManager, Class<?> entityClass) {
+        try {
+            EntityType<?> entityType = entityManager.getMetamodel().entity(entityClass);
+            if (entityType.hasSingleIdAttribute()) {
+                SingularAttribute<?, ?> idAttribute = entityType.getId(entityType.getIdType().getJavaType());
+                return isEmbeddedId(entityClass, idAttribute.getName());
+            }
+            return false;
+        } catch (Exception e) {
+            log.warn("Failed to check if entity {} uses @EmbeddedId: {}", entityClass.getSimpleName(), e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Checks if the given field is an @EmbeddedId field.
-     * 
+     *
      * @param entityClass the entity class
      * @param fieldName the field name to check
      * @return true if the field is annotated with @EmbeddedId, false otherwise
@@ -172,17 +232,27 @@ public class SearchableFieldUtils {
     
     /**
      * Gets all ID field names for composite key entities (@IdClass and @EmbeddedId).
-     * 
+     * Results are cached per entity class to avoid repeated metamodel/reflection calls.
+     *
      * @param entityManager the entity manager
      * @param entityClass the entity class
      * @return list of ID field names for composite keys, empty list if single ID
      */
     public static List<String> getCompositeKeyFieldNames(EntityManager entityManager, Class<?> entityClass) {
+        String cacheKey = entityClass.getName();
+        return COMPOSITE_KEY_CACHE.computeIfAbsent(cacheKey, k ->
+            computeCompositeKeyFieldNames(entityManager, entityClass));
+    }
+
+    /**
+     * Internal method that computes composite key field names without caching.
+     */
+    private static List<String> computeCompositeKeyFieldNames(EntityManager entityManager, Class<?> entityClass) {
         List<String> idFields = new ArrayList<>();
-        
+
         try {
             EntityType<?> entityType = entityManager.getMetamodel().entity(entityClass);
-            
+
             if (!entityType.hasSingleIdAttribute()) {
                 // Get all ID attributes for @IdClass
                 Set<? extends SingularAttribute<?, ?>> idAttributes = entityType.getIdClassAttributes();
@@ -199,13 +269,13 @@ public class SearchableFieldUtils {
                     log.trace("Found @EmbeddedId composite key fields for {}: {}", entityClass.getSimpleName(), idFields);
                 }
             }
-            
+
         } catch (Exception e) {
             log.warn("Failed to get composite key fields for entity {}: {}", entityClass.getSimpleName(), e.getMessage());
             // Fallback to reflection
             idFields = findIdFieldsByReflection(entityClass);
         }
-        
+
         return idFields;
     }
     
@@ -295,5 +365,38 @@ public class SearchableFieldUtils {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * Extracts join paths from search condition nodes.
+     * This is used to determine which entity relationships need to be joined
+     * for filtering purposes.
+     *
+     * @param nodes the search condition nodes
+     * @return set of join paths (e.g., "author", "author.address")
+     */
+    public static Set<String> extractJoinPaths(List<SearchCondition.Node> nodes) {
+        Set<String> joinPaths = new HashSet<>();
+        if (nodes == null) return joinPaths;
+
+        for (SearchCondition.Node node : nodes) {
+            if (node instanceof SearchCondition.Condition) {
+                SearchCondition.Condition condition = (SearchCondition.Condition) node;
+                String entityField = condition.getEntityField();
+                if (entityField != null && entityField.contains(".")) {
+                    String[] pathParts = entityField.split("\\.");
+                    StringBuilder path = new StringBuilder();
+                    for (int i = 0; i < pathParts.length - 1; i++) {
+                        if (path.length() > 0) path.append(".");
+                        path.append(pathParts[i]);
+                        joinPaths.add(path.toString());
+                    }
+                }
+            } else if (node instanceof SearchCondition.Group) {
+                joinPaths.addAll(extractJoinPaths(node.getNodes()));
+            }
+        }
+
+        return joinPaths;
     }
 } 

@@ -4,6 +4,7 @@ import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.SearchConditionBuilder;
 import dev.simplecore.searchable.core.exception.SearchableOperationException;
 import dev.simplecore.searchable.core.utils.JsonTypeDetector;
+import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.test.config.BaseTestConfig;
 import dev.simplecore.searchable.test.dto.TestJsonFieldEntityDTO;
 import dev.simplecore.searchable.test.entity.TestJsonFieldEntity;
@@ -41,6 +42,7 @@ class JsonFieldSearchTest {
     @BeforeEach
     void setUp() {
         JsonTypeDetector.clearCache();
+        SearchableFieldUtils.clearCache();
         repository.deleteAll();
 
         Map<String, String> descriptionEn = new HashMap<>();

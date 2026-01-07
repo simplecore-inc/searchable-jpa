@@ -6,6 +6,7 @@ import dev.simplecore.searchable.core.service.specification.SearchableSpecificat
 import dev.simplecore.searchable.core.service.specification.SpecificationWithPageable;
 
 import org.modelmapper.ModelMapper;
+import org.modelmapper.convention.MatchingStrategies;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -24,6 +25,18 @@ import java.util.Optional;
 
 @NoRepositoryBean
 public class DefaultSearchableService<T, ID> implements SearchableService<T> {
+
+    // Static preconfigured ModelMapper - thread-safe when configuration is set once
+    private static final ModelMapper MODEL_MAPPER;
+    static {
+        MODEL_MAPPER = new ModelMapper();
+        MODEL_MAPPER.getConfiguration()
+                .setSkipNullEnabled(true)
+                .setFieldMatchingEnabled(true)
+                .setFieldAccessLevel(org.modelmapper.config.Configuration.AccessLevel.PRIVATE)
+                .setPropertyCondition(ctx -> ctx.getSource() != null)
+                .setMatchingStrategy(MatchingStrategies.STRICT);
+    }
 
     protected final JpaRepository<T, ID> repository;
     private final JpaSpecificationExecutor<T> specificationExecutor;
@@ -123,14 +136,8 @@ public class DefaultSearchableService<T, ID> implements SearchableService<T> {
     public long updateWithSearch(@NonNull SearchCondition<?> searchCondition, @NonNull Object updateData) {
 
         if (updateData.getClass() != entityClass) {
-            ModelMapper modelMapper = new ModelMapper();
-            modelMapper.getConfiguration()
-                    .setSkipNullEnabled(true)
-                    .setFieldMatchingEnabled(true)
-                    .setFieldAccessLevel(org.modelmapper.config.Configuration.AccessLevel.PRIVATE)
-                    .setPropertyCondition(ctx -> ctx.getSource() != null)
-                    .setMatchingStrategy(org.modelmapper.convention.MatchingStrategies.STRICT);
-            updateData = modelMapper.map(updateData, entityClass);
+            // Use static preconfigured ModelMapper for thread-safe, efficient mapping
+            updateData = MODEL_MAPPER.map(updateData, entityClass);
         }
 
         try {

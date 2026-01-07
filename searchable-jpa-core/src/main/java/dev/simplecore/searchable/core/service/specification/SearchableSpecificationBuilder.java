@@ -249,32 +249,8 @@ public class SearchableSpecificationBuilder<T> {
     }
 
     private Set<String> extractJoinPaths(List<Node> nodes) {
-        Set<String> joinPaths = new HashSet<>();
-        if (nodes == null) return joinPaths;
-
-        for (Node node : nodes) {
-            if (node instanceof SearchCondition.Condition) {
-                SearchCondition.Condition condition = (SearchCondition.Condition) node;
-                String entityField = condition.getEntityField();
-                if (entityField != null && !entityField.isEmpty()) {
-                    String[] pathParts = entityField.split("\\.");
-                    StringBuilder path = new StringBuilder();
-
-                    // Add all intermediate paths for nested joins
-                    for (int i = 0; i < pathParts.length - 1; i++) {
-                        if (path.length() > 0) {
-                            path.append(".");
-                        }
-                        path.append(pathParts[i]);
-                        joinPaths.add(path.toString());
-                    }
-                }
-            } else if (node instanceof SearchCondition.Group) {
-                joinPaths.addAll(extractJoinPaths(node.getNodes()));
-            }
-        }
-
-        return joinPaths;
+        // Delegate to shared utility for consistent behavior
+        return SearchableFieldUtils.extractJoinPaths(nodes);
     }
 
     /**

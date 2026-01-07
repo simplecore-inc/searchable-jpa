@@ -15,8 +15,6 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.*;
-import jakarta.persistence.metamodel.EntityType;
-import jakarta.persistence.metamodel.SingularAttribute;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
@@ -47,6 +45,10 @@ public class TwoPhaseQueryExecutor<T> {
     private final JpaSpecificationExecutor<T> specificationExecutor;
     private final RelationshipAnalyzer<T> relationshipAnalyzer;
     private final JoinStrategyManager<T> joinStrategyManager;
+
+    // Cached values to avoid redundant computations within same query execution
+    private Set<String> cachedJoinPaths;
+    private Boolean cachedIsEmbeddedId;
 
     public TwoPhaseQueryExecutor(SearchCondition<?> condition,
                                  EntityManager entityManager,
@@ -108,16 +110,17 @@ public class TwoPhaseQueryExecutor<T> {
      * Phase 1: Execute query to get IDs only with conditions and pagination.
      */
     private List<Object> executePhaseOneQuery(PageRequest pageRequest) {
-        Set<String> joinPaths = extractJoinPaths(condition.getNodes());
+        // Cache join paths for reuse in count query
+        this.cachedJoinPaths = extractJoinPaths(condition.getNodes());
         String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
         
         // Handle composite key entities
         if ("__COMPOSITE_KEY__".equals(primaryKeyField)) {
-            return executePhaseOneQueryWithCompositeKey(pageRequest, joinPaths);
+            return executePhaseOneQueryWithCompositeKey(pageRequest, cachedJoinPaths);
         }
 
         // Use regular query for single primary key
-        return executeRegularPhaseOneQuery(pageRequest, joinPaths, primaryKeyField);
+        return executeRegularPhaseOneQuery(pageRequest, cachedJoinPaths, primaryKeyField);
     }
 
     /**
@@ -293,8 +296,9 @@ public class TwoPhaseQueryExecutor<T> {
      * Phase 3: Execute count query to get total number of records.
      */
     private long executeCountQuery() {
-        Set<String> joinPaths = extractJoinPaths(condition.getNodes());
-        
+        // Reuse cached join paths from Phase 1 if available, otherwise compute
+        Set<String> joinPaths = (cachedJoinPaths != null) ? cachedJoinPaths : extractJoinPaths(condition.getNodes());
+
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
         Root<T> root = countQuery.from(entityClass);
@@ -601,16 +605,17 @@ public class TwoPhaseQueryExecutor<T> {
 
     /**
      * Reorder entities to match ID order from phase 1.
+     * Optimized with pre-allocated collections and pre-computed keys.
      */
     private List<T> reorderEntitiesByIds(List<T> entities, List<Object> orderedIds) {
-        Map<String, T> entityMap = new HashMap<>();
+        // Pre-allocate HashMap with expected capacity to avoid resizing
+        Map<String, T> entityMap = new HashMap<>(entities.size());
 
         for (T entity : entities) {
             try {
                 Object id = getEntityId(entity);
                 if (id != null) {
-                    String keyStr = createComparableKey(id);
-                    entityMap.put(keyStr, entity);
+                    entityMap.put(createComparableKey(id), entity);
                 }
             } catch (Exception e) {
                 log.warn("Failed to get entity ID for reordering: {}", e.getMessage());
@@ -618,17 +623,17 @@ public class TwoPhaseQueryExecutor<T> {
             }
         }
 
-        List<T> reorderedEntities = new ArrayList<>();
+        // Pre-allocate ArrayList with expected capacity
+        List<T> reorderedEntities = new ArrayList<>(orderedIds.size());
         for (Object orderedId : orderedIds) {
-            String keyStr = createComparableKey(orderedId);
-            T entity = entityMap.get(keyStr);
+            T entity = entityMap.get(createComparableKey(orderedId));
             if (entity != null) {
                 reorderedEntities.add(entity);
             } else {
-                log.warn("No entity found for ordered key: {}", keyStr);
+                log.trace("No entity found for ordered key: {}", orderedId);
             }
         }
-        
+
         log.trace("Reordered {} entities out of {} ordered IDs", reorderedEntities.size(), orderedIds.size());
         return reorderedEntities;
     }
@@ -736,28 +741,8 @@ public class TwoPhaseQueryExecutor<T> {
     }
 
     private Set<String> extractJoinPaths(List<SearchCondition.Node> nodes) {
-        Set<String> joinPaths = new HashSet<>();
-        if (nodes == null) return joinPaths;
-
-        for (SearchCondition.Node node : nodes) {
-            if (node instanceof SearchCondition.Condition) {
-                SearchCondition.Condition condition = (SearchCondition.Condition) node;
-                String entityField = condition.getEntityField();
-                if (entityField != null && entityField.contains(".")) {
-                    String[] pathParts = entityField.split("\\.");
-                    StringBuilder path = new StringBuilder();
-                    for (int i = 0; i < pathParts.length - 1; i++) {
-                        if (path.length() > 0) path.append(".");
-                        path.append(pathParts[i]);
-                        joinPaths.add(path.toString());
-                    }
-                }
-            } else if (node instanceof SearchCondition.Group) {
-                joinPaths.addAll(extractJoinPaths(node.getNodes()));
-            }
-        }
-
-        return joinPaths;
+        // Delegate to shared utility for consistent behavior
+        return SearchableFieldUtils.extractJoinPaths(nodes);
     }
 
     private Predicate createPredicates(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
@@ -793,25 +778,15 @@ public class TwoPhaseQueryExecutor<T> {
     
     /**
      * Checks if the entity uses @EmbeddedId composite key.
+     * Uses instance-level caching and delegates to SearchableFieldUtils for static caching.
      */
     private boolean isEmbeddedIdEntity() {
-        try {
-            EntityType<?> entityType = entityManager.getMetamodel().entity(entityClass);
-            if (entityType.hasSingleIdAttribute()) {
-                SingularAttribute<?, ?> idAttribute = entityType.getId(entityType.getIdType().getJavaType());
-                // Use reflection to check for @EmbeddedId annotation
-                try {
-                    Field field = entityClass.getDeclaredField(idAttribute.getName());
-                    return field.isAnnotationPresent(jakarta.persistence.EmbeddedId.class);
-                } catch (NoSuchFieldException e) {
-                    return false;
-                }
-            }
-            return false;
-        } catch (Exception e) {
-            log.warn("Failed to check if entity {} uses @EmbeddedId: {}", entityClass.getSimpleName(), e.getMessage());
-            return false;
+        if (cachedIsEmbeddedId != null) {
+            return cachedIsEmbeddedId;
         }
+        // Delegate to SearchableFieldUtils which has static caching
+        cachedIsEmbeddedId = SearchableFieldUtils.isEmbeddedIdEntity(entityManager, entityClass);
+        return cachedIsEmbeddedId;
     }
 
     /**

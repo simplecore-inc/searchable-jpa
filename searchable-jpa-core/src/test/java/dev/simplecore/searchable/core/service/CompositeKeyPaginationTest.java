@@ -2,6 +2,7 @@ package dev.simplecore.searchable.core.service;
 
 import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
+import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.test.config.BaseTestConfig;
 import dev.simplecore.searchable.test.entity.TestIdClassEntity;
 import dev.simplecore.searchable.test.entity.TestCompositeKeyEntity;
@@ -42,8 +43,11 @@ public class CompositeKeyPaginationTest {
     @BeforeEach
     @Transactional
     void setupTestData() {
+        // Clear caches to ensure test isolation with @DirtiesContext
+        SearchableFieldUtils.clearCache();
+
         log.info("=== STEP 1: SETTING UP COMPOSITE KEY TEST DATA ===");
-        
+
         // Clean existing data
         entityManager.createNativeQuery("DELETE FROM test_id_class_entity").executeUpdate();
         entityManager.createNativeQuery("DELETE FROM test_composite_key_entity").executeUpdate();

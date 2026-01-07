@@ -1,5 +1,6 @@
 package dev.simplecore.searchable.core.service;
 
+import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.test.config.BaseTestConfig;
 import dev.simplecore.searchable.test.config.TestConfig;
 import dev.simplecore.searchable.test.entity.TestIdClassEntity;
@@ -30,6 +31,9 @@ public class SimpleCompositeKeyTest {
     @BeforeEach
     @Transactional
     void setupTestData() {
+        // Clear caches to ensure test isolation with @DirtiesContext
+        SearchableFieldUtils.clearCache();
+
         // Clean existing data (ignore if table doesn't exist)
         try {
             entityManager.createNativeQuery("DELETE FROM test_id_class_entity").executeUpdate();
