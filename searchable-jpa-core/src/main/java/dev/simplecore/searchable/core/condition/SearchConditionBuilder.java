@@ -184,16 +184,18 @@ public class SearchConditionBuilder<D> {
         if (builder.getGroups().isEmpty()) {
             for (SearchCondition.Node node : builder.getConditions()) {
                 SearchCondition.Condition condition = (SearchCondition.Condition) node;
-                condition.setOperator(LogicalOperator.AND);
+                // Only set AND if operator is null (preserve orXXX() operators)
+                if (condition.getOperator() == null) {
+                    condition.setOperator(LogicalOperator.AND);
+                }
                 this.condition.getNodes().add(condition);
             }
         } else {
-            // Add as a group only if there are groups
-            for (SearchCondition.Node node : builder.getGroups()) {
-                SearchCondition.Group group = (SearchCondition.Group) node;
-                group.setOperator(LogicalOperator.AND);
-                this.condition.getNodes().add(group);
-            }
+            // When groups exist, combine both conditions and groups into a single group
+            List<SearchCondition.Node> nodes = new ArrayList<>();
+            nodes.addAll(builder.getConditions());
+            nodes.addAll(builder.getGroups());
+            this.condition.getNodes().add(new SearchCondition.Group(LogicalOperator.AND, nodes));
         }
 
         return this;
@@ -213,16 +215,18 @@ public class SearchConditionBuilder<D> {
         if (builder.getGroups().isEmpty()) {
             for (SearchCondition.Node node : builder.getConditions()) {
                 SearchCondition.Condition condition = (SearchCondition.Condition) node;
-                condition.setOperator(LogicalOperator.OR);
+                // Only set OR if operator is null (preserve existing operators)
+                if (condition.getOperator() == null) {
+                    condition.setOperator(LogicalOperator.OR);
+                }
                 this.condition.getNodes().add(condition);
             }
         } else {
-            // Add as a group only if there are groups
-            for (SearchCondition.Node node : builder.getGroups()) {
-                SearchCondition.Group group = (SearchCondition.Group) node;
-                group.setOperator(LogicalOperator.OR);
-                this.condition.getNodes().add(group);
-            }
+            // When groups exist, combine both conditions and groups into a single group
+            List<SearchCondition.Node> nodes = new ArrayList<>();
+            nodes.addAll(builder.getConditions());
+            nodes.addAll(builder.getGroups());
+            this.condition.getNodes().add(new SearchCondition.Group(LogicalOperator.OR, nodes));
         }
 
         return this;
