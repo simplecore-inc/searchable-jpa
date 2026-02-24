@@ -59,10 +59,16 @@ bin/
 ### Mac OS ###
 .DS_Store
 *.hprof
-.cursorrules
-.cursor
 test-data
 *.log
+
+### Claude Code ###
+.claude/
+CLAUDE.md
+
+### Cursor ###
+.cursorrules
+.cursor/
 
 ### Documentation Build ###
 build-docs/
