@@ -19,7 +19,7 @@ public class ExampleGenerator {
 
     public String generateSimpleExample(Class<?> dtoClass) {
         try {
-            SearchCondition<?> condition = buildSearchCondition(dtoClass, true);
+            SearchCondition<?> condition = buildSimpleCondition(dtoClass);
             return condition.toJson();
         } catch (Exception e) {
             log.error("Error generating simple example: {}", e.getMessage(), e);
@@ -27,46 +27,17 @@ public class ExampleGenerator {
         }
     }
 
-    public String generateCompleteExample(Class<?> dtoClass) {
-        try {
-            SearchCondition<?> condition = buildSearchCondition(dtoClass, false);
-            return condition.toJson();
-        } catch (Exception e) {
-            log.error("Error generating complete example: {}", e.getMessage(), e);
-            return "{}";
-        }
-    }
-
-    private SearchCondition<?> buildSearchCondition(Class<?> dtoClass, boolean isSimple) {
+    private SearchCondition<?> buildSimpleCondition(Class<?> dtoClass) {
         SearchConditionBuilder<?> builder = SearchConditionBuilder.create(dtoClass);
 
         builder.where(w -> {
-            if (isSimple) {
-                Field firstField = findFirstSearchableField(dtoClass);
-                if (firstField != null) {
-                    processSearchableField(firstField, w);
-                }
-            } else {
-                for (Field field : dtoClass.getDeclaredFields()) {
-                    processSearchableField(field, w);
-                }
+            Field firstField = findFirstSearchableField(dtoClass);
+            if (firstField != null) {
+                processSearchableField(firstField, w);
             }
         });
 
-        builder.page(0).size(isSimple ? 10 : 20);
-
-        if (!isSimple) {
-            builder.sort(s -> {
-                for (Field field : dtoClass.getDeclaredFields()) {
-                    SearchableField searchableField = field.getAnnotation(SearchableField.class);
-                    if (searchableField != null && searchableField.sortable()) {
-                        s.asc(field.getName());
-                        break;
-                    }
-                }
-            });
-        }
-
+        builder.page(0).size(10);
         return builder.build();
     }
 
@@ -154,7 +125,6 @@ public class ExampleGenerator {
     private Object convertToTargetType(Object rawExampleValue, Class<?> fieldType) {
         if (rawExampleValue instanceof String) {
             String strValue = (String) rawExampleValue;
-            // Numeric types
             if (fieldType == Long.class || fieldType == long.class) {
                 return Long.parseLong(strValue);
             } else if (fieldType == Integer.class || fieldType == int.class) {
@@ -171,17 +141,11 @@ public class ExampleGenerator {
                 return new java.math.BigDecimal(strValue);
             } else if (fieldType == java.math.BigInteger.class) {
                 return new java.math.BigInteger(strValue);
-            }
-            // Boolean
-            else if (fieldType == Boolean.class || fieldType == boolean.class) {
+            } else if (fieldType == Boolean.class || fieldType == boolean.class) {
                 return Boolean.parseBoolean(strValue);
-            }
-            // Character
-            else if (fieldType == Character.class || fieldType == char.class) {
+            } else if (fieldType == Character.class || fieldType == char.class) {
                 return !strValue.isEmpty() ? strValue.charAt(0) : '\0';
-            }
-            // Date/Time types
-            else if (fieldType == java.time.LocalDateTime.class) {
+            } else if (fieldType == java.time.LocalDateTime.class) {
                 return java.time.LocalDateTime.parse(strValue);
             } else if (fieldType == java.time.LocalDate.class) {
                 return java.time.LocalDate.parse(strValue);
@@ -199,16 +163,12 @@ public class ExampleGenerator {
                 return java.sql.Date.valueOf(java.time.LocalDate.parse(strValue));
             } else if (fieldType == java.sql.Timestamp.class) {
                 return java.sql.Timestamp.valueOf(java.time.LocalDateTime.parse(strValue));
-            }
-            // UUID
-            else if (fieldType == java.util.UUID.class) {
+            } else if (fieldType == java.util.UUID.class) {
                 return java.util.UUID.fromString(strValue);
-            }
-            // Enum
-            else if (fieldType.isEnum()) {
+            } else if (fieldType.isEnum()) {
                 return Enum.valueOf((Class) fieldType, strValue);
             }
         }
         return rawExampleValue;
     }
-} 
+}

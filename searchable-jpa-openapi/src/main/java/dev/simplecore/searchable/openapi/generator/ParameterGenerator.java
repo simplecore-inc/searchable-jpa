@@ -8,16 +8,12 @@ import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 
 import java.lang.reflect.Field;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class ParameterGenerator {
-    private static final String DEFAULT_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
-    private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern(DEFAULT_DATE_FORMAT);
     private final ParameterSchemaGenerator schemaGenerator;
 
     public ParameterGenerator() {
@@ -52,14 +48,12 @@ public class ParameterGenerator {
                         fieldName,
                         OpenApiDocUtils.toCamelCase(operator.name().toLowerCase()));
 
-                // Use ParameterSchemaGenerator for schema references
                 Schema<?> schema = schemaGenerator.createFieldParameterSchema(field, operator);
-                Object example = OpenApiDocUtils.getExampleValue(field, operator);
 
                 Parameter parameter = new Parameter()
                         .name(paramName)
                         .in("query")
-                        .description(getOperatorDescription(fieldDescription, operator, example))
+                        .description(getOperatorDescription(fieldDescription, operator))
                         .schema(schema)
                         .required(false);
 
@@ -107,56 +101,13 @@ public class ParameterGenerator {
         }
     }
 
-    // These methods are no longer needed as we use ParameterSchemaGenerator
-    // Keep them for backward compatibility if needed, but marked as deprecated
-    @Deprecated
-    private Schema<?> createFieldSchema(Field field, SearchOperator op) {
-        // Delegate to ParameterSchemaGenerator
-        return schemaGenerator.createFieldParameterSchema(field, op);
-    }
-
-    @Deprecated
-    private void setFieldTypeSchema(Schema<?> schema, Class<?> fieldType) {
-        // This method is no longer used as schema generation is handled by ParameterSchemaGenerator
-        // Keep empty for backward compatibility
-    }
-
     private String getFieldDescription(Field field) {
         io.swagger.v3.oas.annotations.media.Schema schema = field
                 .getAnnotation(io.swagger.v3.oas.annotations.media.Schema.class);
         return schema != null && !schema.description().isEmpty() ? schema.description() : field.getName();
     }
 
-    private String getOperatorDescription(String fieldDescription, SearchOperator operator, Object example) {
-        String desc = String.format("%s %s", fieldDescription, OpenApiDocUtils.getOperationDescription(operator));
-        if (example != null) {
-            String formattedExample = formatExample(example, operator);
-            desc += String.format(" (e.g., %s)", formattedExample);
-        }
-        return desc;
-    }
-
-    private String formatExample(Object example, SearchOperator operator) {
-        if (example == null) return null;
-        if (example instanceof LocalDateTime) {
-            return ((LocalDateTime) example).format(dateFormatter);
-        }
-        if (example instanceof List<?> values) {
-            if (operator == SearchOperator.BETWEEN && values.size() >= 2) {
-                return values.stream()
-                        .limit(2)
-                        .map(v -> v instanceof LocalDateTime ?
-                                ((LocalDateTime) v).format(dateFormatter) :
-                                String.valueOf(v))
-                        .collect(Collectors.joining(","));
-            }
-            if (operator == SearchOperator.IN || operator == SearchOperator.NOT_IN) {
-                return values.stream()
-                        .limit(2)
-                        .map(String::valueOf)
-                        .collect(Collectors.joining(","));
-            }
-        }
-        return String.valueOf(example);
+    private String getOperatorDescription(String fieldDescription, SearchOperator operator) {
+        return String.format("%s - %s", fieldDescription, OpenApiDocUtils.getOperationDescription(operator));
     }
 } 
