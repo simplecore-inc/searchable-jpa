@@ -59,7 +59,7 @@ public class RelationshipAnalyzer<T> {
                 log.warn("Failed to detect nested ToOne relationships, continuing without them: {}", e.getMessage());
             }
 
-            log.info("DetectCommonToOneFields: Detected {} ToOne relationships for automatic fetch joining: {}",
+            log.trace("DetectCommonToOneFields: Detected {} ToOne relationships for automatic fetch joining: {}",
                     commonFields.size(), commonFields);
 
         } catch (Exception e) {
@@ -75,7 +75,7 @@ public class RelationshipAnalyzer<T> {
                 }
             }
 
-            log.info("DetectCommonToOneFields: Reflection fallback detected {} ToOne relationships: {}",
+            log.trace("DetectCommonToOneFields: Reflection fallback detected {} ToOne relationships: {}",
                     commonFields.size(), commonFields);
         }
 
@@ -137,7 +137,7 @@ public class RelationshipAnalyzer<T> {
             });
 
             if (!nestedToOneFields.isEmpty()) {
-                log.info("DetectNestedToOneRelationships: Detected {} nested ToOne relationships: {}",
+                log.trace("DetectNestedToOneRelationships: Detected {} nested ToOne relationships: {}",
                         nestedToOneFields.size(), nestedToOneFields);
             }
 
@@ -208,7 +208,7 @@ public class RelationshipAnalyzer<T> {
             });
 
             if (!manyToManyFields.isEmpty()) {
-                log.info("DetectManyToManyFields: Detected {} ManyToMany relationships: {}",
+                log.trace("DetectManyToManyFields: Detected {} ManyToMany relationships: {}",
                         manyToManyFields.size(), manyToManyFields);
             }
 
@@ -224,7 +224,7 @@ public class RelationshipAnalyzer<T> {
                 }
             }
 
-            log.info("DetectManyToManyFields: Reflection fallback detected {} ManyToMany relationships: {}",
+            log.trace("DetectManyToManyFields: Reflection fallback detected {} ManyToMany relationships: {}",
                     manyToManyFields.size(), manyToManyFields);
         }
 

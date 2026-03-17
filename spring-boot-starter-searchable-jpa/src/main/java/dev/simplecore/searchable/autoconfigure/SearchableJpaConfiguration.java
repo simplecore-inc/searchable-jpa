@@ -34,7 +34,7 @@ public class SearchableJpaConfiguration {
     public SearchableJpaConfiguration(SearchableProperties searchableProperties, ConfigurableEnvironment environment) {
         this.searchableProperties = searchableProperties;
         this.environment = environment;
-        log.info("SearchableJpaConfiguration is being initialized");
+        log.trace("SearchableJpaConfiguration is being initialized");
     }
 
     @PostConstruct
@@ -45,7 +45,7 @@ public class SearchableJpaConfiguration {
             return;
         }
 
-        log.info("Configuring automatic Hibernate optimizations for searchable-jpa...");
+        log.trace("Configuring automatic Hibernate optimizations for searchable-jpa...");
         
         SearchableProperties.HibernateProperties hibernateProps = searchableProperties.getHibernate();
         
@@ -82,13 +82,13 @@ public class SearchableJpaConfiguration {
         // Add with high priority (but after command line arguments)
         propertySources.addAfter("systemProperties", searchableHibernateProperties);
         
-        log.info("Applied Hibernate optimizations:");
-        log.info("  - default_batch_fetch_size: {}", hibernateProps.getDefaultBatchFetchSize());
-        log.info("  - jdbc.batch_size: {}", hibernateProps.getJdbcBatchSize());
-        log.info("  - order_inserts: {}", hibernateProps.isOrderInserts());
-        log.info("  - order_updates: {}", hibernateProps.isOrderUpdates());
-        log.info("  - in_clause_parameter_padding: {}", hibernateProps.isInClauseParameterPadding());
-        log.info("These settings help prevent N+1 problems and improve performance automatically.");
-        log.info("To disable auto-optimization, set: searchable.hibernate.auto-optimization=false");
+        log.trace("Applied Hibernate optimizations:");
+        log.trace("  - default_batch_fetch_size: {}", hibernateProps.getDefaultBatchFetchSize());
+        log.trace("  - jdbc.batch_size: {}", hibernateProps.getJdbcBatchSize());
+        log.trace("  - order_inserts: {}", hibernateProps.isOrderInserts());
+        log.trace("  - order_updates: {}", hibernateProps.isOrderUpdates());
+        log.trace("  - in_clause_parameter_padding: {}", hibernateProps.isInClauseParameterPadding());
+        log.trace("These settings help prevent N+1 problems and improve performance automatically.");
+        log.trace("To disable auto-optimization, set: searchable.hibernate.auto-optimization=false");
     }
 } 

@@ -160,7 +160,7 @@ public class JoinStrategyManager<T> {
             try {
                 log.trace("ApplySmartFetchJoins: Attempting fetch join for ToOne path: {}", path);
                 root.fetch(path, JoinType.LEFT);
-                log.info("ApplySmartFetchJoins: Successfully applied fetch join for ToOne: {}", path);
+                log.trace("ApplySmartFetchJoins: Successfully applied fetch join for ToOne: {}", path);
             } catch (Exception e) {
                 log.warn("ApplySmartFetchJoins: Fetch join failed for path '{}', using regular join as fallback: {}", path, e.getMessage());
                 // If fetch join fails, use regular join as fallback
@@ -180,7 +180,7 @@ public class JoinStrategyManager<T> {
             log.trace("ApplySmartFetchJoins: Single ToMany path, applying fetch join: {}", toManyPath);
             try {
                 root.fetch(toManyPath, JoinType.LEFT);
-                log.info("ApplySmartFetchJoins: Successfully applied fetch join for single ToMany: {}", toManyPath);
+                log.trace("ApplySmartFetchJoins: Successfully applied fetch join for single ToMany: {}", toManyPath);
             } catch (Exception e) {
                 log.warn("ApplySmartFetchJoins: Fetch join failed for ToMany '{}', using regular join: {}", toManyPath, e.getMessage());
                 root.join(toManyPath, JoinType.LEFT);
@@ -192,7 +192,7 @@ public class JoinStrategyManager<T> {
             if (primaryToMany != null) {
                 try {
                     root.fetch(primaryToMany, JoinType.LEFT);
-                    log.info("ApplySmartFetchJoins: Successfully applied fetch join for primary ToMany: {}", primaryToMany);
+                    log.trace("ApplySmartFetchJoins: Successfully applied fetch join for primary ToMany: {}", primaryToMany);
                 } catch (Exception e) {
                     log.warn("ApplySmartFetchJoins: Fetch join failed for primary ToMany '{}': {}", primaryToMany, e.getMessage());
                 }
@@ -212,7 +212,7 @@ public class JoinStrategyManager<T> {
             }
         }
 
-        log.info("ApplySmartFetchJoins: Completed join application - ToOne fetched: {}, ToMany fetched: {}",
+        log.trace("ApplySmartFetchJoins: Completed join application - ToOne fetched: {}, ToMany fetched: {}",
                 toOnePaths.size(), toManyPaths.isEmpty() ? 0 : 1);
     }
 

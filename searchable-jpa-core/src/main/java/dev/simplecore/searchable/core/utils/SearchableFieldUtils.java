@@ -328,7 +328,7 @@ public class SearchableFieldUtils {
             String[] commonIdFields = {"id", "uuid", "identifier"};
             for (String fieldName : commonIdFields) {
                 if (hasField(entityClass, fieldName)) {
-                    log.info("Using fallback ID field '{}' for entity {}", fieldName, entityClass.getSimpleName());
+                    log.trace("Using fallback ID field '{}' for entity {}", fieldName, entityClass.getSimpleName());
                     return fieldName;
                 }
             }

@@ -55,7 +55,7 @@ public class EntityGraphManager<T> {
                 }
             }
 
-            log.info("Created dynamic EntityGraph with {} ToOne relationship paths (excluded {} ToMany paths)",
+            log.trace("Created dynamic EntityGraph with {} ToOne relationship paths (excluded {} ToMany paths)",
                     toOneOnlyPaths.size(), relationshipPaths.size() - toOneOnlyPaths.size());
             return entityGraph;
 
@@ -77,7 +77,7 @@ public class EntityGraphManager<T> {
             jakarta.persistence.EntityGraph<T> entityGraph = createDynamicEntityGraph(relationshipPaths);
             if (entityGraph != null) {
                 query.setHint("jakarta.persistence.fetchgraph", entityGraph);
-                log.info("Applied dynamic EntityGraph with {} paths to query", relationshipPaths.size());
+                log.trace("Applied dynamic EntityGraph with {} paths to query", relationshipPaths.size());
             }
         } catch (Exception e) {
             log.warn("Failed to apply dynamic EntityGraph: {}", e.getMessage());

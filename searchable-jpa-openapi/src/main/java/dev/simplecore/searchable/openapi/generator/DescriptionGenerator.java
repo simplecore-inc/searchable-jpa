@@ -19,7 +19,7 @@ public class DescriptionGenerator {
     }
 
     static String generateDescription(Class<?> dtoClass) {
-        log.debug("Generating OpenAPI description for DTO class: {}", dtoClass.getSimpleName());
+        log.trace("Generating OpenAPI description for DTO class: {}", dtoClass.getSimpleName());
         StringBuilder description = new StringBuilder();
         appendSearchFieldSummary(dtoClass, description);
         return description.toString();

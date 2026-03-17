@@ -37,7 +37,7 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
         
         JavaType dtoType = type.containedType(0);
         this.dtoClass = dtoType.getRawClass();
-        log.info("Found DTO class in createContextual: {}", dtoClass.getName());
+        log.trace("Found DTO class in createContextual: {}", dtoClass.getName());
 
         try {
             JsonDeserializer<?> deserializer = ctxt.findRootValueDeserializer(
@@ -96,7 +96,7 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
 
         // Only validate if DTO class is available
         if (dtoClass != null) {
-            log.info("Using DTO class in deserializer: {}", dtoClass.getName());
+            log.trace("Using DTO class in deserializer: {}", dtoClass.getName());
             Class<Object> typedDtoClass = (Class<Object>) dtoClass;
             
             // First validate @SearchableField annotations

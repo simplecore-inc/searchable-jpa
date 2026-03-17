@@ -101,7 +101,7 @@ public class ParameterSchemaGenerator {
 
             if (resolvedSchema != null && resolvedSchema.schema != null) {
                 registeredSchemas.put(schemaName, resolvedSchema.schema);
-                log.debug("Registered enum schema as component: {}", schemaName);
+                log.trace("Registered enum schema as component: {}", schemaName);
 
                 // Return reference to the registered schema
                 return createRefSchema(schemaName);
@@ -131,7 +131,7 @@ public class ParameterSchemaGenerator {
                 new AnnotatedType(enumType).resolveAsRef(true).name(schemaName)
             );
         } catch (Exception e) {
-            log.debug("Could not register with ModelConverters: {}", e.getMessage());
+            log.trace("Could not register with ModelConverters: {}", e.getMessage());
         }
 
         // Return reference
@@ -157,7 +157,7 @@ public class ParameterSchemaGenerator {
 
             if (resolvedSchema != null && resolvedSchema.schema != null) {
                 registeredSchemas.put(schemaName, resolvedSchema.schema);
-                log.debug("Registered component schema: {}", schemaName);
+                log.trace("Registered component schema: {}", schemaName);
                 return resolvedSchema.schema;
             }
         } catch (Exception e) {
