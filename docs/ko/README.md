@@ -17,7 +17,7 @@ Spring Data JPA를 확장하여 동적 검색, 정렬, 페이지네이션 기능
 |------|------|
 | **동적 검색** | 18개 검색 연산자 지원 (EQUALS, CONTAINS, BETWEEN 등) |
 | **유연한 정렬** | 다중 필드 정렬 및 동적 정렬 조건 |
-| **고성능 페이지네이션** | 대용량 데이터셋을 위한 커서 기반 페이지네이션 |
+| **고성능 페이지네이션** | 대용량 데이터셋을 위한 2단계 쿼리 최적화 페이지네이션 |
 | **타입 안전성** | 컴파일 타임 검증과 타입 안전 빌더 패턴 |
 | **OpenAPI 통합** | Swagger 문서 자동 생성 |
 | **다양한 데이터 타입** | 문자열, 숫자, 날짜, 열거형, 중첩 객체 지원 |
@@ -152,7 +152,7 @@ Searchable JPA
 | [설치 가이드](./installation.md) | 시스템 요구사항 및 설치 안내 |
 | [기본 사용법](./basic-usage.md) | 기본 사용법과 예제 |
 | [검색 연산자](./search-operators.md) | 지원하는 모든 검색 연산자 |
-| [2단계 쿼리 최적화](./two-phase-query-optimization.md) | 고성능 커서 기반 페이지네이션 |
+| [2단계 쿼리 최적화](./two-phase-query-optimization.md) | 대용량 데이터를 위한 고성능 페이지네이션 |
 | [관계형 데이터와 2단계 쿼리](./relationship-and-two-phase-query.md) | JPA 관계 매핑과 N+1 문제 해결 |
 | [고급 기능](./advanced-features.md) | 복잡한 검색 조건과 고급 기능 |
 | [OpenAPI 통합](./openapi-integration.md) | Swagger 문서 자동 생성 |

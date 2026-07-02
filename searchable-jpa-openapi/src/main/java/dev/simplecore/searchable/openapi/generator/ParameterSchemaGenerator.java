@@ -52,11 +52,11 @@ public class ParameterSchemaGenerator {
         }
 
         if (operator == SearchOperator.IN || operator == SearchOperator.NOT_IN) {
-            return createCommaSeparatedSchema("Enter multiple values separated by comma");
+            return createMultiValueSchema("Enter multiple values separated by comma", fieldType);
         }
 
-        if (operator == SearchOperator.BETWEEN) {
-            return createCommaSeparatedSchema("Enter two values separated by comma");
+        if (operator == SearchOperator.BETWEEN || operator == SearchOperator.NOT_BETWEEN) {
+            return createMultiValueSchema("Enter two values separated by comma", fieldType);
         }
 
         // For enum types, register as component and return reference
@@ -190,6 +190,13 @@ public class ParameterSchemaGenerator {
     private Schema<?> createInlineSchema(Class<?> fieldType, Type genericType) {
         Schema<?> schema = new Schema<>();
 
+        // Handle array types (e.g. String[]) before anything that might dereference getPackage().
+        if (fieldType.isArray()) {
+            schema.type("array");
+            schema.items(createSchemaForType(fieldType.getComponentType()));
+            return schema;
+        }
+
         // Handle Map types
         if (java.util.Map.class.isAssignableFrom(fieldType)) {
             schema.type("object");
@@ -285,12 +292,20 @@ public class ParameterSchemaGenerator {
     }
 
     /**
-     * Creates a comma-separated string schema.
+     * Creates a comma-separated string schema used for multi-value operators (IN/NOT_IN/BETWEEN).
+     * When the field is an enum, the allowed enum values are attached so the documentation still
+     * lists them even though the input is entered as a comma-separated string.
      */
-    private Schema<?> createCommaSeparatedSchema(String description) {
-        Schema<?> schema = new Schema<>();
+    private Schema<?> createMultiValueSchema(String description, Class<?> fieldType) {
+        Schema<String> schema = new Schema<>();
         schema.type("string");
         schema.description(description);
+        if (fieldType.isEnum()) {
+            List<String> enumValues = Arrays.stream(fieldType.getEnumConstants())
+                    .map(e -> ((Enum<?>) e).name())
+                    .collect(Collectors.toList());
+            schema.setEnum(enumValues);
+        }
         return schema;
     }
 
@@ -298,6 +313,12 @@ public class ParameterSchemaGenerator {
      * Determines if a type should be registered as a component schema.
      */
     private boolean shouldRegisterAsComponent(Class<?> type) {
+        // Arrays, primitives, and types without a package (e.g. arrays) are never components.
+        // Class.getPackage() is null for array types, so this guard also prevents a NullPointerException.
+        if (type.isArray() || type.isPrimitive() || type.getPackage() == null) {
+            return false;
+        }
+
         // Don't register Java collections and maps as components
         if (java.util.Map.class.isAssignableFrom(type) ||
             java.util.Collection.class.isAssignableFrom(type) ||
@@ -308,8 +329,7 @@ public class ParameterSchemaGenerator {
 
         // Register enums and custom domain types as components
         return type.isEnum() ||
-               (!type.isPrimitive() &&
-                !type.getPackage().getName().startsWith("java.") &&
+               (!type.getPackage().getName().startsWith("java.") &&
                 !type.getPackage().getName().startsWith("javax.") &&
                 !type.getPackage().getName().startsWith("jakarta."));
     }

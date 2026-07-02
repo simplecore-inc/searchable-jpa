@@ -32,6 +32,11 @@ public class TestAuthor extends AuditingBaseEntity<Long> {
     @Column
     private String description;
 
+    // Self-referencing ToOne relationship, enabling multi-level ToOne chains (e.g. author.manager.name).
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manager_id")
+    private TestAuthor manager;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 

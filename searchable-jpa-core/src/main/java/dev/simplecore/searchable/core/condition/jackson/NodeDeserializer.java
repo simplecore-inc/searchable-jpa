@@ -47,23 +47,25 @@ public class NodeDeserializer extends JsonDeserializer<Node> {
         List<Node> nodes = new ArrayList<>();
 
         JsonNode conditions = node.get("conditions");
-        if (conditions.isArray()) {
-            for (JsonNode condition : conditions) {
-                Node deserializedNode = condition.has("conditions") ? 
-                    mapper.treeToValue(condition, Group.class) : 
+        if (!conditions.isArray()) {
+            throw new SearchableValidationException(
+                    MessageUtils.getMessage("search.condition.conditions.not.array"));
+        }
+        for (JsonNode condition : conditions) {
+            Node deserializedNode = condition.has("conditions") ?
+                    mapper.treeToValue(condition, Group.class) :
                     mapper.treeToValue(condition, Condition.class);
-                
-                if (deserializedNode instanceof Group) {
-                    Group group = (Group) deserializedNode;
-                    if (group.getNodes().size() == 1 ||
-                            group.getNodes().stream().allMatch(n -> Objects.equals(n.getOperator(), group.getOperator()))) {
-                        nodes.addAll(group.getNodes());
-                    } else {
-                        nodes.add(group);
-                    }
+
+            if (deserializedNode instanceof Group) {
+                Group group = (Group) deserializedNode;
+                if (group.getNodes().size() == 1 ||
+                        group.getNodes().stream().allMatch(n -> Objects.equals(n.getOperator(), group.getOperator()))) {
+                    nodes.addAll(group.getNodes());
                 } else {
-                    nodes.add(deserializedNode);
+                    nodes.add(group);
                 }
+            } else {
+                nodes.add(deserializedNode);
             }
         }
 
@@ -71,29 +73,56 @@ public class NodeDeserializer extends JsonDeserializer<Node> {
     }
 
     private Node deserializeCondition(JsonNode node) {
-        LogicalOperator operator = node.has("operator") ?
-                LogicalOperator.valueOf(node.get("operator").asText().toUpperCase()) : null;
+        if (!node.has("field") || node.get("field").isNull()) {
+            throw new SearchableValidationException(MessageUtils.getMessage("search.condition.field.required"));
+        }
+        if (!node.has("searchOperator") || node.get("searchOperator").isNull()) {
+            throw new SearchableValidationException(MessageUtils.getMessage("search.condition.operator.required"));
+        }
+
+        // Use the null-safe fromName() (like group parsing) and reject an explicitly-provided
+        // but unknown logical operator with a proper validation exception.
+        LogicalOperator operator = null;
+        if (node.has("operator") && !node.get("operator").isNull()) {
+            String operatorText = node.get("operator").asText();
+            operator = LogicalOperator.fromName(operatorText);
+            if (operator == null) {
+                throw new SearchableValidationException(
+                        MessageUtils.getMessage("search.condition.operator.invalid", new Object[]{operatorText}));
+            }
+        }
 
         String field = node.get("field").asText();
         SearchOperator searchOperator = SearchOperator.fromName(node.get("searchOperator").asText());
         String entityField = node.has("entityField") ? node.get("entityField").asText() : null;
 
         if (searchOperator == null) {
-            throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.supported", 
+            throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.supported",
                 new Object[]{node.get("searchOperator").asText()}));
         }
 
-        JsonNode valueNode = node.get("value");
-        Object value = getNodeValue(valueNode);
-
-        JsonNode value2Node = node.has("value2") ? node.get("value2") : null;
-        Object value2 = getNodeValue(value2Node);
+        Object value = getNodeValue(node.has("value") ? node.get("value") : null);
+        Object value2 = getNodeValue(node.has("value2") ? node.get("value2") : null);
 
         return new Condition(operator, field, searchOperator, value, value2, entityField);
     }
 
     private Object getNodeValue(JsonNode node) {
-        if (node == null) return null;
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        // Preserve array values (e.g. for IN/NOT_IN) instead of collapsing them to an empty string.
+        if (node.isArray()) {
+            List<Object> values = new ArrayList<>();
+            for (JsonNode element : node) {
+                values.add(element.isNull() ? null : element.asText());
+            }
+            return values;
+        }
+        // Preserve object values as their JSON text rather than an empty string.
+        if (node.isObject()) {
+            return node.toString();
+        }
         return node.asText();
     }
 

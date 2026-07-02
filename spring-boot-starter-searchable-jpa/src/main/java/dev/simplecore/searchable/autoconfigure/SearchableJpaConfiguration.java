@@ -5,7 +5,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -37,8 +36,9 @@ public class SearchableJpaConfiguration {
         log.trace("SearchableJpaConfiguration is being initialized");
     }
 
+    // Note: @Conditional-style annotations are only evaluated for @Bean/@Configuration processing and
+    // have no effect on a @PostConstruct method, so the auto-optimization gate is the manual check below.
     @PostConstruct
-    @ConditionalOnProperty(name = "searchable.hibernate.auto-optimization", havingValue = "true", matchIfMissing = true)
     public void configureHibernateOptimizations() {
         if (!searchableProperties.getHibernate().isAutoOptimization()) {
             log.info("Searchable Hibernate auto-optimization is disabled");
@@ -78,9 +78,10 @@ public class SearchableJpaConfiguration {
         MutablePropertySources propertySources = environment.getPropertySources();
         MapPropertySource searchableHibernateProperties = new MapPropertySource(
                 "searchableHibernateOptimizations", hibernateOptimizations);
-        
-        // Add with high priority (but after command line arguments)
-        propertySources.addAfter("systemProperties", searchableHibernateProperties);
+
+        // Register as the lowest-priority source so these are defaults only: any user configuration
+        // (application.yml/properties, system properties, environment) overrides them.
+        propertySources.addLast(searchableHibernateProperties);
         
         log.trace("Applied Hibernate optimizations:");
         log.trace("  - default_batch_fetch_size: {}", hibernateProps.getDefaultBatchFetchSize());

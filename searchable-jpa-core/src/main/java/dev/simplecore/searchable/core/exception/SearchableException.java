@@ -8,7 +8,10 @@ package dev.simplecore.searchable.core.exception;
  * <p>Specific subclasses include:
  * <ul>
  *   <li>{@link SearchableConfigurationException} - For configuration-related errors</li>
- *   <li>Other specialized exceptions for different error scenarios</li>
+ *   <li>{@link SearchableValidationException} - For search condition validation errors</li>
+ *   <li>{@link SearchableOperationException} - For predicate/query execution errors</li>
+ *   <li>{@link SearchableJoinException} - For join resolution errors</li>
+ *   <li>{@link SearchableParseException} - For parameter/value parsing errors</li>
  * </ul>
  *
  * <p>Example usage:

@@ -286,54 +286,6 @@ public class RelationshipAnalyzer<T> {
     }
 
     /**
-     * Validates if a nested path is safe for JOIN operations.
-     * Checks for valid entity relationships and prevents circular references.
-     */
-    public boolean isNestedPathSafeForJoin(Root<T> root, String nestedPath) {
-        if (nestedPath == null || nestedPath.trim().isEmpty()) {
-            return false;
-        }
-
-        try {
-            String[] pathParts = nestedPath.split("\\.");
-            if (pathParts.length > 3) {
-                // Limit nesting depth to prevent performance issues
-                log.trace("Nested path '{}' exceeds maximum depth (3), skipping for safety", nestedPath);
-                return false;
-            }
-
-            Class<?> currentType = root.getJavaType();
-
-            for (String part : pathParts) {
-                EntityType<?> entityType = entityManager.getMetamodel().entity(currentType);
-                Attribute<?, ?> attribute = entityType.getAttribute(part);
-
-                // Only allow ToOne relationships in nested paths for safety
-                if (attribute.getPersistentAttributeType() != Attribute.PersistentAttributeType.MANY_TO_ONE &&
-                        attribute.getPersistentAttributeType() != Attribute.PersistentAttributeType.ONE_TO_ONE) {
-                    log.trace("Nested path '{}' contains ToMany relationship at '{}', not safe for fetch join", nestedPath, part);
-                    return false;
-                }
-
-                currentType = attribute.getJavaType();
-
-                // Prevent circular references
-                if (currentType.equals(root.getJavaType())) {
-                    log.trace("Nested path '{}' contains circular reference, not safe for fetch join", nestedPath);
-                    return false;
-                }
-            }
-
-            log.trace("Nested path '{}' passed safety validation", nestedPath);
-            return true;
-
-        } catch (Exception e) {
-            log.trace("Safety validation failed for nested path '{}': {}", nestedPath, e.getMessage());
-            return false;
-        }
-    }
-
-    /**
      * Validates if a path exists and is accessible in the entity metamodel.
      * This prevents "Unable to locate Attribute" errors during JOIN operations.
      */

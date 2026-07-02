@@ -2,11 +2,18 @@ package dev.simplecore.searchable.properties;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 
 @Data
+@Validated
 @ConfigurationProperties(prefix = "searchable")
 public class SearchableProperties {
     private SwaggerProperties swagger = new SwaggerProperties();
+
+    @Valid
     private HibernateProperties hibernate = new HibernateProperties();
 
     @Data
@@ -26,11 +33,13 @@ public class SearchableProperties {
          * Default batch fetch size for lazy loading.
          * This helps prevent N+1 problems by fetching related entities in batches.
          */
+        @Min(1)
         private int defaultBatchFetchSize = 100;
-        
+
         /**
          * JDBC batch size for bulk operations.
          */
+        @Min(1)
         private int jdbcBatchSize = 1000;
         
         /**

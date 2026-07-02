@@ -50,8 +50,9 @@ public class OpenApiDocUtils {
     private static Object getBetweenExampleValue(Field field) {
         if (field.getType() == LocalDateTime.class) {
             List<Object> objects = new java.util.ArrayList<>();
-            objects.add(getExampleValue(field));
-            objects.add(getExampleValue(field));
+            // Two distinct bounds so the range example is meaningful (start != end).
+            objects.add(FIXED_DATE_TIME);
+            objects.add(FIXED_DATE_TIME.plusDays(7));
             return objects;
         }
         List<Integer> integers = new java.util.ArrayList<>();

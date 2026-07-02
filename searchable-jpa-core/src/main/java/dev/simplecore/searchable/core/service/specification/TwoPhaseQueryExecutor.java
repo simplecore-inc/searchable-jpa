@@ -1,8 +1,8 @@
 package dev.simplecore.searchable.core.service.specification;
 
 import dev.simplecore.searchable.core.condition.SearchCondition;
+import dev.simplecore.searchable.core.exception.SearchableOperationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
-import dev.simplecore.searchable.core.service.join.JoinManager;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -14,41 +14,50 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
-import jakarta.persistence.criteria.*;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.*;
-import java.util.stream.Collectors;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Order;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Selection;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Executes two-phase queries for ToMany relationship optimization.
- * 
- * Phase 1: Query IDs only with conditions and pagination
- * Phase 2: Query full entities using IN clause with the retrieved IDs
- * 
- * Features:
- * - Automatic IN clause batching to prevent database limitations
- * - Memory-efficient processing for large result sets
- * - Count query elimination for improved performance
+ *
+ * <p>Phase 1: query the matching IDs only, with conditions, sorting, and pagination.
+ * <br>Phase 2: query the full entities using batched IN clauses with fetch joins.
+ * <br>Phase 3: compute the total count for accurate pagination.
+ *
+ * <p>Composite-key entities ({@code @IdClass} / {@code @EmbeddedId}) are delegated to
+ * {@link CompositeKeyQueryExecutor}. Single primary-key handling lives here.
  */
 @Slf4j
 public class TwoPhaseQueryExecutor<T> {
-    
-    // Maximum number of IDs in a single IN clause to prevent database limitations
-    // Oracle has 1000 limit, so we use 500 for safety margin
+
+    // Maximum number of IDs in a single IN clause to prevent database limitations.
+    // Oracle has a 1000 limit, so we use 500 for a safety margin.
     private static final int MAX_IN_CLAUSE_SIZE = 500;
-    
+
     private final SearchCondition<?> condition;
     private final EntityManager entityManager;
     private final Class<T> entityClass;
     private final JpaSpecificationExecutor<T> specificationExecutor;
-    private final RelationshipAnalyzer<T> relationshipAnalyzer;
     private final JoinStrategyManager<T> joinStrategyManager;
 
-    // Cached values to avoid redundant computations within same query execution
+    // Cached join paths for reuse between Phase 1 and the count query within the same execution.
     private Set<String> cachedJoinPaths;
-    private Boolean cachedIsEmbeddedId;
+    // Lazily created only for composite-key entities.
+    private CompositeKeyQueryExecutor<T> compositeKeyExecutor;
 
     public TwoPhaseQueryExecutor(SearchCondition<?> condition,
                                  EntityManager entityManager,
@@ -58,774 +67,264 @@ public class TwoPhaseQueryExecutor<T> {
         this.entityManager = entityManager;
         this.entityClass = entityClass;
         this.specificationExecutor = specificationExecutor;
-        this.relationshipAnalyzer = new RelationshipAnalyzer<>(entityManager, entityClass);
         this.joinStrategyManager = new JoinStrategyManager<>(entityManager, entityClass);
     }
 
     /**
-     * Two-phase query optimization is now applied to ALL queries for consistent performance.
-     * This method is deprecated and will be removed in future versions.
-     * 
-     * @deprecated All queries now use two-phase optimization by default
-     */
-    @Deprecated
-    public boolean shouldUseTwoPhaseQuery(Set<String> toManyPaths) {
-        return true; // Always use two-phase optimization
-    }
-
-    /**
-     * Executes optimized two-phase query with automatic IN clause batching.
-     *
-     * @deprecated Use {@link #executeWithTwoPhaseOptimization(PageRequest, Set)} instead
-     */
-    @Deprecated
-    public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest) {
-        return executeWithTwoPhaseOptimization(pageRequest, Collections.emptySet());
-    }
-
-    /**
-     * Executes optimized two-phase query with automatic IN clause batching.
+     * Executes the optimized two-phase query with automatic IN clause batching.
      *
      * @param pageRequest the pagination request
      * @param fetchFields the fields to explicitly fetch join in Phase 2
      */
     public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest, Set<String> fetchFields) {
-        // Phase 1: Get IDs only
+        this.cachedJoinPaths = extractJoinPaths();
+
+        // Phase 1: get the IDs for the requested page.
         List<Object> ids = executePhaseOneQuery(pageRequest);
 
-        if (ids.isEmpty()) {
-            return new PageImpl<>(Collections.emptyList(), pageRequest, 0);
-        }
-
-        // Phase 2: Get full entities using batched IN clauses with fetch joins
-        List<T> entities = executePhaseTwoQuery(ids, pageRequest.getSort(), fetchFields);
-
-        // Phase 3: Get total count for accurate pagination
+        // Phase 3: total count is always computed from the count query, independent of Phase 1,
+        // so an over-the-end page offset still reports the true total.
         long totalCount = executeCountQuery();
 
-        return new PageImpl<>(entities, pageRequest, totalCount);
+        // Strip the internal composite-key ordering marker before exposing the pageable to callers.
+        PageRequest responsePageRequest = sanitizePageRequest(pageRequest);
+
+        if (ids.isEmpty()) {
+            return new PageImpl<>(Collections.emptyList(), responsePageRequest, totalCount);
+        }
+
+        // Phase 2: load the full entities for the collected IDs. Ordering is restored from the
+        // Phase 1 ID order by reorderEntitiesByIds, so Phase 2 does not re-sort in the database.
+        List<T> entities = executePhaseTwoQuery(ids, fetchFields);
+        return new PageImpl<>(entities, responsePageRequest, totalCount);
     }
 
     /**
-     * Phase 1: Execute query to get IDs only with conditions and pagination.
+     * Phase 1: collect IDs for the requested page.
      */
     private List<Object> executePhaseOneQuery(PageRequest pageRequest) {
-        // Cache join paths for reuse in count query
-        this.cachedJoinPaths = extractJoinPaths(condition.getNodes());
         String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-        
-        // Handle composite key entities
-        if ("__COMPOSITE_KEY__".equals(primaryKeyField)) {
-            return executePhaseOneQueryWithCompositeKey(pageRequest, cachedJoinPaths);
+
+        if (SearchableFieldUtils.COMPOSITE_KEY_MARKER.equals(primaryKeyField)) {
+            CompositeKeyQueryExecutor<T> composite = compositeExecutor();
+            if (!composite.hasIdFields()) {
+                throw new SearchableOperationException(
+                        MessageUtils.getMessage("executor.composite.key.not.found",
+                                new Object[]{entityClass.getSimpleName()}));
+            }
+            return composite.executePhaseOne(pageRequest, cachedJoinPaths);
         }
 
-        // Use regular query for single primary key
         return executeRegularPhaseOneQuery(pageRequest, cachedJoinPaths, primaryKeyField);
     }
 
-    /**
-     * Phase 1 for composite key entities: Execute query to get composite IDs.
-     */
-    private List<Object> executePhaseOneQueryWithCompositeKey(PageRequest pageRequest, Set<String> joinPaths) {
-        List<String> idFields = SearchableFieldUtils.getCompositeKeyFieldNames(entityManager, entityClass);
-        
-        if (idFields.isEmpty()) {
-            log.warn("No composite key fields found for entity {}, falling back to regular query", entityClass.getSimpleName());
-            return executeRegularPhaseOneQuery(pageRequest, joinPaths, "id"); // fallback
+    private CompositeKeyQueryExecutor<T> compositeExecutor() {
+        if (compositeKeyExecutor == null) {
+            compositeKeyExecutor = new CompositeKeyQueryExecutor<>(
+                    condition, entityManager, entityClass, specificationExecutor, joinStrategyManager);
         }
-        
-        // Check if this is @EmbeddedId or @IdClass
-        boolean isEmbeddedId = isEmbeddedIdEntity();
-        log.trace("Composite key type for {}: {}", entityClass.getSimpleName(),
-            isEmbeddedId ? "@EmbeddedId" : "@IdClass");
-        
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Object[]> multiSelectQuery = cb.createQuery(Object[].class);
-        Root<T> root = multiSelectQuery.from(entityClass);
-        joinStrategyManager.applyRegularJoinsOnly(root, joinPaths);
-
-        // Build selection list: all ID fields + sort columns
-        List<Selection<?>> selections = new ArrayList<>();
-        for (String idField : idFields) {
-            if (isEmbeddedId) {
-                // For @EmbeddedId: root.get("id").get("fieldName")
-                selections.add(root.get("id").get(idField));
-            } else {
-                // For @IdClass: root.get("fieldName")
-                selections.add(root.get(idField));
-            }
-        }
-        
-        // Add sort columns if needed (excluding ID fields already included)
-        for (org.springframework.data.domain.Sort.Order sortOrder : pageRequest.getSort()) {
-            String sortProperty = sortOrder.getProperty();
-            // Skip __COMPOSITE_KEY__ marker and ID fields already included
-            if (!"__COMPOSITE_KEY__".equals(sortProperty) && !idFields.contains(sortProperty)) {
-                selections.add(getPath(root, sortProperty));
-            }
-        }
-        
-        multiSelectQuery.multiselect(selections).distinct(true);
-
-        // Apply search conditions
-        Predicate predicate = createPredicates(root, multiSelectQuery, cb);
-        if (predicate != null) {
-            multiSelectQuery.where(predicate);
-        }
-
-        // Apply sorting (skip __COMPOSITE_KEY__ marker)
-        if (pageRequest.getSort().isSorted()) {
-            List<Order> orders = pageRequest.getSort().stream()
-                .filter(sortOrder -> !"__COMPOSITE_KEY__".equals(sortOrder.getProperty()))
-                .map(sortOrder -> sortOrder.isAscending() 
-                    ? cb.asc(getPath(root, sortOrder.getProperty()))
-                    : cb.desc(getPath(root, sortOrder.getProperty())))
-                .collect(Collectors.toList());
-            if (!orders.isEmpty()) {
-                multiSelectQuery.orderBy(orders);
-            }
-        }
-
-        // Execute query
-        TypedQuery<Object[]> typedQuery = entityManager.createQuery(multiSelectQuery);
-        typedQuery.setFirstResult((int) pageRequest.getOffset());
-        typedQuery.setMaxResults(pageRequest.getPageSize());
-        
-        // Return composite key objects (Object[] arrays representing each composite key)
-        return typedQuery.getResultList().stream()
-                .map(row -> {
-                    // Create composite key representation
-                    if (idFields.size() == 1) {
-                        return row[0]; // Single ID field
-                    } else {
-                        // Multiple ID fields - return as array for composite key
-                        Object[] compositeKey = new Object[idFields.size()];
-                        System.arraycopy(row, 0, compositeKey, 0, idFields.size());
-                        return compositeKey;
-                    }
-                })
-                .collect(Collectors.toList());
+        return compositeKeyExecutor;
     }
-    
+
     /**
-     * Regular Phase 1 query (extracted for reuse).
+     * Phase 1 for single primary-key entities.
      */
     private List<Object> executeRegularPhaseOneQuery(PageRequest pageRequest, Set<String> joinPaths, String primaryKeyField) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        Root<T> root;
 
-        // Determine if we need to include sort columns in SELECT for SQL Server compatibility
-        boolean needsSortColumnsInSelect = pageRequest.getSort().isSorted() && 
-                                         !pageRequest.getSort().stream()
-                                                    .allMatch(order -> order.getProperty().equals(primaryKeyField));
+        boolean needsSortColumnsInSelect = pageRequest.getSort().isSorted()
+                && !pageRequest.getSort().stream().allMatch(order -> order.getProperty().equals(primaryKeyField));
 
         if (needsSortColumnsInSelect) {
-            // Use multi-select to include sort columns for SQL Server compatibility
-            CriteriaQuery<Object[]> multiSelectQuery = cb.createQuery(Object[].class);
-            root = multiSelectQuery.from(entityClass);
+            // GROUP BY the primary key with deterministic aggregates so that sorting through a
+            // to-many relationship cannot produce duplicate/missing IDs across page boundaries.
+            CriteriaQuery<Object[]> query = cb.createQuery(Object[].class);
+            Root<T> root = query.from(entityClass);
             joinStrategyManager.applyRegularJoinsOnly(root, joinPaths);
 
-            // Build selection list: ID + sort columns
             List<Selection<?>> selections = new ArrayList<>();
             selections.add(root.get(primaryKeyField));
-            
-            for (org.springframework.data.domain.Sort.Order sortOrder : pageRequest.getSort()) {
-                if (!sortOrder.getProperty().equals(primaryKeyField)) {
-                    selections.add(getPath(root, sortOrder.getProperty()));
+
+            List<Order> orders = new ArrayList<>();
+            boolean primaryKeyOrdered = false;
+            for (Sort.Order sortOrder : pageRequest.getSort()) {
+                String property = sortOrder.getProperty();
+                if (property.equals(primaryKeyField)) {
+                    orders.add(sortOrder.isAscending()
+                            ? cb.asc(root.get(primaryKeyField))
+                            : cb.desc(root.get(primaryKeyField)));
+                    primaryKeyOrdered = true;
+                } else {
+                    Path<?> sortPath = SpecificationQuerySupport.getPath(root, property);
+                    Expression<?> aggregate = SpecificationQuerySupport.aggregateForSort(cb, sortPath, sortOrder.isAscending());
+                    selections.add(aggregate);
+                    orders.add(sortOrder.isAscending() ? cb.asc(aggregate) : cb.desc(aggregate));
                 }
             }
-            
-            multiSelectQuery.multiselect(selections).distinct(true);
-
-            // Apply search conditions
-            Predicate predicate = createPredicates(root, multiSelectQuery, cb);
-            if (predicate != null) {
-                multiSelectQuery.where(predicate);
+            if (!primaryKeyOrdered) {
+                orders.add(cb.asc(root.get(primaryKeyField)));
             }
 
-            // Apply sorting
-            List<Order> orders = pageRequest.getSort().stream()
-                .map(sortOrder -> sortOrder.isAscending() 
-                    ? cb.asc(getPath(root, sortOrder.getProperty()))
-                    : cb.desc(getPath(root, sortOrder.getProperty())))
-                .collect(Collectors.toList());
-            multiSelectQuery.orderBy(orders);
+            query.multiselect(selections);
+            Predicate predicate = SpecificationQuerySupport.createPredicates(condition, entityManager, root, query, cb);
+            if (predicate != null) {
+                query.where(predicate);
+            }
+            query.groupBy(root.get(primaryKeyField));
+            query.orderBy(orders);
 
-            // Execute query and extract IDs
-            TypedQuery<Object[]> typedQuery = entityManager.createQuery(multiSelectQuery);
+            TypedQuery<Object[]> typedQuery = entityManager.createQuery(query);
             typedQuery.setFirstResult((int) pageRequest.getOffset());
             typedQuery.setMaxResults(pageRequest.getPageSize());
-            
+
             return typedQuery.getResultList().stream()
-                    .map(row -> row[0]) // Extract ID from first column
+                    .map(row -> row[0])
                     .collect(Collectors.toList());
-        } else {
-            // Simple ID-only select when sorting by primary key or no sorting
-            CriteriaQuery<Object> singleSelectQuery = cb.createQuery(Object.class);
-            root = singleSelectQuery.from(entityClass);
-            joinStrategyManager.applyRegularJoinsOnly(root, joinPaths);
-            
-            singleSelectQuery.select(root.get(primaryKeyField)).distinct(true);
-
-            // Apply search conditions
-            Predicate predicate = createPredicates(root, singleSelectQuery, cb);
-            if (predicate != null) {
-                singleSelectQuery.where(predicate);
-            }
-
-            // Apply sorting
-            if (pageRequest.getSort().isSorted()) {
-                List<Order> orders = pageRequest.getSort().stream()
-                    .map(sortOrder -> sortOrder.isAscending() 
-                        ? cb.asc(getPath(root, sortOrder.getProperty()))
-                        : cb.desc(getPath(root, sortOrder.getProperty())))
-                    .collect(Collectors.toList());
-                singleSelectQuery.orderBy(orders);
-            }
-
-            // Execute query
-            TypedQuery<Object> typedQuery = entityManager.createQuery(singleSelectQuery);
-            typedQuery.setFirstResult((int) pageRequest.getOffset());
-            typedQuery.setMaxResults(pageRequest.getPageSize());
-            
-            return typedQuery.getResultList();
         }
+
+        // Simple ID-only select when sorting by the primary key or not sorting.
+        CriteriaQuery<Object> query = cb.createQuery(Object.class);
+        Root<T> root = query.from(entityClass);
+        joinStrategyManager.applyRegularJoinsOnly(root, joinPaths);
+
+        query.select(root.get(primaryKeyField)).distinct(true);
+
+        Predicate predicate = SpecificationQuerySupport.createPredicates(condition, entityManager, root, query, cb);
+        if (predicate != null) {
+            query.where(predicate);
+        }
+
+        if (pageRequest.getSort().isSorted()) {
+            List<Order> orders = pageRequest.getSort().stream()
+                    .map(sortOrder -> sortOrder.isAscending()
+                            ? cb.asc(SpecificationQuerySupport.getPath(root, sortOrder.getProperty()))
+                            : cb.desc(SpecificationQuerySupport.getPath(root, sortOrder.getProperty())))
+                    .collect(Collectors.toList());
+            query.orderBy(orders);
+        }
+
+        TypedQuery<Object> typedQuery = entityManager.createQuery(query);
+        typedQuery.setFirstResult((int) pageRequest.getOffset());
+        typedQuery.setMaxResults(pageRequest.getPageSize());
+
+        return typedQuery.getResultList();
     }
 
     /**
-     * Phase 3: Execute count query to get total number of records.
+     * Phase 3: total count of matching records, guaranteeing distinct counting when joins are present.
      */
     private long executeCountQuery() {
-        // Reuse cached join paths from Phase 1 if available, otherwise compute
-        Set<String> joinPaths = (cachedJoinPaths != null) ? cachedJoinPaths : extractJoinPaths(condition.getNodes());
+        Set<String> joinPaths = (cachedJoinPaths != null) ? cachedJoinPaths : extractJoinPaths();
 
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
         Root<T> root = countQuery.from(entityClass);
-        
-        // Apply joins for count query (using regular joins only to avoid duplicates)
         joinStrategyManager.applyRegularJoinsOnly(root, joinPaths);
-        
-        // Use countDistinct for accurate count when joins are present
+
         if (joinPaths.isEmpty()) {
             countQuery.select(cb.count(root));
+        } else if (compositeKeyExecutor != null) {
+            // Composite key: count distinct keys via a portable concatenated-key expression.
+            countQuery.select(cb.countDistinct(compositeKeyExecutor.buildDistinctCountKeyExpression(root, cb)));
         } else {
             String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-            log.trace("Count query - Entity: {}, Primary key field: {}, Join paths: {}",
-                entityClass.getSimpleName(), primaryKeyField, joinPaths);
-            
-            // Handle composite key entities for count query
-            if ("__COMPOSITE_KEY__".equals(primaryKeyField)) {
-                // For composite keys, use simple count(root) instead of countDistinct
-                // This is because SQL Server doesn't support COUNT(DISTINCT col1, col2) syntax
-                // and we're already applying joins to avoid duplicates at the specification level
-                log.trace("Using simple count for composite key entity to avoid SQL Server limitations");
-                countQuery.select(cb.count(root));
-            } else {
-                // Regular single primary key
-                log.trace("Using countDistinct for single primary key: {}", primaryKeyField);
-                countQuery.select(cb.countDistinct(root.get(primaryKeyField)));
-            }
+            countQuery.select(cb.countDistinct(root.get(primaryKeyField)));
         }
-        
-        // Apply search conditions
-        Predicate predicate = createPredicates(root, countQuery, cb);
+
+        Predicate predicate = SpecificationQuerySupport.createPredicates(condition, entityManager, root, countQuery, cb);
         if (predicate != null) {
             countQuery.where(predicate);
         }
-        
+
         return entityManager.createQuery(countQuery).getSingleResult();
     }
 
     /**
-     * Phase 2: Execute batched queries to get full entities using IN clauses.
-     * Automatically splits large ID lists into smaller batches to prevent database limitations.
-     *
-     * @deprecated Use {@link #executePhaseTwoQuery(List, Sort, Set)} instead
+     * Phase 2: load entities for the collected IDs using batched IN queries, then restore Phase 1 order.
      */
-    @Deprecated
-    private List<T> executePhaseTwoQuery(List<Object> ids, Sort sort) {
-        return executePhaseTwoQuery(ids, sort, Collections.emptySet());
-    }
-
-    /**
-     * Phase 2: Execute batched queries to get full entities using IN clauses.
-     * Automatically splits large ID lists into smaller batches to prevent database limitations.
-     *
-     * @param ids the entity IDs from Phase 1
-     * @param sort the sort criteria
-     * @param fetchFields the fields to explicitly fetch join
-     */
-    private List<T> executePhaseTwoQuery(List<Object> ids, Sort sort, Set<String> fetchFields) {
+    private List<T> executePhaseTwoQuery(List<Object> ids, Set<String> fetchFields) {
         if (ids.isEmpty()) {
             return Collections.emptyList();
         }
 
-        // If ID count is within safe limit, execute single query
-        if (ids.size() <= MAX_IN_CLAUSE_SIZE) {
-            return executeSingleInQuery(ids, sort, fetchFields);
+        List<T> loaded = new ArrayList<>();
+        for (int i = 0; i < ids.size(); i += MAX_IN_CLAUSE_SIZE) {
+            List<Object> batch = ids.subList(i, Math.min(i + MAX_IN_CLAUSE_SIZE, ids.size()));
+            loaded.addAll(loadBatch(batch, fetchFields));
         }
 
-        // Split into batches and execute multiple queries
-        return executeBatchedInQueries(ids, sort, fetchFields);
+        return reorderEntitiesByIds(loaded, ids);
     }
 
-    /**
-     * Execute single IN query for small ID lists.
-     *
-     * @deprecated Use {@link #executeSingleInQuery(List, Sort, Set)} instead
-     */
-    @Deprecated
-    private List<T> executeSingleInQuery(List<Object> ids, Sort sort) {
-        return executeSingleInQuery(ids, sort, Collections.emptySet());
-    }
+    private List<T> loadBatch(List<Object> ids, Set<String> fetchFields) {
+        if (compositeKeyExecutor != null) {
+            return compositeKeyExecutor.executePhaseTwo(ids, fetchFields);
+        }
 
-    /**
-     * Execute single IN query for small ID lists with fetch joins.
-     *
-     * @param ids the entity IDs to query
-     * @param sort the sort criteria
-     * @param fetchFields the fields to explicitly fetch join
-     */
-    private List<T> executeSingleInQuery(List<Object> ids, Sort sort, Set<String> fetchFields) {
         String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-
-        // Handle composite key entities
-        if ("__COMPOSITE_KEY__".equals(primaryKeyField)) {
-            return executeSingleInQueryWithCompositeKey(ids, sort, fetchFields);
-        }
-
-        // Build specification with fetch joins
         Specification<T> spec = (root, query, cb) -> {
-            // Apply fetch joins for explicitly specified fields
-            if (fetchFields != null && !fetchFields.isEmpty() && !Long.class.equals(query.getResultType())) {
-                for (String fetchField : fetchFields) {
-                    try {
-                        if (fetchField.contains(".")) {
-                            // Handle nested paths
-                            applyNestedFetchJoin(root, fetchField);
-                        } else {
-                            // Simple path - check if not already fetched
-                            boolean alreadyFetched = root.getFetches().stream()
-                                .anyMatch(fetch -> fetch.getAttribute().getName().equals(fetchField));
-                            if (!alreadyFetched) {
-                                root.fetch(fetchField, JoinType.LEFT);
-                            }
-                        }
-                        log.trace("Applied fetch join for field: {}", fetchField);
-                    } catch (Exception e) {
-                        log.warn("Failed to apply fetch join for field '{}': {}", fetchField, e.getMessage());
-                    }
-                }
-            }
-
+            // Apply distinct so to-many fetch joins do not emit duplicate root rows.
+            query.distinct(true);
+            SpecificationQuerySupport.applyFetchJoins(root, query, fetchFields);
             return root.get(primaryKeyField).in(ids);
         };
 
-        List<T> entities = specificationExecutor.findAll(spec, sort);
-        return reorderEntitiesByIds(entities, ids);
+        // No ORDER BY: the final order is restored by reorderEntitiesByIds from the Phase 1 IDs.
+        return specificationExecutor.findAll(spec, Sort.unsorted());
     }
 
     /**
-     * Applies fetch join for nested paths by building the path step by step.
-     */
-    private void applyNestedFetchJoin(Root<T> root, String nestedPath) {
-        String[] pathParts = nestedPath.split("\\.");
-        From<?, ?> currentFrom = root;
-
-        for (String part : pathParts) {
-            // Check if this part is already fetched
-            boolean alreadyFetched = currentFrom.getFetches().stream()
-                .anyMatch(fetch -> fetch.getAttribute().getName().equals(part));
-
-            if (!alreadyFetched) {
-                currentFrom = (From<?, ?>) currentFrom.fetch(part, JoinType.LEFT);
-                log.trace("Applied nested fetch join for path part: {}", part);
-            } else {
-                // Find existing fetch to continue the path
-                currentFrom = (From<?, ?>) currentFrom.getFetches().stream()
-                    .filter(fetch -> fetch.getAttribute().getName().equals(part))
-                    .findFirst()
-                    .orElse(null);
-                if (currentFrom == null) {
-                    log.warn("Expected fetch not found for path part: {}", part);
-                    return;
-                }
-                log.trace("Reusing existing fetch for path part: {}", part);
-            }
-        }
-    }
-    
-    /**
-     * Execute single IN query for composite key entities.
-     *
-     * @deprecated Use {@link #executeSingleInQueryWithCompositeKey(List, Sort, Set)} instead
-     */
-    @Deprecated
-    private List<T> executeSingleInQueryWithCompositeKey(List<Object> ids, Sort sort) {
-        return executeSingleInQueryWithCompositeKey(ids, sort, Collections.emptySet());
-    }
-
-    /**
-     * Execute single IN query for composite key entities with fetch joins.
-     */
-    private List<T> executeSingleInQueryWithCompositeKey(List<Object> ids, Sort sort, Set<String> fetchFields) {
-        List<String> idFields = SearchableFieldUtils.getCompositeKeyFieldNames(entityManager, entityClass);
-        boolean isEmbeddedId = isEmbeddedIdEntity();
-        
-        if (idFields.isEmpty()) {
-            log.warn("No composite key fields found for entity {}, falling back to regular query", entityClass.getSimpleName());
-            return Collections.emptyList();
-        }
-        
-        log.trace("Entity {} is using {} composite key with fields: {}",
-            entityClass.getSimpleName(),
-            isEmbeddedId ? "@EmbeddedId" : "@IdClass",
-            idFields);
-        
-        // Build specification for composite key matching
-        Specification<T> spec = (root, query, cb) -> {
-            // Apply fetch joins for explicitly specified fields
-            if (fetchFields != null && !fetchFields.isEmpty() && !Long.class.equals(query.getResultType())) {
-                for (String fetchField : fetchFields) {
-                    try {
-                        if (fetchField.contains(".")) {
-                            applyNestedFetchJoin(root, fetchField);
-                        } else {
-                            boolean alreadyFetched = root.getFetches().stream()
-                                .anyMatch(fetch -> fetch.getAttribute().getName().equals(fetchField));
-                            if (!alreadyFetched) {
-                                root.fetch(fetchField, JoinType.LEFT);
-                            }
-                        }
-                        log.trace("Applied fetch join for field: {}", fetchField);
-                    } catch (Exception e) {
-                        log.warn("Failed to apply fetch join for field '{}': {}", fetchField, e.getMessage());
-                    }
-                }
-            }
-
-            List<Predicate> orPredicates = new ArrayList<>();
-
-            log.trace("Building composite key conditions for {} IDs, fields: {}", ids.size(), idFields);
-            
-            for (Object id : ids) {
-                if (id instanceof Object[]) {
-                    Object[] compositeKey = (Object[]) id;
-                    log.trace("Processing composite key: {}", Arrays.toString(compositeKey));
-                    
-                    if (compositeKey.length == idFields.size()) {
-                        List<Predicate> andPredicates = new ArrayList<>();
-                        for (int i = 0; i < idFields.size(); i++) {
-                            String fieldName = idFields.get(i);
-                            Object fieldValue = compositeKey[i];
-                            log.trace("Adding condition: {} = {}", fieldName, fieldValue);
-                            
-                            // For @EmbeddedId, access fields through the embedded id object
-                            // For @IdClass, access fields directly on the root
-                            Path<?> fieldPath = isEmbeddedId ? root.get("id").get(fieldName) : root.get(fieldName);
-                            andPredicates.add(cb.equal(fieldPath, fieldValue));
-                        }
-                        orPredicates.add(cb.and(andPredicates.toArray(new Predicate[0])));
-                    } else {
-                        log.warn("Composite key length mismatch: expected {}, got {}", idFields.size(), compositeKey.length);
-                    }
-                } else {
-                    // Single ID field case
-                    if (idFields.size() == 1) {
-                        log.trace("Processing single ID: {}", id);
-                        String fieldName = idFields.get(0);
-                        Path<?> fieldPath = isEmbeddedId ? root.get("id").get(fieldName) : root.get(fieldName);
-                        orPredicates.add(cb.equal(fieldPath, id));
-                    } else {
-                        log.warn("Expected composite key array but got single value: {}", id);
-                    }
-                }
-            }
-            
-            log.trace("Built {} OR predicates", orPredicates.size());
-            return orPredicates.isEmpty() ? cb.disjunction() : cb.or(orPredicates.toArray(new Predicate[0]));
-        };
-
-        // Filter out __COMPOSITE_KEY__ from sort orders
-        Sort filteredSort = Sort.by(
-            sort.stream()
-                .filter(order -> !"__COMPOSITE_KEY__".equals(order.getProperty()))
-                .collect(Collectors.toList())
-        );
-        
-        List<T> entities = specificationExecutor.findAll(spec, filteredSort);
-        return reorderEntitiesByIds(entities, ids);
-    }
-
-    /**
-     * Execute multiple batched IN queries for large ID lists.
-     * Combines results while preserving original order.
-     *
-     * @deprecated Use {@link #executeBatchedInQueries(List, Sort, Set)} instead
-     */
-    @Deprecated
-    private List<T> executeBatchedInQueries(List<Object> ids, Sort sort) {
-        return executeBatchedInQueries(ids, sort, Collections.emptySet());
-    }
-
-    /**
-     * Execute multiple batched IN queries for large ID lists with fetch joins.
-     * Combines results while preserving original order.
-     *
-     * @param ids the entity IDs from Phase 1
-     * @param sort the sort criteria
-     * @param fetchFields the fields to explicitly fetch join
-     */
-    private List<T> executeBatchedInQueries(List<Object> ids, Sort sort, Set<String> fetchFields) {
-        List<T> allResults = new ArrayList<>();
-
-        // Split IDs into batches
-        for (int i = 0; i < ids.size(); i += MAX_IN_CLAUSE_SIZE) {
-            int endIndex = Math.min(i + MAX_IN_CLAUSE_SIZE, ids.size());
-            List<Object> batchIds = ids.subList(i, endIndex);
-
-            log.trace("Executing batch {}/{} with {} IDs",
-                (i / MAX_IN_CLAUSE_SIZE) + 1,
-                (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE,
-                batchIds.size());
-
-            // Execute query for this batch with fetch joins
-            List<T> batchResults = executeSingleInQuery(batchIds, sort, fetchFields);
-            allResults.addAll(batchResults);
-        }
-
-        log.trace("Executed {} batches, total results: {}",
-            (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE,
-            allResults.size());
-
-        // Final ordering is maintained by reorderEntitiesByIds in executeSingleInQuery
-        return allResults;
-    }
-
-    /**
-     * Reorder entities to match ID order from phase 1.
-     * Optimized with pre-allocated collections and pre-computed keys.
+     * Reorders entities to match the ID order established in Phase 1.
      */
     private List<T> reorderEntitiesByIds(List<T> entities, List<Object> orderedIds) {
-        // Pre-allocate HashMap with expected capacity to avoid resizing
         Map<String, T> entityMap = new HashMap<>(entities.size());
-
         for (T entity : entities) {
             try {
-                Object id = getEntityId(entity);
+                Object id = extractEntityId(entity);
                 if (id != null) {
                     entityMap.put(createComparableKey(id), entity);
                 }
             } catch (Exception e) {
                 log.warn("Failed to get entity ID for reordering: {}", e.getMessage());
-                return entities; // Return original order if ID extraction fails
+                return entities;
             }
         }
 
-        // Pre-allocate ArrayList with expected capacity
-        List<T> reorderedEntities = new ArrayList<>(orderedIds.size());
+        List<T> reordered = new ArrayList<>(orderedIds.size());
         for (Object orderedId : orderedIds) {
             T entity = entityMap.get(createComparableKey(orderedId));
             if (entity != null) {
-                reorderedEntities.add(entity);
-            } else {
-                log.trace("No entity found for ordered key: {}", orderedId);
+                reordered.add(entity);
             }
         }
-
-        log.trace("Reordered {} entities out of {} ordered IDs", reorderedEntities.size(), orderedIds.size());
-        return reorderedEntities;
+        return reordered;
     }
-    
-    /**
-     * Create a comparable string key for composite keys.
-     */
+
+    private Object extractEntityId(T entity) {
+        if (compositeKeyExecutor != null) {
+            return compositeKeyExecutor.extractId(entity);
+        }
+        // Single primary key: resolve the identifier from the persistence provider without
+        // assuming a getId() method name.
+        return entityManager.getEntityManagerFactory().getPersistenceUnitUtil().getIdentifier(entity);
+    }
+
     private String createComparableKey(Object id) {
-        if (id instanceof Object[]) {
-            Object[] compositeKey = (Object[]) id;
-            return Arrays.toString(compositeKey);
-        } else {
-            return String.valueOf(id);
-        }
+        return (id instanceof Object[]) ? Arrays.toString((Object[]) id) : String.valueOf(id);
     }
 
     /**
-     * Extract entity ID using reflection.
+     * Rebuilds the pageable without the internal composite-key ordering marker so it is safe to expose.
      */
-    private Object getEntityId(T entity) throws Exception {
-        String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
-        if (primaryKeyField == null) {
-            throw new RuntimeException(MessageUtils.getMessage("executor.primary.key.not.found", new Object[]{entityClass.getSimpleName()}));
-        }
-
-        // Handle composite key entities
-        if ("__COMPOSITE_KEY__".equals(primaryKeyField)) {
-            return getCompositeEntityId(entity);
-        }
-
-        // Try getter method first
-        String getterName = "get" + Character.toUpperCase(primaryKeyField.charAt(0)) + primaryKeyField.substring(1);
-        try {
-            Method getter = entityClass.getMethod(getterName);
-            return getter.invoke(entity);
-        } catch (NoSuchMethodException e) {
-            // Fallback to direct field access
-            Field field = entityClass.getDeclaredField(primaryKeyField);
-            field.setAccessible(true);
-            return field.get(entity);
-        }
-    }
-    
-    /**
-     * Extract composite entity ID as Object array.
-     */
-    private Object getCompositeEntityId(T entity) throws Exception {
-        List<String> idFields = SearchableFieldUtils.getCompositeKeyFieldNames(entityManager, entityClass);
-        boolean isEmbeddedId = isEmbeddedIdEntity();
-        
-        if (idFields.isEmpty()) {
-            throw new RuntimeException(MessageUtils.getMessage("executor.composite.key.not.found", new Object[]{entityClass.getSimpleName()}));
-        }
-        
-        if (idFields.size() == 1) {
-            // Single ID field
-            String idField = idFields.get(0);
-            return getCompositeFieldValue(entity, idField, isEmbeddedId);
-        } else {
-            // Multiple ID fields - create composite key array
-            Object[] compositeKey = new Object[idFields.size()];
-            for (int i = 0; i < idFields.size(); i++) {
-                String idField = idFields.get(i);
-                compositeKey[i] = getCompositeFieldValue(entity, idField, isEmbeddedId);
-            }
-            return compositeKey;
-        }
-    }
-    
-    /**
-     * Extract field value from composite key entity.
-     * Handles both @EmbeddedId and @IdClass entities.
-     */
-    private Object getCompositeFieldValue(T entity, String fieldName, boolean isEmbeddedId) throws Exception {
-        if (isEmbeddedId) {
-            // For @EmbeddedId: get the embedded id object first, then the field from it
-            Method idGetter = entityClass.getMethod("getId");
-            Object embeddedId = idGetter.invoke(entity);
-            if (embeddedId == null) {
-                throw new RuntimeException(MessageUtils.getMessage("executor.embedded.id.null", new Object[]{entityClass.getSimpleName()}));
-            }
-            
-            // Get field from embedded ID object
-            String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-            try {
-                Method fieldGetter = embeddedId.getClass().getMethod(getterName);
-                return fieldGetter.invoke(embeddedId);
-            } catch (NoSuchMethodException e) {
-                Field field = embeddedId.getClass().getDeclaredField(fieldName);
-                field.setAccessible(true);
-                return field.get(embeddedId);
-            }
-        } else {
-            // For @IdClass: get field directly from entity
-            String getterName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
-            try {
-                Method getter = entityClass.getMethod(getterName);
-                return getter.invoke(entity);
-            } catch (NoSuchMethodException e) {
-                Field field = entityClass.getDeclaredField(fieldName);
-                field.setAccessible(true);
-                return field.get(entity);
-            }
-        }
+    private PageRequest sanitizePageRequest(PageRequest pageRequest) {
+        List<Sort.Order> cleaned = pageRequest.getSort().stream()
+                .filter(order -> !SearchableFieldUtils.COMPOSITE_KEY_MARKER.equals(order.getProperty()))
+                .collect(Collectors.toList());
+        Sort sort = cleaned.isEmpty() ? Sort.unsorted() : Sort.by(cleaned);
+        return PageRequest.of(pageRequest.getPageNumber(), pageRequest.getPageSize(), sort);
     }
 
-    private Set<String> extractJoinPaths(List<SearchCondition.Node> nodes) {
-        // Delegate to shared utility for consistent behavior
-        return SearchableFieldUtils.extractJoinPaths(nodes);
+    private Set<String> extractJoinPaths() {
+        return SearchableFieldUtils.extractJoinPaths(condition.getNodes());
     }
-
-    private Predicate createPredicates(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
-        List<SearchCondition.Node> nodes = condition.getNodes();
-        if (nodes == null || nodes.isEmpty()) {
-            return null;
-        }
-
-        JoinManager<T> joinManager = new JoinManager<>(entityManager, root);
-        PredicateBuilder<T> predicateBuilder = new PredicateBuilder<>(cb, joinManager);
-        SpecificationBuilder<T> specBuilder = new SpecificationBuilder<>(predicateBuilder);
-
-        SearchCondition.Node firstNode = nodes.get(0);
-        Predicate result = specBuilder.build(root, query, cb, firstNode);
-        if (result == null) {
-            return null;
-        }
-
-        for (int i = 1; i < nodes.size(); i++) {
-            SearchCondition.Node currentNode = nodes.get(i);
-            Predicate currentPredicate = specBuilder.build(root, query, cb, currentNode);
-            if (currentPredicate == null) continue;
-
-            if (currentNode.getOperator() == dev.simplecore.searchable.core.condition.operator.LogicalOperator.OR) {
-                result = cb.or(result, currentPredicate);
-            } else {
-                result = cb.and(result, currentPredicate);
-            }
-        }
-
-        return result;
-    }
-    
-    /**
-     * Checks if the entity uses @EmbeddedId composite key.
-     * Uses instance-level caching and delegates to SearchableFieldUtils for static caching.
-     */
-    private boolean isEmbeddedIdEntity() {
-        if (cachedIsEmbeddedId != null) {
-            return cachedIsEmbeddedId;
-        }
-        // Delegate to SearchableFieldUtils which has static caching
-        cachedIsEmbeddedId = SearchableFieldUtils.isEmbeddedIdEntity(entityManager, entityClass);
-        return cachedIsEmbeddedId;
-    }
-
-    /**
-     * Get path for a potentially nested property.
-     * Handles properties like "position.name" by creating appropriate joins.
-     */
-    private Path<?> getPath(Root<T> root, String property) {
-        if (!property.contains(".")) {
-            // Simple property
-            return root.get(property);
-        }
-        
-        // Nested property - need to create joins
-        String[] parts = property.split("\\.");
-        Path<?> path = root;
-        
-        for (int i = 0; i < parts.length - 1; i++) {
-            // Create join for each intermediate path
-            if (path instanceof From) {
-                From<?, ?> from = (From<?, ?>) path;
-                Join<?, ?> join = null;
-                
-                // Check if join already exists
-                for (Join<?, ?> existingJoin : from.getJoins()) {
-                    if (existingJoin.getAttribute().getName().equals(parts[i])) {
-                        join = existingJoin;
-                        break;
-                    }
-                }
-                
-                // Create new join if not exists
-                if (join == null) {
-                    join = from.join(parts[i], JoinType.LEFT);
-                }
-                path = join;
-            }
-        }
-        
-        // Get the final property
-        return path.get(parts[parts.length - 1]);
-    }
-} 
+}

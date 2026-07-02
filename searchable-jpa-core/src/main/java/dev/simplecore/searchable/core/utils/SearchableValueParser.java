@@ -11,6 +11,7 @@ import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -166,6 +167,11 @@ public class SearchableValueParser {
                 return parseCharacter(value);
             }
 
+            // Handle UUID
+            if (targetType == UUID.class) {
+                return parseUuid(value);
+            }
+
             // Return as string for String type or if no other type matches
             return value;
         } catch (Exception e) {
@@ -241,6 +247,15 @@ public class SearchableValueParser {
                     MessageUtils.getMessage("parser.character.invalid", new Object[]{value}));
         }
         return value.charAt(0);
+    }
+
+    private static UUID parseUuid(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            throw new SearchableParseException(
+                    MessageUtils.getMessage("parser.uuid.invalid", new Object[]{value}), e);
+        }
     }
 
     private static Object parseTemporalValue(String value, Class<?> targetType) {
@@ -405,7 +420,7 @@ public class SearchableValueParser {
         }
 
         throw new SearchableParseException(
-                String.format("Failed to parse timezone-aware datetime: '%s'", value), lastError);
+                MessageUtils.getMessage("parser.datetime.timezone.failed", new Object[]{value}), lastError);
     }
 
     private static LocalDate parseLocalDate(String value) {
@@ -475,7 +490,7 @@ public class SearchableValueParser {
                 return parseLocalDateTime(value).atZone(ZoneId.systemDefault());
             } catch (Exception ignored) {
                 throw new SearchableParseException(
-                        String.format("Invalid zoned datetime format: '%s'. Expected ISO-8601 format with timezone", value));
+                        MessageUtils.getMessage("parser.zoneddatetime.invalid", new Object[]{value}));
             }
         }
     }
@@ -510,7 +525,7 @@ public class SearchableValueParser {
                         .toOffsetDateTime();
             } catch (Exception ignored) {
                 throw new SearchableParseException(
-                        String.format("Invalid offset datetime format: '%s'. Expected ISO-8601 format with offset", value));
+                        MessageUtils.getMessage("parser.offsetdatetime.invalid", new Object[]{value}));
             }
         }
     }
@@ -551,7 +566,7 @@ public class SearchableValueParser {
                         .toInstant();
             } catch (Exception ignored) {
                 throw new SearchableParseException(
-                        String.format("Invalid instant format: '%s'. Expected ISO-8601 format", value));
+                        MessageUtils.getMessage("parser.instant.invalid", new Object[]{value}));
             }
         }
     }
@@ -566,7 +581,7 @@ public class SearchableValueParser {
                         .toInstant());
             } catch (Exception ignored) {
                 throw new SearchableParseException(
-                        String.format("Invalid date format: '%s'", value));
+                        MessageUtils.getMessage("parser.date.invalid", new Object[]{value}));
             }
         }
     }
@@ -602,10 +617,11 @@ public class SearchableValueParser {
             }
         } catch (NumberFormatException e) {
             throw new SearchableParseException(
-                    String.format("Invalid numeric value '%s' for type %s: %s",
-                            value, targetType.getSimpleName(), e.getMessage()));
+                    MessageUtils.getMessage("parser.numeric.value.invalid",
+                            new Object[]{value, targetType.getSimpleName(), e.getMessage()}));
         }
-        throw new SearchableParseException("Unsupported numeric type: " + targetType.getSimpleName());
+        throw new SearchableParseException(
+                MessageUtils.getMessage("parser.numeric.type.unsupported", new Object[]{targetType.getSimpleName()}));
     }
 
     private static DateTimeFormatter getCachedFormatter(DateTimeFormatter formatter) {

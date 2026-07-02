@@ -16,10 +16,8 @@ import io.swagger.v3.oas.models.parameters.RequestBody;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springdoc.core.customizers.OperationCustomizer;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.MethodParameter;
 import org.springframework.web.method.HandlerMethod;
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
@@ -34,7 +32,7 @@ public class OpenApiDocCustomiser implements OperationCustomizer {
     private final ExampleGenerator exampleGenerator;
     private final ParameterGenerator parameterGenerator;
 
-    public OpenApiDocCustomiser(@Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping) {
+    public OpenApiDocCustomiser() {
         this.exampleGenerator = new ExampleGenerator();
         this.parameterGenerator = new ParameterGenerator();
     }

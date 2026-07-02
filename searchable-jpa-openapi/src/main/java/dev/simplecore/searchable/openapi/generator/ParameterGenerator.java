@@ -2,6 +2,7 @@ package dev.simplecore.searchable.openapi.generator;
 
 import dev.simplecore.searchable.core.annotation.SearchableField;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
+import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.openapi.utils.OpenApiDocUtils;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.Schema;
@@ -9,7 +10,6 @@ import io.swagger.v3.oas.models.parameters.Parameter;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,9 +36,8 @@ public class ParameterGenerator {
     }
 
     private void addSearchFieldParameters(Operation operation, Class<?> dtoClass) {
-        for (Field field : dtoClass.getDeclaredFields()) {
+        for (Field field : SearchableFieldUtils.getSearchableFields(dtoClass)) {
             SearchableField searchableField = field.getAnnotation(SearchableField.class);
-            if (searchableField == null) continue;
 
             String fieldName = field.getName();
             String fieldDescription = getFieldDescription(field);
@@ -81,11 +80,8 @@ public class ParameterGenerator {
     }
 
     private void addSortingParameters(Operation operation, Class<?> dtoClass) {
-        List<String> sortableFields = Arrays.stream(dtoClass.getDeclaredFields())
-                .filter(field -> {
-                    SearchableField annotation = field.getAnnotation(SearchableField.class);
-                    return annotation != null && annotation.sortable();
-                })
+        List<String> sortableFields = SearchableFieldUtils.getSearchableFields(dtoClass).stream()
+                .filter(field -> field.getAnnotation(SearchableField.class).sortable())
                 .map(Field::getName)
                 .collect(Collectors.toList());
 

@@ -2,6 +2,7 @@ package dev.simplecore.searchable.core.service;
 
 import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.exception.SearchableConfigurationException;
+import dev.simplecore.searchable.core.exception.SearchableOperationException;
 import dev.simplecore.searchable.core.service.specification.SearchableSpecificationBuilder;
 import dev.simplecore.searchable.core.service.specification.SpecificationWithPageable;
 
@@ -17,8 +18,10 @@ import org.springframework.lang.NonNull;
 
 import jakarta.persistence.EntityManager;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -57,6 +60,9 @@ public class SearchableServiceDelegate<T, ID> implements SearchableService<T> {
 
     @SuppressWarnings("unchecked")
     public SearchableServiceDelegate(JpaRepository<T, ID> repository, EntityManager entityManager, Class<T> entityClass) {
+        Objects.requireNonNull(repository, "repository must not be null");
+        Objects.requireNonNull(entityManager, "entityManager must not be null");
+        Objects.requireNonNull(entityClass, "entityClass must not be null");
         if (!(repository instanceof JpaSpecificationExecutor<?>)) {
             throw new SearchableConfigurationException("Repository must implement JpaSpecificationExecutor");
         }
@@ -129,42 +135,49 @@ public class SearchableServiceDelegate<T, ID> implements SearchableService<T> {
         return specificationExecutor.exists(spec.getSpecification());
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public long updateWithSearch(@NonNull SearchCondition<?> searchCondition, @NonNull Object updateData) {
+        // Map the update payload to an entity instance when a different type is supplied.
+        Object mappedData = (updateData.getClass() != entityClass)
+                ? MODEL_MAPPER.map(updateData, entityClass)
+                : updateData;
 
-        if (updateData.getClass() != entityClass) {
-            updateData = MODEL_MAPPER.map(updateData, entityClass);
+        // The entities returned by findAll are already managed within the current transaction, so
+        // there is no need to look them up again by id (which also avoids assuming a getId() method).
+        SpecificationWithPageable<T> specification = createSpecification(searchCondition);
+        List<T> entitiesToUpdate = specificationExecutor.findAll(specification.getSpecification());
+
+        for (T entity : entitiesToUpdate) {
+            copyNonNullProperties(mappedData, entity);
+            repository.save(entity);
         }
 
-        try {
-            SpecificationWithPageable<T> specification = createSpecification(searchCondition);
-            List<T> entitiesToUpdate = specificationExecutor.findAll(specification.getSpecification());
-
-            for (T entity : entitiesToUpdate) {
-                ID id = (ID) entityClass.getMethod("getId").invoke(entity);
-
-                T managedEntity = repository.findById(id)
-                        .orElseThrow(() -> new SearchableConfigurationException("Entity not found with id: " + id));
-
-                copyNonNullProperties(updateData, managedEntity);
-
-                repository.save(managedEntity);
-            }
-
-            return entitiesToUpdate.size();
-        } catch (Exception e) {
-            throw new SearchableConfigurationException("Failed to perform batch update", e);
-        }
+        return entitiesToUpdate.size();
     }
 
-    private void copyNonNullProperties(Object source, T target) throws IllegalAccessException {
-        Field[] fields = entityClass.getDeclaredFields();
-        for (Field field : fields) {
-            field.setAccessible(true);
-            Object value = field.get(source);
-            if (value != null && !Collection.class.isAssignableFrom(field.getType())) {
-                field.set(target, value);
+    /**
+     * Copies non-null, non-collection properties from source to target, including fields declared in
+     * {@code @MappedSuperclass} ancestors (e.g. auditing fields), by walking the class hierarchy.
+     */
+    private void copyNonNullProperties(Object source, T target) {
+        for (Class<?> current = entityClass; current != null && current != Object.class; current = current.getSuperclass()) {
+            for (Field field : current.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
+                    continue;
+                }
+                if (Collection.class.isAssignableFrom(field.getType())) {
+                    continue;
+                }
+                field.setAccessible(true);
+                try {
+                    Object value = field.get(source);
+                    if (value != null) {
+                        field.set(target, value);
+                    }
+                } catch (IllegalAccessException e) {
+                    throw new SearchableOperationException(
+                            "Failed to copy field '" + field.getName() + "' during batch update", e);
+                }
             }
         }
     }

@@ -135,6 +135,7 @@ public class SearchConditionValidator<D> {
         }
 
         validateValue(pd.getPropertyType(), condition.getValue(), condition.getSearchOperator(), fieldName);
+        validateSecondValueForBetween(pd.getPropertyType(), condition, fieldName);
 
         // Validate constraints
         try {
@@ -281,6 +282,29 @@ public class SearchConditionValidator<D> {
 
         // Validate single value
         validateSingleValue(targetType, value, fieldName);
+    }
+
+    /**
+     * Validates the second value (value2) for BETWEEN/NOT_BETWEEN operators. The second bound must be
+     * present and convertible to the field type, mirroring the validation of the primary value.
+     *
+     * @param targetType the expected type of the value
+     * @param condition  the condition to validate
+     * @param fieldName  the name of the field
+     * @throws ValidationException if value2 is missing or has an incompatible type
+     */
+    private void validateSecondValueForBetween(Class<?> targetType, SearchCondition.Condition condition, String fieldName) {
+        SearchOperator operator = condition.getSearchOperator();
+        if (operator != SearchOperator.BETWEEN && operator != SearchOperator.NOT_BETWEEN) {
+            return;
+        }
+
+        Object value2 = condition.getValue2();
+        if (value2 == null) {
+            throw new SearchableValidationException(
+                    MessageUtils.getMessage("validator.between.value2.required", new Object[]{operator}));
+        }
+        validateSingleValue(targetType, value2, fieldName);
     }
 
     /**

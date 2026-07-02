@@ -5,7 +5,7 @@
 [![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-9%2B-blue.svg)](https://jakarta.ee/)
 [![License](https://img.shields.io/badge/License-SimpleCORE%201.0-blue.svg)](LICENSE)
 
-Searchable JPA is a library that extends Spring Data JPA to provide dynamic search, sorting, and pagination functionality. It allows complex search conditions to be implemented using simple annotations and builder patterns, and supports high-performance cursor-based pagination even for large datasets.
+Searchable JPA is a library that extends Spring Data JPA to provide dynamic search, sorting, and pagination functionality. It allows complex search conditions to be implemented using simple annotations and builder patterns, and provides high-performance pagination for large datasets through two-phase query optimization.
 
 ## Version Compatibility
 
@@ -52,9 +52,9 @@ When upgrading to Spring Boot 3.x, the following changes are required:
 
 ## Key Features
 
-- **Dynamic Search**: Supports 20+ search operators (EQUALS, CONTAINS, BETWEEN, etc.)
+- **Dynamic Search**: Supports 18 search operators (EQUALS, CONTAINS, BETWEEN, etc.)
 - **Flexible Sorting**: Multi-field sorting and dynamic sort conditions
-- **High-Performance Pagination**: Cursor-based pagination for large dataset processing
+- **High-Performance Pagination**: Two-phase query optimization for large dataset processing
 - **Type Safety**: Compile-time validation and type-safe builder patterns
 - **OpenAPI Integration**: Automatic Swagger documentation generation
 - **Multiple Data Types**: Support for strings, numbers, dates, enums, and nested objects
@@ -136,7 +136,7 @@ GET /api/posts/search?title.contains=Spring&sort=createdAt,desc&page=0&size=10
 - [Basic Usage](docs/ko/basic-usage.md) - Basic usage methods and examples
 - [Search Operators](docs/ko/search-operators.md) - All supported search operators
 - [Advanced Features](docs/ko/advanced-features.md) - Complex search conditions and advanced features
-- [Two-Phase Query Optimization](docs/ko/two-phase-query-optimization.md) - High-performance cursor-based pagination
+- [Two-Phase Query Optimization](docs/ko/two-phase-query-optimization.md) - High-performance pagination for large datasets
 - [Relational Data and Two-Phase Query](docs/ko/relationship-and-two-phase-query.md) - JPA relationship mapping and N+1 problem resolution
 - [Auto Configuration](docs/ko/auto-configuration.md) - Spring Boot auto-configuration settings
 - [OpenAPI Integration](docs/ko/openapi-integration.md) - Automatic Swagger documentation generation

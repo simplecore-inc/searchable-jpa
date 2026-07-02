@@ -44,29 +44,28 @@ public class PredicateBuilder<T> {
 
         if (node instanceof SearchCondition.Group) {
             SearchCondition.Group group = (SearchCondition.Group) node;
-            if (group.getNodes() == null || group.getNodes().isEmpty()) {
+            List<SearchCondition.Node> children = group.getNodes();
+            if (children == null || children.isEmpty()) {
                 return null;
             }
 
-            List<Predicate> predicates = new ArrayList<>();
-            LogicalOperator groupOperator = group.getOperator();
-
-            for (SearchCondition.Node currentNode : group.getNodes()) {
-                Predicate currentPredicate = build(currentNode);
-                if (currentPredicate != null) {
-                    predicates.add(currentPredicate);
+            // Fold children left-to-right by each child's own operator, matching
+            // SpecificationBuilder.buildGroup so mixed AND/OR groups evaluate consistently.
+            Predicate result = build(children.get(0));
+            if (result == null) {
+                return null;
+            }
+            for (int i = 1; i < children.size(); i++) {
+                SearchCondition.Node child = children.get(i);
+                Predicate currentPredicate = build(child);
+                if (currentPredicate == null) {
+                    continue;
                 }
+                result = (child.getOperator() == LogicalOperator.OR)
+                        ? cb.or(result, currentPredicate)
+                        : cb.and(result, currentPredicate);
             }
-
-            if (predicates.isEmpty()) {
-                return null;
-            }
-
-            if (groupOperator == LogicalOperator.OR) {
-                return cb.or(predicates.toArray(new Predicate[0]));
-            } else {
-                return cb.and(predicates.toArray(new Predicate[0]));
-            }
+            return result;
         }
 
         throw new SearchableOperationException("Unknown node type: " + node.getClass().getSimpleName());
@@ -112,9 +111,9 @@ public class PredicateBuilder<T> {
             case LESS_THAN_OR_EQUAL_TO:
                 return buildComparablePredicate(path, convertedValue, (expr, val) -> cb.lessThanOrEqualTo(expr, val));
             case BETWEEN:
-                return buildBetweenPredicate(path, value, value2);
+                return buildBetweenPredicate(convertedValue, convertValue(value2, fieldType), path);
             case NOT_BETWEEN:
-                return buildNotBetweenPredicate(path, value, value2);
+                return buildBetweenPredicate(convertedValue, convertValue(value2, fieldType), path).not();
             case CONTAINS:
                 return buildStringPredicate(path, value, pattern -> "%" + pattern + "%", false);
             case NOT_CONTAINS:
@@ -151,11 +150,7 @@ public class PredicateBuilder<T> {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private Predicate buildBetweenPredicate(Path<?> path, Object value1, Object value2) {
-        Class<?> fieldType = path.getJavaType();
-        Object convertedValue1 = convertValue(value1, fieldType);
-        Object convertedValue2 = convertValue(value2, fieldType);
-
+    private Predicate buildBetweenPredicate(Object convertedValue1, Object convertedValue2, Path<?> path) {
         Expression<? extends Comparable> comparablePath = getComparablePath(path);
         try {
             return cb.between(comparablePath, (Comparable) convertedValue1, (Comparable) convertedValue2);
@@ -164,15 +159,22 @@ public class PredicateBuilder<T> {
         }
     }
 
-    private Predicate buildNotBetweenPredicate(Path<?> path, Object value1, Object value2) {
-        return buildBetweenPredicate(path, value1, value2).not();
-    }
+    // Escape character used with LIKE so that escaped %/_ are matched literally on all databases.
+    private static final char LIKE_ESCAPE_CHAR = '\\';
 
     private Predicate buildStringPredicate(Path<?> path, Object value, Function<String, String> patternBuilder, boolean negate) {
+        if (value == null) {
+            throw new SearchableOperationException("Pattern value must not be null for pattern matching operators");
+        }
+        String raw = value.toString();
+        if (raw.isEmpty()) {
+            throw new SearchableOperationException("Pattern value must not be empty for pattern matching operators");
+        }
         Expression<String> stringPath = getStringPath(path);
-        String pattern = escapePattern(value.toString());
-        pattern = patternBuilder.apply(pattern);
-        Predicate predicate = cb.like(stringPath, pattern);
+        String pattern = patternBuilder.apply(escapePattern(raw));
+        // Specify the ESCAPE character so the '\'-escaped %/_ are treated as literals (ANSI SQL:
+        // without ESCAPE, the backslash is not recognized as an escape on many databases).
+        Predicate predicate = cb.like(stringPath, pattern, LIKE_ESCAPE_CHAR);
         return negate ? predicate.not() : predicate;
     }
 
@@ -233,7 +235,8 @@ public class PredicateBuilder<T> {
     }
 
     private String escapePattern(String value) {
-        return value.replace("%", "\\%").replace("_", "\\_");
+        // Escape the escape character itself first, then the LIKE wildcards.
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     private void validateValueForOperator(Path<?> path, Object value) {

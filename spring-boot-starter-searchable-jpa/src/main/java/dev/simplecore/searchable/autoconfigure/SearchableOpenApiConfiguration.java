@@ -7,7 +7,6 @@ import io.swagger.v3.oas.models.OpenAPI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springdoc.core.customizers.OperationCustomizer;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.*;
@@ -27,14 +26,13 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 public class SearchableOpenApiConfiguration {
     private static final Logger log = LoggerFactory.getLogger(SearchableOpenApiConfiguration.class);
 
+    // Gated on RequestMappingHandlerMapping so the customizer is only registered in a servlet web
+    // application once Spring MVC is configured; the mapping itself is not needed by the customizer.
     @Bean(name = "searchConditionCustomizer")
     @ConditionalOnMissingBean(name = "searchConditionCustomizer")
     @ConditionalOnBean(RequestMappingHandlerMapping.class)
-    public OperationCustomizer searchConditionCustomizer(
-            @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping
-    ) {
+    public OperationCustomizer searchConditionCustomizer() {
         log.trace("Creating SearchConditionDocCustomiser bean");
-        log.trace("RequestMappingHandlerMapping available: {}", handlerMapping != null);
-        return new OpenApiDocCustomiser(handlerMapping);
+        return new OpenApiDocCustomiser();
     }
 }

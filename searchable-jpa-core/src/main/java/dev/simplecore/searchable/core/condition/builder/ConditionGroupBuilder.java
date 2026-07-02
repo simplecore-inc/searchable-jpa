@@ -15,23 +15,16 @@ import java.util.function.Consumer;
  * This class implements the {@link ChainedCondition} interface to provide a fluent API for building
  * complex search conditions with both AND and OR operations.
  *
- * <p>The builder maintains two lists:
- * <ul>
- *   <li>conditions: for individual search conditions</li>
- *   <li>groups: for nested groups of conditions</li>
- * </ul>
+ * <p>Conditions and nested groups are kept in a single order-preserving list, so the SQL logic
+ * reflects the actual call order (e.g. {@code equals(...).or(...).equals(...)} groups the OR where
+ * it was written).
  */
 @Getter
 public class ConditionGroupBuilder implements ChainedCondition {
     /**
-     * List of individual search conditions in this group.
+     * Ordered list of nodes (individual conditions and nested groups) in the order they were added.
      */
-    private final List<SearchCondition.Node> conditions = new ArrayList<>();
-
-    /**
-     * List of nested condition groups.
-     */
-    private final List<SearchCondition.Node> groups = new ArrayList<>();
+    private final List<SearchCondition.Node> nodes = new ArrayList<>();
 
     /**
      * The DTO class type used for field name resolution.
@@ -64,7 +57,7 @@ public class ConditionGroupBuilder implements ChainedCondition {
     }
 
     /**
-     * Adds a new condition to the conditions list with a single value.
+     * Adds a new condition with a single value.
      *
      * @param logicalOperator the logical operator (AND/OR) for this condition
      * @param field           the field name to search on
@@ -73,15 +66,13 @@ public class ConditionGroupBuilder implements ChainedCondition {
      */
     private void addCondition(LogicalOperator logicalOperator, String field,
                               SearchOperator searchOperator, Object value) {
-        // Set operator to null if this is the first condition with AND operator
-        if (conditions.isEmpty() && logicalOperator == LogicalOperator.AND) {
-            logicalOperator = null;
-        }
-        conditions.add(createCondition(logicalOperator, field, searchOperator, value, null));
+        addCondition(logicalOperator, field, searchOperator, value, null);
     }
 
     /**
-     * Adds a new condition to the conditions list with two values.
+     * Adds a new condition with two values.
+     * The first node in a group carries no logical operator (regardless of AND/OR), while
+     * subsequent conditions keep the operator they were declared with.
      *
      * @param logicalOperator the logical operator (AND/OR) for this condition
      * @param field           the field name to search on
@@ -91,48 +82,13 @@ public class ConditionGroupBuilder implements ChainedCondition {
      */
     private void addCondition(LogicalOperator logicalOperator, String field,
                               SearchOperator searchOperator, Object value, Object value2) {
-        // Set operator to null if this is the first condition with AND operator
-        if (conditions.isEmpty() && logicalOperator == LogicalOperator.AND) {
-            logicalOperator = null;
-        }
-        conditions.add(createCondition(logicalOperator, field, searchOperator, value, value2));
+        LogicalOperator effectiveOperator = nodes.isEmpty() ? null : logicalOperator;
+        nodes.add(createCondition(effectiveOperator, field, searchOperator, value, value2));
     }
 
     /**
-     * Process a list of conditions by setting the operator of the first condition to null
-     * and returning all conditions together.
-     * This is used to ensure proper operator precedence in nested conditions.
-     *
-     * @param conditions the list of conditions to process
-     * @return processed list of conditions with the first condition's operator set to null
-     */
-    private List<SearchCondition.Node> processConditionsWithNullFirstOperator(List<SearchCondition.Node> conditions) {
-        if (conditions.isEmpty()) {
-            return conditions;
-        }
-
-        List<SearchCondition.Node> result = new ArrayList<>();
-        SearchCondition.Node firstNode = conditions.get(0);
-        if (firstNode instanceof SearchCondition.Condition) {
-            SearchCondition.Condition firstCondition = (SearchCondition.Condition) firstNode;
-            result.add(new SearchCondition.Condition(
-                    null,
-                    firstCondition.getField(),
-                    firstCondition.getSearchOperator(),
-                    firstCondition.getValue(),
-                    firstCondition.getValue2(),
-                    firstCondition.getEntityField()
-            ));
-            result.addAll(conditions.subList(1, conditions.size()));
-            return result;
-        }
-        return conditions;
-    }
-
-    /**
-     * Adds a new group of conditions with the specified logical operator.
-     * The first condition in the group will have its operator set to null,
-     * while subsequent conditions maintain their operators.
+     * Adds a new nested group of conditions with the specified logical operator.
+     * Empty groups (where the callback added nothing) are skipped so they cannot fail at build time.
      *
      * @param operator the logical operator (AND/OR) for the group
      * @param consumer the consumer function that builds the group's conditions
@@ -141,11 +97,11 @@ public class ConditionGroupBuilder implements ChainedCondition {
         ConditionGroupBuilder builder = new ConditionGroupBuilder(dtoClass);
         consumer.accept(builder);
 
-        List<SearchCondition.Node> nodes = new ArrayList<>();
-        nodes.addAll(processConditionsWithNullFirstOperator(builder.getConditions()));
-        nodes.addAll(builder.getGroups());
+        if (builder.getNodes().isEmpty()) {
+            return;
+        }
 
-        groups.add(new SearchCondition.Group(operator, nodes));
+        nodes.add(new SearchCondition.Group(operator, builder.getNodes()));
     }
 
     @Override
@@ -369,15 +325,8 @@ public class ConditionGroupBuilder implements ChainedCondition {
         ConditionGroupBuilder builder = new ConditionGroupBuilder(dtoClass);
         consumer.accept(builder);
 
-        List<SearchCondition.Node> nodes = new ArrayList<>();
-        nodes.addAll(processConditionsWithNullFirstOperator(builder.getConditions()));
-        nodes.addAll(builder.getGroups());
-
-        if (builder.getGroups().isEmpty()) {
-            conditions.addAll(nodes);
-        } else {
-            groups.add(new SearchCondition.Group(null, nodes));
-        }
+        // Inline the sub-builder's nodes in call order; its first node already carries no operator.
+        nodes.addAll(builder.getNodes());
         return this;
     }
 

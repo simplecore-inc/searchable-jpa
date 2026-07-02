@@ -419,21 +419,23 @@ ID | CREATED_AT          | TITLE
 4  | 2023-01-01 09:00:00 | Post D
 ```
 
-**1페이지 결과 (LIMIT 2):**
+정렬 값이 동일한 행 사이의 순서는 데이터베이스가 보장하지 않으므로, 쿼리를 실행할 때마다 Post A/B/C의 순서가 달라질 수 있습니다.
+
+**1페이지 쿼리 결과 (LIMIT 2 OFFSET 0):**
 ```
-[Post A, Post B] // cursor = '2023-01-01 10:00:00'
+[Post A, Post B]
 ```
 
-**2페이지 쿼리:**
+**2페이지 쿼리 (LIMIT 2 OFFSET 2):**
 ```sql
-SELECT * FROM posts 
-WHERE created_at < '2023-01-01 10:00:00'  -- Post C가 제외됨!
-ORDER BY created_at DESC LIMIT 2;
+SELECT * FROM posts
+ORDER BY created_at DESC LIMIT 2 OFFSET 2;
+-- 동일한 created_at 행들의 순서가 이번 실행에서는 다르게 결정될 수 있음
 ```
 
 **2페이지 결과:**
 ```
-[Post D, ...] // Post C가 누락됨!
+[Post B, Post D] // Post B가 중복되고 Post C가 누락될 수 있음!
 ```
 
 ### 해결책: 자동 Primary Key 정렬
@@ -489,11 +491,11 @@ private List<Sort.Order> ensureUniqueSorting(List<Sort.Order> sortOrders) {
                 sortOrders = new ArrayList<>(sortOrders);
                 sortOrders.add(Sort.Order.by(primaryKeyField));
 
-                log.debug("Automatically added primary key field '{}' to sort criteria for cursor-based pagination uniqueness",
+                log.trace("Automatically added primary key field '{}' to sort criteria for deterministic pagination ordering",
                         primaryKeyField);
             }
         } else {
-            log.warn("Could not determine primary key field for entity {}. Cursor-based pagination may not work correctly with duplicate sort values.",
+            log.warn("Could not determine primary key field for entity {}. Pagination may not work correctly with duplicate sort values.",
                     entityClass.getSimpleName());
         }
 

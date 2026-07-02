@@ -54,8 +54,8 @@ public interface SearchableServiceSupport<T, ID> extends SearchableService<T> {
 
     @Override
     @NonNull
-    default <D> Page<D> findAllWithSearch(@NonNull SearchCondition<?> searchCondition, Class<D> dtoClass) {
-        return getSearchableDelegate().findAllWithSearch(searchCondition, dtoClass);
+    default <P> Page<P> findAllWithSearch(@NonNull SearchCondition<?> searchCondition, Class<P> projectionClass) {
+        return getSearchableDelegate().findAllWithSearch(searchCondition, projectionClass);
     }
 
     @Override

@@ -5,13 +5,15 @@ import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.SearchConditionBuilder;
 import dev.simplecore.searchable.core.condition.builder.FirstCondition;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
+import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.openapi.utils.OpenApiDocUtils;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
 @RequiredArgsConstructor
 public class ExampleGenerator {
@@ -44,15 +46,38 @@ public class ExampleGenerator {
     private void processSearchableField(Field field, FirstCondition w) {
         SearchableField searchableField = field.getAnnotation(SearchableField.class);
         if (searchableField != null && searchableField.operators().length > 0) {
-            final Object rawExampleValue = OpenApiDocUtils.getExampleValue(field);
-            if (rawExampleValue != null) {
-                final Object exampleValue = convertToTargetType(rawExampleValue, field.getType());
-                applyOperator(searchableField.operators()[0], exampleValue, field.getName(), w);
-            }
+            applyOperator(searchableField.operators()[0], field, w);
         }
     }
 
-    private void applyOperator(SearchOperator operator, Object exampleValue, String fieldName, FirstCondition w) {
+    private void applyOperator(SearchOperator operator, Field field, FirstCondition w) {
+        String fieldName = field.getName();
+        switch (operator) {
+            case BETWEEN: {
+                List<Object> range = exampleRange(field, operator);
+                w.between(fieldName, range.get(0), range.get(1));
+                break;
+            }
+            case NOT_BETWEEN: {
+                List<Object> range = exampleRange(field, operator);
+                w.notBetween(fieldName, range.get(0), range.get(1));
+                break;
+            }
+            case IN:
+                w.in(fieldName, exampleValues(field, operator));
+                break;
+            case NOT_IN:
+                w.notIn(fieldName, exampleValues(field, operator));
+                break;
+            default:
+                applySingleValueOperator(operator, field, w);
+        }
+    }
+
+    private void applySingleValueOperator(SearchOperator operator, Field field, FirstCondition w) {
+        String fieldName = field.getName();
+        Object rawExampleValue = OpenApiDocUtils.getExampleValue(field);
+        Object exampleValue = rawExampleValue == null ? null : convertToTargetType(rawExampleValue, field.getType());
         switch (operator) {
             case NOT_EQUALS:
                 w.notEquals(fieldName, exampleValue);
@@ -93,36 +118,69 @@ public class ExampleGenerator {
             case IS_NOT_NULL:
                 w.isNotNull(fieldName);
                 break;
-            case IN:
-                w.in(fieldName, Collections.singletonList(exampleValue));
-                break;
-            case NOT_IN:
-                w.notIn(fieldName, Collections.singletonList(exampleValue));
-                break;
-            case BETWEEN:
-                w.between(fieldName, exampleValue, exampleValue);
-                break;
-            case NOT_BETWEEN:
-                w.notBetween(fieldName, exampleValue, exampleValue);
-                break;
             case EQUALS:
             default:
                 w.equals(fieldName, exampleValue);
         }
     }
 
-    private Field findFirstSearchableField(Class<?> dtoClass) {
-        for (Field field : dtoClass.getDeclaredFields()) {
-            SearchableField searchableField = field.getAnnotation(SearchableField.class);
-            if (searchableField != null) {
-                return field;
-            }
+    /**
+     * Produces the two distinct bounds for a BETWEEN/NOT_BETWEEN example using the 2-arg example
+     * generator, converting each to the field's type.
+     */
+    private List<Object> exampleRange(Field field, SearchOperator operator) {
+        List<Object> converted = exampleValues(field, operator);
+        while (converted.size() < 2) {
+            converted.add(convertToTargetType(OpenApiDocUtils.getExampleValue(field), field.getType()));
         }
-        return null;
+        return converted;
+    }
+
+    /**
+     * Produces the example values for a multi-value operator (IN/NOT_IN/BETWEEN) using the 2-arg
+     * example generator, converting each element to the field's type.
+     */
+    private List<Object> exampleValues(Field field, SearchOperator operator) {
+        Object example = OpenApiDocUtils.getExampleValue(field, operator);
+        List<Object> values = new ArrayList<>();
+        if (example instanceof List) {
+            for (Object element : (List<?>) example) {
+                values.add(convertToTargetType(element, field.getType()));
+            }
+        } else if (example != null) {
+            values.add(convertToTargetType(example, field.getType()));
+        }
+        return values;
+    }
+
+    private Field findFirstSearchableField(Class<?> dtoClass) {
+        List<Field> searchableFields = SearchableFieldUtils.getSearchableFields(dtoClass);
+        return searchableFields.isEmpty() ? null : searchableFields.get(0);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private Object convertToTargetType(Object rawExampleValue, Class<?> fieldType) {
+        // Convert numeric example values (e.g. the generic [1, 100] BETWEEN range) to the field's type.
+        if (rawExampleValue instanceof Number && !fieldType.isInstance(rawExampleValue)) {
+            Number number = (Number) rawExampleValue;
+            if (fieldType == Long.class || fieldType == long.class) {
+                return number.longValue();
+            } else if (fieldType == Integer.class || fieldType == int.class) {
+                return number.intValue();
+            } else if (fieldType == Double.class || fieldType == double.class) {
+                return number.doubleValue();
+            } else if (fieldType == Float.class || fieldType == float.class) {
+                return number.floatValue();
+            } else if (fieldType == Short.class || fieldType == short.class) {
+                return number.shortValue();
+            } else if (fieldType == Byte.class || fieldType == byte.class) {
+                return number.byteValue();
+            } else if (fieldType == java.math.BigDecimal.class) {
+                return new java.math.BigDecimal(number.toString());
+            } else if (fieldType == java.math.BigInteger.class) {
+                return java.math.BigInteger.valueOf(number.longValue());
+            }
+        }
         if (rawExampleValue instanceof String) {
             String strValue = (String) rawExampleValue;
             if (fieldType == Long.class || fieldType == long.class) {

@@ -87,7 +87,7 @@ class SearchableExceptionTest {
         SearchableValidationException exception = new SearchableValidationException(message);
 
         // Then
-        assertThat(exception).isInstanceOf(jakarta.validation.ValidationException.class);
+        assertThat(exception).isInstanceOf(SearchableException.class);
         assertThat(exception.getMessage()).isEqualTo(message);
     }
 
@@ -196,17 +196,31 @@ class SearchableExceptionTest {
     @Test
     @DisplayName("Exception hierarchy should be correct")
     void testExceptionHierarchy() {
-        // SearchableException hierarchy
+        // SearchableException hierarchy: all library exceptions extend SearchableException
         assertThat(SearchableException.class).isAssignableFrom(SearchableConfigurationException.class);
         assertThat(SearchableException.class).isAssignableFrom(SearchableOperationException.class);
         assertThat(SearchableException.class).isAssignableFrom(SearchableJoinException.class);
-        
+        assertThat(SearchableException.class).isAssignableFrom(SearchableValidationException.class);
+        assertThat(SearchableException.class).isAssignableFrom(SearchableParseException.class);
+
         // RuntimeException hierarchy
         assertThat(RuntimeException.class).isAssignableFrom(SearchableException.class);
         assertThat(RuntimeException.class).isAssignableFrom(SearchableParseException.class);
-        
-        // ValidationException hierarchy
-        assertThat(jakarta.validation.ValidationException.class).isAssignableFrom(SearchableValidationException.class);
+        assertThat(RuntimeException.class).isAssignableFrom(SearchableValidationException.class);
+    }
+
+    @Test
+    @DisplayName("catch(SearchableException) should catch parse and validation exceptions")
+    void testCatchAllViaSearchableException() {
+        // Parse failures are catchable via the common base type
+        assertThatThrownBy(() -> {
+            throw new SearchableParseException("parse failed");
+        }).isInstanceOf(SearchableException.class);
+
+        // Validation failures are catchable via the common base type
+        assertThatThrownBy(() -> {
+            throw new SearchableValidationException("validation failed");
+        }).isInstanceOf(SearchableException.class);
     }
 
     @Test

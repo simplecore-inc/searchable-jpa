@@ -4,7 +4,9 @@ import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.SearchConditionBuilder;
 import dev.simplecore.searchable.core.condition.builder.FirstCondition;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
+import dev.simplecore.searchable.core.exception.SearchableException;
 import dev.simplecore.searchable.core.exception.SearchableParseException;
+import dev.simplecore.searchable.core.exception.SearchableValidationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
 import dev.simplecore.searchable.core.utils.SearchableValueParser;
 import lombok.NonNull;
@@ -12,8 +14,8 @@ import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -84,6 +86,9 @@ public class SearchableParamsParser<D> {
             }
 
             return builder.build();
+        } catch (SearchableException e) {
+            // Preserve dedicated parse/validation messages instead of masking them with the generic one.
+            throw e;
         } catch (Exception e) {
             throw new SearchableParseException(MessageUtils.getMessage("parser.parse.error"), e);
         }
@@ -133,77 +138,98 @@ public class SearchableParamsParser<D> {
         String field = matcher.group(1);
         String operatorStr = matcher.group(2);
 
-        try {
-            SearchOperator operator = SearchOperator.fromName(operatorStr);
-            String[] values = value.split(",");
-
-            switch (Objects.requireNonNull(operator)) {
-                case EQUALS:
-                    whereBuilder.equals(field, parseValue(field, values[0]));
-                    break;
-                case NOT_EQUALS:
-                    whereBuilder.notEquals(field, parseValue(field, values[0]));
-                    break;
-                case GREATER_THAN:
-                    whereBuilder.greaterThan(field, parseValue(field, values[0]));
-                    break;
-                case GREATER_THAN_OR_EQUAL_TO:
-                    whereBuilder.greaterThanOrEqualTo(field, parseValue(field, values[0]));
-                    break;
-                case LESS_THAN:
-                    whereBuilder.lessThan(field, parseValue(field, values[0]));
-                    break;
-                case LESS_THAN_OR_EQUAL_TO:
-                    whereBuilder.lessThanOrEqualTo(field, parseValue(field, values[0]));
-                    break;
-                case CONTAINS:
-                    whereBuilder.contains(field, values[0]);
-                    break;
-                case NOT_CONTAINS:
-                    whereBuilder.notContains(field, values[0]);
-                    break;
-                case STARTS_WITH:
-                    whereBuilder.startsWith(field, values[0]);
-                    break;
-                case NOT_STARTS_WITH:
-                    whereBuilder.notStartsWith(field, values[0]);
-                    break;
-                case ENDS_WITH:
-                    whereBuilder.endsWith(field, values[0]);
-                    break;
-                case NOT_ENDS_WITH:
-                    whereBuilder.notEndsWith(field, values[0]);
-                    break;
-                case IN:
-                    whereBuilder.in(field, Arrays.asList(values));
-                    break;
-                case NOT_IN:
-                    whereBuilder.notIn(field, Arrays.asList(values));
-                    break;
-                case BETWEEN:
-                    if (values.length != 2) {
-                        throw new SearchableParseException(MessageUtils.getMessage("parser.operator.requires.two.values", new Object[]{operatorStr}));
-                    }
-                    whereBuilder.between(field, parseValueForBetween(field, values[0], false), parseValueForBetween(field, values[1], true));
-                    break;
-                case NOT_BETWEEN:
-                    if (values.length != 2) {
-                        throw new SearchableParseException(MessageUtils.getMessage("parser.operator.requires.two.values", new Object[]{operatorStr}));
-                    }
-                    whereBuilder.notBetween(field, parseValueForBetween(field, values[0], false), parseValueForBetween(field, values[1], true));
-                    break;
-                case IS_NULL:
-                    whereBuilder.isNull(field);
-                    break;
-                case IS_NOT_NULL:
-                    whereBuilder.isNotNull(field);
-                    break;
-                default:
-                    throw new SearchableParseException("Unsupported operator: " + operatorStr);
-            }
-        } catch (IllegalArgumentException e) {
-            throw new SearchableParseException(MessageUtils.getMessage("parser.operator.invalid", new Object[]{operatorStr}), e);
+        SearchOperator operator = SearchOperator.fromName(operatorStr);
+        if (operator == null) {
+            throw new SearchableParseException(MessageUtils.getMessage("parser.operator.invalid", new Object[]{operatorStr}));
         }
+
+        switch (operator) {
+            case EQUALS:
+                whereBuilder.equals(field, parseValue(field, value));
+                break;
+            case NOT_EQUALS:
+                whereBuilder.notEquals(field, parseValue(field, value));
+                break;
+            case GREATER_THAN:
+                whereBuilder.greaterThan(field, parseValue(field, value));
+                break;
+            case GREATER_THAN_OR_EQUAL_TO:
+                whereBuilder.greaterThanOrEqualTo(field, parseValue(field, value));
+                break;
+            case LESS_THAN:
+                whereBuilder.lessThan(field, parseValue(field, value));
+                break;
+            case LESS_THAN_OR_EQUAL_TO:
+                whereBuilder.lessThanOrEqualTo(field, parseValue(field, value));
+                break;
+            case CONTAINS:
+                whereBuilder.contains(field, requirePatternValue(operatorStr, value));
+                break;
+            case NOT_CONTAINS:
+                whereBuilder.notContains(field, requirePatternValue(operatorStr, value));
+                break;
+            case STARTS_WITH:
+                whereBuilder.startsWith(field, requirePatternValue(operatorStr, value));
+                break;
+            case NOT_STARTS_WITH:
+                whereBuilder.notStartsWith(field, requirePatternValue(operatorStr, value));
+                break;
+            case ENDS_WITH:
+                whereBuilder.endsWith(field, requirePatternValue(operatorStr, value));
+                break;
+            case NOT_ENDS_WITH:
+                whereBuilder.notEndsWith(field, requirePatternValue(operatorStr, value));
+                break;
+            case IN:
+                whereBuilder.in(field, splitMultiValues(value));
+                break;
+            case NOT_IN:
+                whereBuilder.notIn(field, splitMultiValues(value));
+                break;
+            case BETWEEN: {
+                String[] values = value.split(",");
+                if (values.length != 2) {
+                    throw new SearchableParseException(MessageUtils.getMessage("parser.operator.requires.two.values", new Object[]{operatorStr}));
+                }
+                whereBuilder.between(field, parseValueForBetween(field, values[0], false), parseValueForBetween(field, values[1], true));
+                break;
+            }
+            case NOT_BETWEEN: {
+                String[] values = value.split(",");
+                if (values.length != 2) {
+                    throw new SearchableParseException(MessageUtils.getMessage("parser.operator.requires.two.values", new Object[]{operatorStr}));
+                }
+                whereBuilder.notBetween(field, parseValueForBetween(field, values[0], false), parseValueForBetween(field, values[1], true));
+                break;
+            }
+            case IS_NULL:
+                whereBuilder.isNull(field);
+                break;
+            case IS_NOT_NULL:
+                whereBuilder.isNotNull(field);
+                break;
+            default:
+                throw new SearchableParseException(MessageUtils.getMessage("parser.operator.invalid", new Object[]{operatorStr}));
+        }
+    }
+
+    /**
+     * Splits a comma-separated value into a list. Only multi-value operators (IN/NOT_IN) call this;
+     * single-value operators keep the raw value intact so that a literal comma is preserved.
+     */
+    private List<String> splitMultiValues(String value) {
+        return Arrays.asList(value.split(","));
+    }
+
+    /**
+     * Rejects an empty pattern-matching value so it does not become a match-everything {@code LIKE '%%'}.
+     */
+    private String requirePatternValue(String operatorStr, String value) {
+        if (!StringUtils.hasText(value)) {
+            throw new SearchableValidationException(
+                    MessageUtils.getMessage("parser.pattern.empty", new Object[]{operatorStr}));
+        }
+        return value;
     }
 
     private Object parseValue(String field, String value) {

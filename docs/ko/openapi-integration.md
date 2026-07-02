@@ -374,28 +374,7 @@ public class PostPageResponse {
 }
 ```
 
-### 2단계 쿼리 페이징 응답
-
-```java
-@Schema(description = "2단계 쿼리 최적화 페이징 응답")
-public class CursorPageResponse<T> {
-    
-    @Schema(description = "현재 페이지 데이터")
-    private List<T> content;
-    
-    @Schema(description = "다음 페이지 토큰", example = "eyJjcmVhdGVkQXQiOiIyMDI0LTAxLTE0VDE1OjIwOjAwIiwiaWQiOjk5fQ==")
-    private String nextCursor;
-    
-    @Schema(description = "이전 페이지 토큰")
-    private String previousCursor;
-    
-    @Schema(description = "다음 페이지 존재 여부")
-    private boolean hasNext;
-    
-    @Schema(description = "이전 페이지 존재 여부")
-    private boolean hasPrevious;
-}
-```
+2단계 쿼리 최적화는 내부 실행 방식이므로 응답 구조는 위 표준 페이징 응답과 동일하다. 별도의 응답 스키마가 필요하지 않다.
 
 ## 에러 응답 문서화
 
@@ -466,18 +445,10 @@ public class PostController {
     public Page<Post> searchPostsPost(/* ... */) {
         // ...
     }
-    
-    @Operation(
-        summary = "2단계 쿼리 검색",
-        description = "대용량 데이터를 위한 2단계 쿼리 최적화 검색",
-        tags = {"게시글 검색", "2단계 쿼리"}
-    )
-    @GetMapping("/cursor-search")
-    public Page<Post> searchPosts(/* ... */) {
-        // ...
-    }
 }
 ```
+
+2단계 쿼리 최적화는 모든 검색 쿼리에 자동으로 적용되므로 별도의 엔드포인트가 필요하지 않다.
 
 ## 보안 문서화
 
@@ -546,12 +517,6 @@ public OpenAPI secureOpenAPI() {
      "page": 0,
      "size": 10
    }
-   ```
-
-3. **2단계 쿼리 최적화 테스트**
-   ```
-   GET /api/posts/cursor-search?sort=createdAt,desc&size=10
-   GET /api/posts/cursor-search?cursor=eyJjcmVhdGVkQXQiOiIyMDI0LTAxLTE0VDE1OjIwOjAwIiwiaWQiOjk5fQ==&size=10
    ```
 
 ## 문서 접근

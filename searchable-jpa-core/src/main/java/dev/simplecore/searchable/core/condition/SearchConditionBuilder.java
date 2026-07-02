@@ -125,8 +125,10 @@ public class SearchConditionBuilder<D> {
         this.dtoClass = dtoClass;
         this.condition = new SearchCondition<>();
 
-        // Copy nodes (reference copy - nodes are effectively immutable)
-        this.condition.getNodes().addAll(existing.getNodes());
+        // Deep-copy nodes so mutating the extended condition never affects the original.
+        for (SearchCondition.Node node : existing.getNodes()) {
+            this.condition.getNodes().add(deepCopyNode(node));
+        }
 
         // Copy pagination
         this.condition.setPage(existing.getPage());
@@ -153,19 +155,17 @@ public class SearchConditionBuilder<D> {
 
     /**
      * Starts building the search condition with an initial group of conditions.
-     * This method must be called first before any other builder methods.
-     * It handles both direct conditions and nested groups.
+     * It handles both direct conditions and nested groups, preserving the order in which they were
+     * declared. This method may also be called more than once; each call appends its conditions.
      *
      * @param consumer a consumer that configures the initial conditions
      * @return a chained builder for additional configuration
-     * @throws IllegalStateException if where() is called after the first group
      */
     public SearchConditionBuilder<D> where(Consumer<ConditionGroupBuilder> consumer) {
         ConditionGroupBuilder builder = new ConditionGroupBuilder(dtoClass);
         consumer.accept(builder);
 
-        condition.getNodes().addAll(builder.getConditions());
-        condition.getNodes().addAll(builder.getGroups());
+        condition.getNodes().addAll(builder.getNodes());
 
         return this;
     }
@@ -179,26 +179,34 @@ public class SearchConditionBuilder<D> {
     public SearchConditionBuilder<D> and(Consumer<ConditionGroupBuilder> consumer) {
         ConditionGroupBuilder builder = new ConditionGroupBuilder(dtoClass);
         consumer.accept(builder);
+        combineGroup(builder.getNodes(), LogicalOperator.AND);
+        return this;
+    }
 
-        // Do not group single conditions or simple AND conditions
-        if (builder.getGroups().isEmpty()) {
-            for (SearchCondition.Node node : builder.getConditions()) {
+    /**
+     * Combines a sub-builder's ordered nodes into the top-level condition. A flat set of conditions
+     * (no nested groups) is inlined with the given operator applied to the first (operator-less) node,
+     * preserving any {@code orXXX()} operators; otherwise the whole set is wrapped in a single group so
+     * its internal order is preserved.
+     */
+    private void combineGroup(List<SearchCondition.Node> subNodes, LogicalOperator operator) {
+        if (subNodes.isEmpty()) {
+            return;
+        }
+
+        boolean hasNestedGroup = subNodes.stream().anyMatch(node -> node instanceof SearchCondition.Group);
+        if (!hasNestedGroup) {
+            for (SearchCondition.Node node : subNodes) {
                 SearchCondition.Condition condition = (SearchCondition.Condition) node;
-                // Only set AND if operator is null (preserve orXXX() operators)
+                // Only set the operator when it is null (preserve orXXX()/other operators).
                 if (condition.getOperator() == null) {
-                    condition.setOperator(LogicalOperator.AND);
+                    condition.setOperator(operator);
                 }
                 this.condition.getNodes().add(condition);
             }
         } else {
-            // When groups exist, combine both conditions and groups into a single group
-            List<SearchCondition.Node> nodes = new ArrayList<>();
-            nodes.addAll(builder.getConditions());
-            nodes.addAll(builder.getGroups());
-            this.condition.getNodes().add(new SearchCondition.Group(LogicalOperator.AND, nodes));
+            this.condition.getNodes().add(new SearchCondition.Group(operator, subNodes));
         }
-
-        return this;
     }
 
     /**
@@ -210,25 +218,7 @@ public class SearchConditionBuilder<D> {
     public SearchConditionBuilder<D> or(Consumer<ConditionGroupBuilder> consumer) {
         ConditionGroupBuilder builder = new ConditionGroupBuilder(dtoClass);
         consumer.accept(builder);
-
-        // Do not group single conditions or simple OR conditions
-        if (builder.getGroups().isEmpty()) {
-            for (SearchCondition.Node node : builder.getConditions()) {
-                SearchCondition.Condition condition = (SearchCondition.Condition) node;
-                // Only set OR if operator is null (preserve existing operators)
-                if (condition.getOperator() == null) {
-                    condition.setOperator(LogicalOperator.OR);
-                }
-                this.condition.getNodes().add(condition);
-            }
-        } else {
-            // When groups exist, combine both conditions and groups into a single group
-            List<SearchCondition.Node> nodes = new ArrayList<>();
-            nodes.addAll(builder.getConditions());
-            nodes.addAll(builder.getGroups());
-            this.condition.getNodes().add(new SearchCondition.Group(LogicalOperator.OR, nodes));
-        }
-
+        combineGroup(builder.getNodes(), LogicalOperator.OR);
         return this;
     }
 
@@ -329,18 +319,42 @@ public class SearchConditionBuilder<D> {
         ConditionGroupBuilder builder = new ConditionGroupBuilder(dtoClass);
         consumer.accept(builder);
 
-        // Handle empty group case
-        if (builder.getConditions().isEmpty() && builder.getGroups().isEmpty()) {
-            return;  // Skip adding empty groups
+        // Skip adding empty groups
+        if (builder.getNodes().isEmpty()) {
+            return;
         }
 
-        // Create a new group with all conditions and nested groups
-        List<SearchCondition.Node> nodes = new ArrayList<>();
-        nodes.addAll(builder.getConditions());
-        nodes.addAll(builder.getGroups());
+        // Add the group (preserving the sub-builder's node order) with the specified operator
+        this.condition.getNodes().add(new SearchCondition.Group(operator, builder.getNodes()));
+    }
 
-        // Add the group with the specified operator
-        this.condition.getNodes().add(new SearchCondition.Group(operator, nodes));
+    /**
+     * Deep-copies a node so that mutating the copy (e.g. via {@code setOperator}) never affects the
+     * original. Conditions are copied field-by-field; groups are copied recursively.
+     *
+     * @param node the node to copy
+     * @return an independent copy of the node
+     */
+    private static SearchCondition.Node deepCopyNode(SearchCondition.Node node) {
+        if (node instanceof SearchCondition.Condition) {
+            SearchCondition.Condition source = (SearchCondition.Condition) node;
+            return new SearchCondition.Condition(
+                    source.getOperator(),
+                    source.getField(),
+                    source.getSearchOperator(),
+                    source.getValue(),
+                    source.getValue2(),
+                    source.getEntityField());
+        }
+        if (node instanceof SearchCondition.Group) {
+            SearchCondition.Group source = (SearchCondition.Group) node;
+            List<SearchCondition.Node> copies = new ArrayList<>();
+            for (SearchCondition.Node child : source.getNodes()) {
+                copies.add(deepCopyNode(child));
+            }
+            return new SearchCondition.Group(source.getOperator(), copies);
+        }
+        return node;
     }
 
     /**

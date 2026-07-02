@@ -40,8 +40,7 @@ public class SearchableSpecificationBuilder<T> {
     private final RelationshipAnalyzer<T> relationshipAnalyzer;
     private final JoinStrategyManager<T> joinStrategyManager;
     private final TwoPhaseQueryExecutor<T> twoPhaseQueryExecutor;
-    private final EntityGraphManager<T> entityGraphManager;
-    
+
     // Cache for relationship analysis to prevent redundant calls
     private volatile Set<String> cachedCommonToOneFields;
     private final Object cacheLock = new Object();
@@ -57,7 +56,6 @@ public class SearchableSpecificationBuilder<T> {
         this.relationshipAnalyzer = new RelationshipAnalyzer<>(entityManager, entityClass);
         this.joinStrategyManager = new JoinStrategyManager<>(entityManager, entityClass);
         this.twoPhaseQueryExecutor = new TwoPhaseQueryExecutor<>(condition, entityManager, entityClass, specificationExecutor);
-        this.entityGraphManager = new EntityGraphManager<>(entityManager, entityClass);
     }
 
     public static <T> SearchableSpecificationBuilder<T> of(
@@ -70,7 +68,7 @@ public class SearchableSpecificationBuilder<T> {
 
     /**
      * Creates Sort object from SearchCondition orders.
-     * Automatically adds primary key field for cursor-based pagination uniqueness.
+     * Automatically adds primary key field to guarantee a deterministic row order across pages.
      * If no sort conditions are specified, automatically adds PK sorting in ascending order.
      */
     private Sort createSort() {
@@ -87,7 +85,7 @@ public class SearchableSpecificationBuilder<T> {
                     .collect(Collectors.toList());
         }
 
-        // Automatically add primary key field for cursor-based pagination uniqueness
+        // Automatically add primary key field to guarantee deterministic ordering
         sortOrders = ensureUniqueSorting(sortOrders);
 
         return Sort.by(sortOrders);
@@ -95,7 +93,8 @@ public class SearchableSpecificationBuilder<T> {
 
     /**
      * Ensures unique sorting by adding primary key field if not already present.
-     * This is crucial for cursor-based pagination to work correctly.
+     * Without a unique tiebreaker, rows sharing the same sort value may repeat or
+     * disappear across page boundaries.
      *
      * @param sortOrders the existing sort orders
      * @return sort orders with primary key field added if necessary
@@ -114,11 +113,11 @@ public class SearchableSpecificationBuilder<T> {
                     sortOrders = new java.util.ArrayList<>(sortOrders);
                     sortOrders.add(Sort.Order.by(primaryKeyField));
 
-                    log.trace("Automatically added primary key field '{}' to sort criteria for cursor-based pagination uniqueness",
+                    log.trace("Automatically added primary key field '{}' to sort criteria for deterministic pagination ordering",
                             primaryKeyField);
                 }
             } else {
-                log.warn("Could not determine primary key field for entity {}. Cursor-based pagination may not work correctly with duplicate sort values.",
+                log.warn("Could not determine primary key field for entity {}. Pagination may not work correctly with duplicate sort values.",
                         entityClass.getSimpleName());
             }
 
@@ -204,7 +203,7 @@ public class SearchableSpecificationBuilder<T> {
      * Builds only the specification part for operations that don't need pagination.
      * This method is used for count, exists, delete, and update operations.
      *
-     * @return SpecificationWithPageable containing specification without cursor pagination
+     * @return SpecificationWithPageable containing specification without pagination optimization
      */
     public SpecificationWithPageable<T> buildSpecificationOnly() {
         return new SpecificationWithPageable<>(

@@ -18,8 +18,17 @@ public interface SearchableService<T> {
     @NonNull
     Page<T> findAllWithSearch(@NonNull SearchCondition<?> searchCondition);
 
+    /**
+     * Search entities and map each result to a Spring Data projection.
+     *
+     * @param searchCondition search conditions
+     * @param projectionClass a Spring Data projection <strong>interface</strong>. A concrete class is
+     *                        not supported and results in a configuration exception.
+     * @param <P>             the projection interface type
+     * @return page of projected results
+     */
     @NonNull
-    <D> Page<D> findAllWithSearch(@NonNull SearchCondition<?> searchCondition, Class<D> dtoClass);
+    <P> Page<P> findAllWithSearch(@NonNull SearchCondition<?> searchCondition, Class<P> projectionClass);
 
     /**
      * Find a single entity matching the search conditions

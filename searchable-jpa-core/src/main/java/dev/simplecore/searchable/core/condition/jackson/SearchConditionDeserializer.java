@@ -13,6 +13,8 @@ import dev.simplecore.searchable.core.condition.SearchCondition.Sort;
 import dev.simplecore.searchable.core.condition.validator.SearchConditionValidator;
 
 import dev.simplecore.searchable.core.condition.validator.SearchableFieldValidator;
+import dev.simplecore.searchable.core.exception.SearchableValidationException;
+import dev.simplecore.searchable.core.i18n.MessageUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,15 +69,17 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
         // conditions
         if (jsonNode.has("conditions")) {
             JsonNode conditionsNode = jsonNode.get("conditions");
-            if (conditionsNode.isArray()) {
-                for (JsonNode conditionNode : conditionsNode) {
-                    NodeDeserializer nodeDeserializer = new NodeDeserializer();
-                    nodeDeserializer.setDtoClass(dtoClass);
+            if (!conditionsNode.isArray()) {
+                throw new SearchableValidationException(
+                        MessageUtils.getMessage("search.condition.conditions.not.array"));
+            }
+            for (JsonNode conditionNode : conditionsNode) {
+                NodeDeserializer nodeDeserializer = new NodeDeserializer();
+                nodeDeserializer.setDtoClass(dtoClass);
 
-                    JsonParser conditionParser = conditionNode.traverse(mapper);
-                    Node node = nodeDeserializer.deserialize(conditionParser, ctxt);
-                    searchCondition.getNodes().add(node);
-                }
+                JsonParser conditionParser = conditionNode.traverse(mapper);
+                Node node = nodeDeserializer.deserialize(conditionParser, ctxt);
+                searchCondition.getNodes().add(node);
             }
         }
         

@@ -2,6 +2,7 @@ package dev.simplecore.searchable.openapi.generator;
 
 import dev.simplecore.searchable.core.annotation.SearchableField;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
+import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.openapi.utils.OpenApiDocUtils;
 import io.swagger.v3.oas.models.Operation;
 import org.slf4j.Logger;
@@ -29,16 +30,14 @@ public class DescriptionGenerator {
         description.append("**Searchable Fields:** ");
 
         StringJoiner fieldJoiner = new StringJoiner(", ");
-        for (Field field : dtoClass.getDeclaredFields()) {
-            if (field.isAnnotationPresent(SearchableField.class)) {
-                SearchableField searchOp = field.getAnnotation(SearchableField.class);
-                StringJoiner opJoiner = new StringJoiner("|");
-                for (SearchOperator op : searchOp.operators()) {
-                    opJoiner.add(OpenApiDocUtils.toCamelCase(op.name().toLowerCase()));
-                }
-                String sortIndicator = searchOp.sortable() ? " [sortable]" : "";
-                fieldJoiner.add(String.format("`%s` (%s)%s", field.getName(), opJoiner, sortIndicator));
+        for (Field field : SearchableFieldUtils.getSearchableFields(dtoClass)) {
+            SearchableField searchOp = field.getAnnotation(SearchableField.class);
+            StringJoiner opJoiner = new StringJoiner("|");
+            for (SearchOperator op : searchOp.operators()) {
+                opJoiner.add(OpenApiDocUtils.toCamelCase(op.name().toLowerCase()));
             }
+            String sortIndicator = searchOp.sortable() ? " [sortable]" : "";
+            fieldJoiner.add(String.format("`%s` (%s)%s", field.getName(), opJoiner, sortIndicator));
         }
         description.append(fieldJoiner);
     }

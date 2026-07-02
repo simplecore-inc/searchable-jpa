@@ -1,14 +1,15 @@
 package dev.simplecore.searchable.core.service;
 
 import dev.simplecore.searchable.core.condition.SearchCondition;
+import dev.simplecore.searchable.core.exception.SearchableConfigurationException;
 import dev.simplecore.searchable.core.service.specification.SearchableSpecificationBuilder;
 import dev.simplecore.searchable.core.service.specification.SpecificationWithPageable;
 
+import org.springframework.core.GenericTypeResolver;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.NoRepositoryBean;
 
 import jakarta.persistence.EntityManager;
-import java.lang.reflect.ParameterizedType;
 
 /**
  * Default implementation of {@link SearchableService} that can be extended directly.
@@ -32,8 +33,15 @@ public class DefaultSearchableService<T, ID> implements SearchableServiceSupport
 
     @SuppressWarnings("unchecked")
     public DefaultSearchableService(JpaRepository<T, ID> repository, EntityManager entityManager) {
-        Class<T> entityClass = (Class<T>) ((ParameterizedType) getClass().getGenericSuperclass())
-                .getActualTypeArguments()[0];
+        // Resolve the entity type by walking the class hierarchy, so subclasses that extend through
+        // an intermediate (possibly abstract) class are supported and do not fail with a ClassCastException.
+        Class<?>[] typeArguments = GenericTypeResolver.resolveTypeArguments(getClass(), DefaultSearchableService.class);
+        if (typeArguments == null || typeArguments.length < 1 || typeArguments[0] == null) {
+            throw new SearchableConfigurationException(
+                    "Unable to resolve the entity type for " + getClass().getName()
+                            + ". Ensure the concrete service binds the entity type argument of DefaultSearchableService.");
+        }
+        Class<T> entityClass = (Class<T>) typeArguments[0];
         this.repository = repository;
         this.delegate = new SearchableServiceDelegate<>(repository, entityManager, entityClass);
     }

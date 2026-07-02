@@ -4,11 +4,11 @@
 
 ![version](https://img.shields.io/badge/version-{{VERSION}}-blue)
 
-> Dynamic Search, Sorting, and Cursor Pagination for Spring Data JPA
+> Dynamic Search, Sorting, and Pagination for Spring Data JPA
 
 - Java 17+ / Spring Boot 3.2+
-- 20+ Search Operators
-- High-Performance Cursor-Based Pagination
+- 18 Search Operators
+- High-Performance Two-Phase Query Pagination
 - OpenAPI/Swagger Integration
 
 [한국어 문서](/ko/)

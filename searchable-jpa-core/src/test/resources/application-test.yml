@@ -16,6 +16,9 @@ spring:
       hibernate:
         format_sql: true
         use_sql_comments: true
+        # Test-only SQL inspector (inert until a test calls TestSqlCapture.start())
+        session_factory:
+          statement_inspector: dev.simplecore.searchable.test.support.TestSqlCapture
         # Batch processing optimizations
         jdbc:
           batch_size: 1000
