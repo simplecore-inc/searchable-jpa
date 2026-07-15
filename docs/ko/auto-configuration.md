@@ -210,6 +210,10 @@ searchable:
   swagger:
     enabled: true  # 기본값: true, OpenAPI/Swagger 통합 활성화
 
+  # 날짜/시간 설정
+  date-time:
+    default-timezone: UTC  # 시간대 없는 검색값의 해석 기준 시간대(IANA ID, 예: Asia/Seoul). 미지정 시 UTC
+
   # Hibernate 최적화 설정
   hibernate:
     auto-optimization: true  # 기본값: true, 자동 Hibernate 최적화 활성화
@@ -226,6 +230,9 @@ searchable:
 ```properties
 # Swagger/OpenAPI 설정
 searchable.swagger.enabled=true
+
+# 날짜/시간 설정
+searchable.date-time.default-timezone=UTC
 
 # Hibernate 최적화 설정
 searchable.hibernate.auto-optimization=true
@@ -277,6 +284,22 @@ searchable.hibernate.in-clause-parameter-padding=true
 - **기본값**: `true`
 - **설명**: IN 절 파라미터 패딩 활성화
 - **효과**: 쿼리 플랜 캐싱을 개선하여 성능을 향상시킵니다.
+
+### 날짜/시간 설정
+
+시간대 정보가 없는 날짜/시간 검색값과 날짜만 입력한 BETWEEN 경계를 해석할 애플리케이션 시간대(application timezone)를 지정합니다. 이 시간대는 배포 서버의 JVM 기본 시간대와 무관하게 동작하므로, 서버 환경이 달라도 검색 결과가 일관됩니다.
+
+#### date-time.default-timezone
+- **기본값**: 지정하지 않음
+- **설명**: 시간대 정보가 없는 검색값을 해석할 기준 시간대. IANA 시간대 ID를 사용합니다(예: `Asia/Seoul`, `UTC`).
+- **효과**: 시간대 정보가 없는 `LocalDateTime`, `Instant`, `OffsetDateTime`, `ZonedDateTime`, `Date` 검색값과, 날짜만 입력한 BETWEEN 경계를 이 시간대 기준으로 해석합니다. `Z` 접미사나 오프셋이 포함된 값은 이미 절대 시각이 정해지므로 영향을 받지 않습니다.
+- **해석 순서**: 값을 지정하지 않으면 다음 순서로 기준 시간대를 결정합니다.
+  1. `searchable.date-time.default-timezone` (이 설정)
+  2. 호스트 애플리케이션이 등록한 `applicationZoneId` 빈(`ZoneId` 타입)
+  3. `spring.jackson.time-zone`
+  4. UTC (최종 기본값)
+
+> ⚠ **동작 변경**: 이전에는 시간대 정보가 없는 검색값을 배포 서버의 JVM 기본 시간대로 해석했습니다. 이제는 위 순서로 기준 시간대를 결정하며, 아무것도 지정하지 않으면 UTC를 사용합니다. 서버 로컬 시간대 기준 해석이 필요하면 `searchable.date-time.default-timezone`에 해당 시간대를 명시하세요.
 
 ### Swagger 설정
 

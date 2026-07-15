@@ -177,6 +177,8 @@ components:
 
 파라미터 설명은 필드 설명과 연산자 이름을 `-`로 이어 붙인 형식입니다(예: `Post id - equals`). Enum 타입 필드(`status`)는 별도 스키마로 등록되고, 파라미터는 그 스키마를 `$ref`로 참조합니다. `sort` 파라미터는 `explode: true`로 각 정렬 값을 개별 파라미터로 전달합니다. `page`와 `size`에만 파라미터 자체에 `example`이 붙고, 나머지 검색 필드 파라미터에는 예제 값이 없습니다.
 
+날짜/시간 필드의 단일 값 연산자 파라미터에는 타입에 맞는 OpenAPI `format`이 부여됩니다: `LocalDate`는 `date`, `LocalTime`은 `partial-time`, `LocalDateTime`·`Instant`·`OffsetDateTime`·`ZonedDateTime`은 `date-time`(RFC 3339)입니다. 이 `format`은 프론트엔드 코드 생성 도구가 알맞은 날짜/시간 선택기를 고르도록 돕습니다. IN, BETWEEN처럼 여러 값을 받는 연산자는 콤마로 구분한 문자열로 표현됩니다.
+
 ## 고급 문서화
 
 ### 1. 상세한 필드 문서화

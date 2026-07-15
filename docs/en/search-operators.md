@@ -395,6 +395,14 @@ createdAt.between=2024-01-01,2024-12-31
 
 `LocalDate` and `LocalTime` fields deal only in date-only or time-only units to begin with, so this adjustment does not apply -- the input value is used exactly as given.
 
+### Timezone Interpretation
+
+When you supply a timezone-less value (for example, `2024-01-01T00:00:00`) to a field that carries a time component -- `LocalDateTime`, `Instant`, `OffsetDateTime`, `ZonedDateTime`, or `Date` -- it is interpreted in the application timezone. This timezone is independent of the deployment host's JVM default timezone, and defaults to UTC.
+
+Values with a `Z` suffix or an explicit offset (for example, `2024-01-01T00:00:00Z` or `2024-01-01T09:00:00+09:00`) already denote an absolute instant, so this setting does not affect them.
+
+Set the timezone with `searchable.date-time.default-timezone`. See the [Auto-Configuration Guide](auto-configuration.md#date-time-settings) for details.
+
 ## Special Character Handling
 
 ### URL Encoding

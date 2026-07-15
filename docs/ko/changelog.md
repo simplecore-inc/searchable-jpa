@@ -22,13 +22,17 @@
 - **Hibernate 자동 설정 우선순위 변경**
   - 스타터가 등록하는 `searchable.hibernate.*` 기본값은 최저 우선순위로 적용되어 사용자가 지정한 Hibernate 설정이 항상 우선
   - 효과 없던 `@PostConstruct`의 `@ConditionalOnProperty` 제거, 배치 크기 속성에 1 이상 검증 추가
+- **시간대 없는 날짜/시간 검색값의 해석 기준 변경**
+  - 이전에는 배포 서버의 JVM 기본 시간대로 해석했으나, 이제 애플리케이션 시간대를 사용하며 미지정 시 UTC로 동작
+  - 기준 시간대는 `searchable.date-time.default-timezone`, 호스트의 `applicationZoneId` 빈, `spring.jackson.time-zone`, UTC 순으로 결정
 
 #### 개선 사항
 - 페이지네이션: `@EmbeddedId` 속성명을 메타모델에서 조회, 마지막 페이지를 넘어가는 요청에서도 total count 정확히 계산, 복합 키 구분 카운트 처리, ToMany 정렬을 GROUP BY 집계로 안정화, `CompositeKeyQueryExecutor`/`SpecificationQuerySupport`로 로직 분리
 - 파싱: 콤마 분할을 IN/NOT_IN/BETWEEN 등 다중값 연산자에만 적용, 빈 패턴 값 거부, BETWEEN 두 번째 값 검증
 - 조인/조건 생성: LIKE 조건에 ESCAPE 절 추가(리터럴 `%`/`_` 정확히 처리), 빈 패턴 값 거부
 - 서비스/유틸/예외: `@MappedSuperclass` 상속 필드 반영, UUID 값 파싱 지원
-- OpenAPI: IN/NOT_IN/BETWEEN 스키마에서 enum 값 유지, BETWEEN 예제의 상한/하한을 다른 값으로 생성, 상속 필드 문서화, 배열 타입 스키마 NPE 방어
+- 설정: 검색값 해석 기준 시간대를 지정하는 `searchable.date-time.default-timezone` 추가
+- OpenAPI: IN/NOT_IN/BETWEEN 스키마에서 enum 값 유지, BETWEEN 예제의 상한/하한을 다른 값으로 생성, 상속 필드 문서화, 배열 타입 스키마 NPE 방어, 날짜/시간 파라미터에 타입별 `format`(date/partial-time/date-time) 부여
 
 ---
 

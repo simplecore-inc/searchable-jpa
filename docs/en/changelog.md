@@ -22,13 +22,17 @@ This development version addresses findings from a code review and includes brea
 - **Changed priority of Hibernate auto-configuration**
   - The `searchable.hibernate.*` defaults registered by the starter now apply at the lowest priority, so any Hibernate settings you configure always take precedence.
   - Removed an ineffective `@ConditionalOnProperty` on a `@PostConstruct` method, and added validation requiring batch size properties to be 1 or greater.
+- **Changed how timezone-less date/time search values are interpreted**
+  - Previously interpreted in the deployment host's JVM default timezone; now interpreted in the application timezone, defaulting to UTC when unset.
+  - The timezone is resolved in this order: `searchable.date-time.default-timezone`, an `applicationZoneId` bean from the host, `spring.jackson.time-zone`, then UTC.
 
 #### Improvements
 - **Pagination**: resolves `@EmbeddedId` property names from the metamodel, computes the total count correctly even for requests beyond the last page, handles distinct counting for composite keys, stabilizes to-many sorting with GROUP BY aggregation, and separates the logic into `CompositeKeyQueryExecutor` and `SpecificationQuerySupport`
 - **Parsing**: applies comma splitting only to multi-value operators such as IN, NOT_IN, and BETWEEN, rejects empty pattern values, and validates the second BETWEEN value
 - **Joins and condition building**: adds an ESCAPE clause to LIKE conditions to correctly handle literal `%` and `_` characters, and rejects empty pattern values
 - **Service, utilities, and exceptions**: honors inherited fields from `@MappedSuperclass`, and adds support for parsing UUID values
-- **OpenAPI**: preserves enum values in IN/NOT_IN/BETWEEN schemas, generates distinct upper and lower bounds for BETWEEN examples, documents inherited fields, and guards array-type schema generation against NPEs
+- **Configuration**: adds `searchable.date-time.default-timezone` to set the timezone used to interpret search values
+- **OpenAPI**: preserves enum values in IN/NOT_IN/BETWEEN schemas, generates distinct upper and lower bounds for BETWEEN examples, documents inherited fields, guards array-type schema generation against NPEs, and assigns a per-type `format` (date/partial-time/date-time) to date/time parameters
 
 ---
 

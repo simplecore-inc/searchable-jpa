@@ -177,6 +177,8 @@ components:
 
 Each parameter description joins the field description and the operator name with a `-` (for example, `Post id - equals`). Enum-typed fields (`status`) are registered as a separate schema, and the parameter references that schema via `$ref`. The `sort` parameter uses `explode: true` so each sort value is passed as an individual parameter. Only `page` and `size` carry an `example` directly on the parameter; the other search field parameters have no example value.
 
+Single-value operators on date/time fields carry an OpenAPI `format` matching the field type: `LocalDate` uses `date`, `LocalTime` uses `partial-time`, and `LocalDateTime`, `Instant`, `OffsetDateTime`, and `ZonedDateTime` use `date-time` (RFC 3339). This `format` helps frontend code generators pick an appropriate date/time picker. Multi-value operators such as IN and BETWEEN are represented as a comma-separated string.
+
 ## Advanced Documentation
 
 ### 1. Detailed Field Documentation

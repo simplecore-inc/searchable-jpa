@@ -210,6 +210,10 @@ searchable:
   swagger:
     enabled: true  # Default: true, enables OpenAPI/Swagger integration
 
+  # Date/time settings
+  date-time:
+    default-timezone: UTC  # Timezone for interpreting timezone-less search values (IANA id, e.g. Asia/Seoul). Defaults to UTC when unset
+
   # Hibernate optimization settings
   hibernate:
     auto-optimization: true  # Default: true, enables automatic Hibernate optimization
@@ -226,6 +230,9 @@ searchable:
 ```properties
 # Swagger/OpenAPI settings
 searchable.swagger.enabled=true
+
+# Date/time settings
+searchable.date-time.default-timezone=UTC
 
 # Hibernate optimization settings
 searchable.hibernate.auto-optimization=true
@@ -277,6 +284,22 @@ searchable.hibernate.in-clause-parameter-padding=true
 - **Default**: `true`
 - **Description**: Enables IN clause parameter padding.
 - **Effect**: Improves performance by making query plan caching more effective.
+
+### Date/Time Settings
+
+Sets the application timezone used to interpret timezone-less date/time search values and to expand date-only BETWEEN boundaries. This timezone is independent of the deployment host's JVM default timezone, so search results stay consistent across different server environments.
+
+#### date-time.default-timezone
+- **Default**: unset
+- **Description**: The timezone used to interpret timezone-less search values. Uses an IANA timezone id (for example, `Asia/Seoul` or `UTC`).
+- **Effect**: Interprets timezone-less `LocalDateTime`, `Instant`, `OffsetDateTime`, `ZonedDateTime`, and `Date` search values -- and date-only BETWEEN boundaries -- in this timezone. Values with a `Z` suffix or an offset already denote an absolute instant and are unaffected.
+- **Resolution order**: When left unset, the timezone is resolved in the following order:
+  1. `searchable.date-time.default-timezone` (this setting)
+  2. An `applicationZoneId` bean (of type `ZoneId`) registered by the host application
+  3. `spring.jackson.time-zone`
+  4. UTC (final default)
+
+> ⚠ **Behavior change**: Previously, timezone-less search values were interpreted in the deployment host's JVM default timezone. They are now resolved in the order above, defaulting to UTC when nothing is set. If you need interpretation in the server's local timezone, specify it explicitly via `searchable.date-time.default-timezone`.
 
 ### Swagger Settings
 
