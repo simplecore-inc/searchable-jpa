@@ -12,7 +12,12 @@ import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -264,9 +269,23 @@ public class ParameterSchemaGenerator {
         }
 
         // Handle date/time types
-        if (rawType == LocalDateTime.class) {
+        if (rawType == LocalDateTime.class
+                || rawType == Instant.class
+                || rawType == OffsetDateTime.class
+                || rawType == ZonedDateTime.class) {
+            // Absolute-instant and datetime search params: emit format:date-time so the
+            // frontend codegen selects a date-time picker for these parameters.
             schema.type("string").format("date-time");
-            schema.description("Format: " + DEFAULT_DATE_FORMAT);
+            schema.description("Format: date-time (RFC 3339)");
+        } else if (rawType == LocalDate.class) {
+            // Calendar-date search params: emit format:date for a date-only picker.
+            schema.type("string").format("date");
+            schema.description("Format: yyyy-MM-dd");
+        } else if (rawType == LocalTime.class) {
+            // Wall-clock time search params: emit format:partial-time so the frontend codegen
+            // selects a time picker, matching the LocalTime response schema.
+            schema.type("string").format("partial-time");
+            schema.description("Format: HH:mm[:ss]");
         } else if (rawType == Long.class || rawType == long.class) {
             schema.type("integer").format("int64");
         } else if (rawType == Integer.class || rawType == int.class) {
