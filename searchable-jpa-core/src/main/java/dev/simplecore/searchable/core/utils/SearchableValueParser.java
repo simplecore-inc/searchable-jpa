@@ -89,6 +89,15 @@ public class SearchableValueParser {
     };
 
     /**
+     * Returns the application timezone used to interpret timezone-less values and to
+     * expand date-only BETWEEN boundaries. Backed by {@link SearchableTimeZoneHolder}
+     * so the parser never depends on the JVM default timezone.
+     */
+    private static ZoneId appZone() {
+        return SearchableTimeZoneHolder.getZoneId();
+    }
+
+    /**
      * Parse a string value to the specified target type for between operations.
      * For date types, if only date is provided (no time), it will be adjusted for range queries:
      * - Start value: set to beginning of day (00:00:00)
@@ -389,7 +398,7 @@ public class SearchableValueParser {
         // Try parsing as Instant first (for Z suffix)
         if (value.endsWith("Z")) {
             try {
-                return Instant.parse(value).atZone(ZoneId.systemDefault()).toLocalDateTime();
+                return Instant.parse(value).atZone(appZone()).toLocalDateTime();
             } catch (DateTimeParseException ignored) {
             }
         }
@@ -401,11 +410,11 @@ public class SearchableValueParser {
                 // Try parsing as OffsetDateTime first
                 try {
                     OffsetDateTime offsetDateTime = OffsetDateTime.parse(value, getCachedFormatter(formatter));
-                    return offsetDateTime.atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+                    return offsetDateTime.atZoneSameInstant(appZone()).toLocalDateTime();
                 } catch (DateTimeParseException e) {
                     // Try parsing as ZonedDateTime
                     ZonedDateTime zonedDateTime = ZonedDateTime.parse(value, getCachedFormatter(formatter));
-                    return zonedDateTime.withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+                    return zonedDateTime.withZoneSameInstant(appZone()).toLocalDateTime();
                 }
             } catch (DateTimeParseException e) {
                 lastError = e;
@@ -415,7 +424,7 @@ public class SearchableValueParser {
         // Fallback: try parsing as OffsetDateTime with common patterns
         try {
             OffsetDateTime offsetDateTime = OffsetDateTime.parse(value);
-            return offsetDateTime.atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+            return offsetDateTime.atZoneSameInstant(appZone()).toLocalDateTime();
         } catch (DateTimeParseException ignored) {
         }
 
@@ -487,7 +496,7 @@ public class SearchableValueParser {
             
             // If no timezone info, parse as LocalDateTime and use system default zone
             try {
-                return parseLocalDateTime(value).atZone(ZoneId.systemDefault());
+                return parseLocalDateTime(value).atZone(appZone());
             } catch (Exception ignored) {
                 throw new SearchableParseException(
                         MessageUtils.getMessage("parser.zoneddatetime.invalid", new Object[]{value}));
@@ -521,7 +530,7 @@ public class SearchableValueParser {
             // If no timezone info, parse as LocalDateTime and use system default offset
             try {
                 return parseLocalDateTime(value)
-                        .atZone(ZoneId.systemDefault())
+                        .atZone(appZone())
                         .toOffsetDateTime();
             } catch (Exception ignored) {
                 throw new SearchableParseException(
@@ -562,7 +571,7 @@ public class SearchableValueParser {
             // If no timezone info, parse as LocalDateTime and convert to Instant using system timezone
             try {
                 return parseLocalDateTime(value)
-                        .atZone(ZoneId.systemDefault())
+                        .atZone(appZone())
                         .toInstant();
             } catch (Exception ignored) {
                 throw new SearchableParseException(
@@ -577,7 +586,7 @@ public class SearchableValueParser {
         } catch (Exception e) {
             try {
                 return Date.from(parseLocalDateTime(value)
-                        .atZone(ZoneId.systemDefault())
+                        .atZone(appZone())
                         .toInstant());
             } catch (Exception ignored) {
                 throw new SearchableParseException(
@@ -667,7 +676,7 @@ public class SearchableValueParser {
             } else {
                 localDateTime = date.atTime(LocalTime.MIN);
             }
-            return localDateTime.atZone(ZoneId.systemDefault());
+            return localDateTime.atZone(appZone());
         }
         
         return parseZonedDateTime(value);
@@ -687,7 +696,7 @@ public class SearchableValueParser {
             } else {
                 localDateTime = date.atTime(LocalTime.MIN);
             }
-            return localDateTime.atZone(ZoneId.systemDefault()).toOffsetDateTime();
+            return localDateTime.atZone(appZone()).toOffsetDateTime();
         }
         
         return parseOffsetDateTime(value);
@@ -707,7 +716,7 @@ public class SearchableValueParser {
             } else {
                 localDateTime = date.atTime(LocalTime.MIN);
             }
-            return localDateTime.atZone(ZoneId.systemDefault()).toInstant();
+            return localDateTime.atZone(appZone()).toInstant();
         }
         
         return parseInstant(value);
@@ -727,7 +736,7 @@ public class SearchableValueParser {
             } else {
                 localDateTime = date.atTime(LocalTime.MIN);
             }
-            return Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
+            return Date.from(localDateTime.atZone(appZone()).toInstant());
         }
         
         return parseDate(value);

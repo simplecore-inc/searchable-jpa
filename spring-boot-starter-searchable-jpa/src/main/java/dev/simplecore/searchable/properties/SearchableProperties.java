@@ -16,9 +16,23 @@ public class SearchableProperties {
     @Valid
     private HibernateProperties hibernate = new HibernateProperties();
 
+    @Valid
+    private DateTimeProperties dateTime = new DateTimeProperties();
+
     @Data
     public static class SwaggerProperties {
         private boolean enabled = true;
+    }
+
+    @Data
+    public static class DateTimeProperties {
+        /**
+         * Application timezone (IANA id, e.g. "Asia/Seoul", "UTC") used to interpret
+         * timezone-less search values and expand date-only BETWEEN boundaries.
+         * When null, resolution falls back to an application ZoneId bean, then
+         * spring.jackson.time-zone, then UTC.
+         */
+        private String defaultTimezone;
     }
 
     @Data

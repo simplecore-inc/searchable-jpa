@@ -1,13 +1,14 @@
 package dev.simplecore.searchable.autoconfigure;
 
+import dev.simplecore.searchable.core.utils.SearchableTimeZoneHolder;
 import dev.simplecore.searchable.properties.SearchableProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -16,6 +17,8 @@ import org.springframework.core.env.MutablePropertySources;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManager;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,14 +29,60 @@ import java.util.Map;
 @Order(1)
 public class SearchableJpaConfiguration {
     private static final Logger log = LoggerFactory.getLogger(SearchableJpaConfiguration.class);
-    
+
+    /**
+     * Optional bean name a host application may define to publish its canonical
+     * application timezone as a single {@link ZoneId} value.
+     */
+    private static final String APPLICATION_ZONE_ID_BEAN = "applicationZoneId";
+
     private final SearchableProperties searchableProperties;
     private final ConfigurableEnvironment environment;
+    private final BeanFactory beanFactory;
 
-    public SearchableJpaConfiguration(SearchableProperties searchableProperties, ConfigurableEnvironment environment) {
+    public SearchableJpaConfiguration(SearchableProperties searchableProperties,
+                                      ConfigurableEnvironment environment,
+                                      BeanFactory beanFactory) {
         this.searchableProperties = searchableProperties;
         this.environment = environment;
+        this.beanFactory = beanFactory;
         log.trace("SearchableJpaConfiguration is being initialized");
+    }
+
+    // Note: @Conditional-style annotations have no effect on @PostConstruct, so this runs unconditionally.
+    @PostConstruct
+    public void configureSearchableTimeZone() {
+        ZoneId zone = resolveApplicationZoneId();
+        SearchableTimeZoneHolder.setZoneId(zone);
+        log.info("Searchable value parser timezone set to: {}", zone);
+    }
+
+    private ZoneId resolveApplicationZoneId() {
+        // 1. Explicit searchable override
+        String configured = searchableProperties.getDateTime().getDefaultTimezone();
+        if (configured != null && !configured.isEmpty()) {
+            try {
+                return ZoneId.of(configured);
+            } catch (Exception e) {
+                log.warn("Invalid searchable.date-time.default-timezone '{}', falling back", configured);
+            }
+        }
+        // 2. Host-provided application ZoneId bean (single canonical value), when the host defines one
+        if (beanFactory.containsBean(APPLICATION_ZONE_ID_BEAN)
+                && beanFactory.isTypeMatch(APPLICATION_ZONE_ID_BEAN, ZoneId.class)) {
+            return beanFactory.getBean(APPLICATION_ZONE_ID_BEAN, ZoneId.class);
+        }
+        // 3. Spring Jackson standard key (shared, framework-neutral)
+        String springTimezone = environment.getProperty("spring.jackson.time-zone");
+        if (springTimezone != null && !springTimezone.isEmpty()) {
+            try {
+                return ZoneId.of(springTimezone);
+            } catch (Exception e) {
+                log.warn("Invalid spring.jackson.time-zone '{}', falling back to UTC", springTimezone);
+            }
+        }
+        // 4. Deployment-independent default (never the JVM default timezone)
+        return ZoneOffset.UTC;
     }
 
     // Note: @Conditional-style annotations are only evaluated for @Bean/@Configuration processing and

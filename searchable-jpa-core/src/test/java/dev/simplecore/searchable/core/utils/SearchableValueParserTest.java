@@ -33,6 +33,9 @@ class SearchableValueParserTest {
     void setUp() {
         // Set English locale for tests to ensure consistent error messages
         LocaleContextHolder.setLocale(Locale.ENGLISH);
+        // This test context's application zone is the JVM zone (deployment rule 4),
+        // so timezone-less values resolve exactly as these assertions expect.
+        SearchableTimeZoneHolder.setZoneId(ZoneId.systemDefault());
     }
 
     @Test
