@@ -1,9 +1,10 @@
-[English](../../README.md) | 한국어
+[English](/en/README.md) | 한국어
 
 # Searchable JPA
 
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2%2B-green.svg)](https://spring.io/projects/spring-boot)
+[![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-9%2B-blue.svg)](https://jakarta.ee/)
 [![License](https://img.shields.io/badge/License-SCL--1.0-blue.svg)](../../LICENSE)
 
 Spring Data JPA를 확장하여 동적 검색, 정렬, 페이지네이션 기능을 제공하는 라이브러리입니다.
@@ -111,19 +112,18 @@ public class PostController {
 
 ```bash
 # 제목에 "Spring"이 포함된 게시물 검색
-GET /api/posts/search?title.contains=Spring&sort=createdAt,desc&page=0&size=10
+GET /api/posts/search?title.contains=Spring&sort=createdAt.desc&page=0&size=10
 ```
 
 ## 모듈 아키텍처
 
+searchable-jpa-core, searchable-jpa-openapi, spring-boot-starter-searchable-jpa는 각각 독립된 최상위 Gradle 모듈이며, 아래는 모듈 간 의존 관계입니다.
+
 ```
-Searchable JPA
-|
-+-- searchable-jpa-core ------------ 핵심 라이브러리
-|   |
-|   +-- searchable-jpa-openapi ----- OpenAPI/Swagger 지원
-|
-+-- spring-boot-starter-searchable-jpa - Spring Boot 자동 설정 스타터
+spring-boot-starter-searchable-jpa   Spring Boot 자동 설정 스타터
+  +-- searchable-jpa-core            핵심 라이브러리
+  +-- searchable-jpa-openapi         OpenAPI/Swagger 지원
+        +-- searchable-jpa-core
 ```
 
 ## 지원하는 검색 연산자
@@ -151,6 +151,7 @@ Searchable JPA
 |--------|------|
 | [설치 가이드](./installation.md) | 시스템 요구사항 및 설치 안내 |
 | [기본 사용법](./basic-usage.md) | 기본 사용법과 예제 |
+| [자동 설정](./auto-configuration.md) | Spring Boot 자동 설정과 Hibernate 최적화 옵션 |
 | [검색 연산자](./search-operators.md) | 지원하는 모든 검색 연산자 |
 | [2단계 쿼리 최적화](./two-phase-query-optimization.md) | 대용량 데이터를 위한 고성능 페이지네이션 |
 | [관계형 데이터와 2단계 쿼리](./relationship-and-two-phase-query.md) | JPA 관계 매핑과 N+1 문제 해결 |
@@ -167,7 +168,7 @@ Searchable JPA
 
 ## 라이선스
 
-이 프로젝트는 [SimpleCORE License 1.0 (SCL-1.0)](./license.md) 라이선스를 따릅니다.
+이 프로젝트는 [SimpleCORE License 1.0 (SCL-1.0)](./license.md)을 따릅니다.
 
 ## 개발팀
 

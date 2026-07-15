@@ -1,12 +1,12 @@
-# 고급 기능
+# Advanced Features
 
-이 문서는 Searchable JPA의 고급 기능을 설명합니다.
+This document covers advanced features of Searchable JPA.
 
-## 다른 베이스 클래스를 상속해야 하는 경우
+## When You Need to Extend a Different Base Class
 
-이 문서와 기본 사용법 문서의 서비스 예제는 모두 `DefaultSearchableService`를 상속하는 방식을 사용합니다. 그런데 서비스 클래스가 이미 다른 베이스 클래스를 상속하고 있어 `DefaultSearchableService`를 상속할 수 없는 경우가 있습니다. 이때는 `SearchableServiceSupport` 인터페이스와 `SearchableServiceDelegate`를 조합해 동일한 검색 기능을 컴포지션 방식으로 구현합니다.
+The service examples in this document and in the Basic Usage guide all extend `DefaultSearchableService`. Sometimes, however, a service class already extends a different base class and cannot also extend `DefaultSearchableService`. In that case, combine the `SearchableServiceSupport` interface with `SearchableServiceDelegate` to implement the same search functionality through composition instead of inheritance.
 
-`SearchableServiceDelegate`는 `SearchableService`의 모든 메서드 구현을 캡슐화한 독립 클래스이고, `SearchableServiceSupport`는 이 델리게이트에 위임하는 기본 메서드를 제공하는 믹스인 인터페이스입니다. `DefaultSearchableService` 자체도 내부적으로 `SearchableServiceDelegate`에 위임하는 `SearchableServiceSupport` 구현체입니다.
+`SearchableServiceDelegate` is a standalone class that encapsulates every method implementation of `SearchableService`, and `SearchableServiceSupport` is a mixin interface that provides default methods delegating to it. `DefaultSearchableService` itself is a `SearchableServiceSupport` implementation that internally delegates to a `SearchableServiceDelegate`.
 
 ```java
 @Service
@@ -26,22 +26,22 @@ public class PostService extends SomeOtherBaseClass
 }
 ```
 
-`repository`는 `JpaRepository`와 `JpaSpecificationExecutor`를 함께 구현해야 합니다. 이 조건을 만족하지 않으면 `SearchableServiceDelegate` 생성 시점에 예외가 발생합니다.
+`repository` must implement both `JpaRepository` and `JpaSpecificationExecutor`. If it does not satisfy this requirement, constructing `SearchableServiceDelegate` throws an exception.
 
-`PostService`는 `DefaultSearchableService`를 상속한 서비스와 동일한 방식으로 호출합니다.
+You call `PostService` the same way you call a service that extends `DefaultSearchableService`.
 
 ```java
 Page<Post> result = postService.findAllWithSearch(condition);
 long updatedCount = postService.updateWithSearch(condition, updateData);
 ```
 
-인터페이스 구현 없이 `SearchableServiceDelegate` 인스턴스를 직접 생성해 메서드를 호출하는 방식도 지원합니다.
+You can also create a `SearchableServiceDelegate` instance directly and call its methods without implementing the interface.
 
-## 프로젝션(Projection) 지원
+## Projection Support
 
-엔티티 필드 일부만 조회하려면 인터페이스 기반 프로젝션을 사용합니다.
+Use interface-based projections to fetch only a subset of an entity's fields.
 
-### 인터페이스 기반 프로젝션
+### Interface-Based Projections
 
 ```java
 public interface PostSummary {
@@ -49,13 +49,13 @@ public interface PostSummary {
     String getAuthorName();
     LocalDateTime getCreatedAt();
 
-    // 계산된 필드 (SpEL 표현식 지원)
+    // Computed field (SpEL expressions supported)
     @Value("#{target.title + ' by ' + target.authorName}")
     String getDisplayName();
 }
 ```
 
-### 프로젝션 사용
+### Using a Projection
 
 ```java
 @GetMapping("/summaries")
@@ -68,7 +68,7 @@ public Page<PostSummary> getPostSummaries(
 }
 ```
 
-### 동적 프로젝션
+### Dynamic Projections
 
 ```java
 @GetMapping("/dynamic-summaries")
@@ -90,17 +90,17 @@ public Page<?> getDynamicSummaries(
 }
 ```
 
-### 제한사항
+### Limitations
 
-- **인터페이스만 지원**: 현재 구현에서는 인터페이스 기반 프로젝션만 지원됩니다
-- **클래스 기반 프로젝션**: DTO 클래스를 사용한 프로젝션은 아직 지원되지 않습니다
-- **계산된 필드**: `@Value` 어노테이션을 사용한 SpEL 표현식을 지원합니다
+- **Interfaces only**: The current implementation supports interface-based projections only.
+- **Class-based projections**: Projections based on DTO classes are not yet supported.
+- **Computed fields**: SpEL expressions via the `@Value` annotation are supported.
 
-## 배치 업데이트
+## Batch Update
 
-검색 조건에 맞는 여러 엔티티를 한 번에 업데이트합니다.
+Update multiple entities that match a search condition in a single call.
 
-### 업데이트 DTO
+### Update DTO
 
 ```java
 public class PostUpdateDTO {
@@ -113,9 +113,9 @@ public class PostUpdateDTO {
 }
 ```
 
-### 배치 업데이트 실행
+### Executing a Batch Update
 
-Spring MVC는 요청 본문을 한 번만 읽으므로, 검색 조건과 수정할 값을 각각 별도의 `@RequestBody` 파라미터로는 받을 수 없습니다. 두 값을 하나의 요청 DTO로 감쌉니다.
+Spring MVC reads the request body only once, so a search condition and the update values cannot each be bound from a separate `@RequestBody` parameter. Wrap both values in a single request DTO instead.
 
 ```java
 public class BatchUpdateRequest {
@@ -133,7 +133,7 @@ public ResponseEntity<Long> batchUpdate(@RequestBody BatchUpdateRequest request)
 }
 ```
 
-### 조건부 배치 업데이트
+### Conditional Batch Update
 
 ```java
 @Service
@@ -155,10 +155,10 @@ public class PostService extends DefaultSearchableService<Post, Long> {
 }
 ```
 
-### 사용 예제
+### Usage Example
 
 ```bash
-# 특정 조건의 게시글 상태를 일괄 변경
+# Bulk-update the status of posts matching a condition
 PUT /api/posts/batch-update
 Content-Type: application/json
 
@@ -186,11 +186,11 @@ Content-Type: application/json
 }
 ```
 
-## 배치 삭제
+## Batch Delete
 
-검색 조건에 맞는 여러 엔티티를 한 번에 삭제합니다.
+Delete multiple entities that match a search condition in a single call.
 
-### 기본 배치 삭제
+### Basic Batch Delete
 
 ```java
 @DeleteMapping("/batch-delete")
@@ -202,7 +202,7 @@ public ResponseEntity<Long> batchDelete(
 }
 ```
 
-### 안전한 배치 삭제
+### Safe Batch Delete
 
 ```java
 @Service
@@ -220,7 +220,7 @@ public class PostService extends DefaultSearchableService<Post, Long> {
             )
             .build();
             
-        // 삭제 전 개수 확인
+        // Check the count before deleting
         Page<Post> toDelete = findAllWithSearch(condition);
         log.info("Deleting {} old draft posts", toDelete.getTotalElements());
         
@@ -229,18 +229,18 @@ public class PostService extends DefaultSearchableService<Post, Long> {
 }
 ```
 
-## 동적 정렬
+## Dynamic Sorting
 
-검색 조건과 함께 정렬 조건을 동적으로 지정합니다.
+Specify sort conditions dynamically alongside search conditions.
 
-### 다중 필드 정렬
+### Multi-Field Sorting
 
 ```bash
-# 상태 오름차순, 생성일 내림차순, ID 오름차순
+# Status ascending, created date descending, ID ascending
 GET /api/posts/search?sort=status.asc,createdAt.desc,id.asc
 ```
 
-### JSON 방식 동적 정렬
+### Dynamic Sorting via JSON
 
 ```json
 {
@@ -271,7 +271,7 @@ GET /api/posts/search?sort=status.asc,createdAt.desc,id.asc
 }
 ```
 
-### 프로그래매틱 정렬
+### Programmatic Sorting
 
 ```java
 @Service
@@ -285,7 +285,7 @@ public class PostService extends DefaultSearchableService<Post, Long> {
             builder = builder.where(group -> group.equals("status", PostStatus.valueOf(status)));
         }
         
-        // 동적 정렬 추가
+        // Add dynamic sorting
         if (sortField != null && sortDirection != null) {
             builder = builder.sort(sort -> {
                 if ("ASC".equalsIgnoreCase(sortDirection)) {
@@ -302,29 +302,29 @@ public class PostService extends DefaultSearchableService<Post, Long> {
 }
 ```
 
-## 중첩 필드 검색
+## Nested Field Search
 
-연관 엔티티의 필드로 검색합니다.
+Search on fields of related entities.
 
-### 깊은 중첩 필드 검색
+### Deeply Nested Field Search
 
 ```java
 public class PostSearchDTO {
-    // 2단계 중첩
+    // Two levels of nesting
     @SearchableField(entityField = "author.profile.department", operators = {EQUALS, CONTAINS})
     private String authorDepartment;
     
-    // 3단계 중첩
+    // Three levels of nesting
     @SearchableField(entityField = "author.profile.company.name", operators = {CONTAINS})
     private String companyName;
     
-    // 컬렉션 중첩
+    // Nesting through a collection
     @SearchableField(entityField = "comments.author.name", operators = {CONTAINS})
     private String commentAuthorName;
 }
 ```
 
-### 중첩 필드 조건부 검색
+### Conditional Search on Nested Fields
 
 ```java
 @GetMapping("/advanced-search")
@@ -353,16 +353,16 @@ public Page<Post> advancedSearch(
 }
 ```
 
-## 기존 검색 조건 확장
+## Extending Existing Search Conditions
 
-기존 `SearchCondition` 객체를 기반으로 새 조건을 추가합니다. 원본 객체는 그대로 두고 검색 조건을 재사용하거나 확장할 때 사용합니다.
+Add new conditions on top of an existing `SearchCondition` object. This leaves the original object untouched, so you can reuse or extend a search condition without mutating it.
 
-### from() 팩토리 메서드
+### The from() Factory Method
 
-`SearchConditionBuilder.from()` 메서드는 기존 검색 조건을 복사하고 새 조건을 추가합니다.
+`SearchConditionBuilder.from()` copies an existing search condition and adds new conditions to the copy.
 
 ```java
-// 기본 검색 조건 생성
+// Create a base search condition
 SearchCondition<PostSearchDTO> baseCondition = SearchConditionBuilder
     .create(PostSearchDTO.class)
     .where(w -> w.equals("status", PostStatus.PUBLISHED))
@@ -371,18 +371,18 @@ SearchCondition<PostSearchDTO> baseCondition = SearchConditionBuilder
     .size(10)
     .build();
 
-// 기존 조건 기반으로 새 조건 추가
+// Add a new condition on top of the existing one
 SearchCondition<PostSearchDTO> extendedCondition = SearchConditionBuilder
     .from(baseCondition, PostSearchDTO.class)
     .and(a -> a.greaterThan("viewCount", 100))
     .build();
 
-// baseCondition은 변경되지 않음 (불변성 유지)
+// baseCondition is left unchanged (immutability preserved)
 ```
 
-### AND/OR 조건 결합 순서
+### AND/OR Condition Combination Order
 
-`SearchConditionBuilder`의 `where()`, `and()`, `or()`는 호출한 순서대로 조건 노드를 쌓습니다. 최종 `Predicate`는 이 노드 목록을 왼쪽에서 오른쪽으로 접어가며(fold) 만들고, 각 노드는 자신에게 지정된 연산자(AND/OR)로 그때까지 누적된 결과와 결합됩니다. 목록의 첫 노드에는 연산자가 없습니다.
+`where()`, `and()`, and `or()` on `SearchConditionBuilder` stack condition nodes in call order. The final `Predicate` is built by folding this list of nodes from left to right: each node combines with the result accumulated so far using its own operator (AND/OR). The first node in the list carries no operator.
 
 ```java
 SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
@@ -393,7 +393,7 @@ SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
     .build();
 ```
 
-이 호출은 노드 목록 `[a, b(AND), c(OR)]`를 만들고, 다음 순서로 접습니다.
+This call produces the node list `[a, b(AND), c(OR)]` and folds it in the following order.
 
 ```
 result = a
@@ -401,7 +401,7 @@ result = result AND b
 result = result OR c
 ```
 
-최종 조건은 `(a AND b) OR c`이며, `a AND (b OR c)`가 아닙니다. `b`와 `c`를 하나로 묶어 `a AND (b OR c)`를 표현하려면 `or()`를 최상위에 별도로 두지 말고, 하나의 `and()` 호출 안에 중첩합니다.
+The final condition is `(a AND b) OR c`, not `a AND (b OR c)`. To group `b` and `c` together and express `a AND (b OR c)`, do not place `or()` at the top level as a separate call — nest it inside a single `and()` call instead.
 
 ```java
 SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
@@ -409,22 +409,22 @@ SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
     .where(w -> w.equals("status", "PUBLISHED"))              // a
     .and(a -> a
         .equals("authorId", currentUserId)                     // b
-        .or(o -> o.equals("visibility", "PUBLIC"))              // c, and() 안에 중첩
+        .or(o -> o.equals("visibility", "PUBLIC"))              // c, nested inside and()
     )
     .build();
 ```
 
-이렇게 중첩하면 `b`와 `c`가 하나의 그룹으로 묶여 `a AND (b OR c)`가 됩니다.
+Nesting it this way groups `b` and `c` into a single unit, producing `a AND (b OR c)`.
 
-![AND/OR 조건 그룹 평가 순서](_images/condition-group-evaluation.svg)
+![AND/OR condition group evaluation order](_images/condition-group-evaluation.svg)
 
-*그림. `.where(a).and(b).or(c)` 호출이 노드 목록 `[a, b(AND), c(OR)]`로 쌓이고 좌에서 우로 접혀 `(a AND b) OR c`가 되는 과정*
+*Figure. How the calls `.where(a).and(b).or(c)` stack into the node list `[a, b(AND), c(OR)]` and fold left to right into `(a AND b) OR c`.*
 
-### 실용적인 활용 사례
+### Practical Use Cases
 
-#### 1. 테넌트별 필터 추가
+#### 1. Adding a Tenant Filter
 
-멀티테넌트 환경에서 기본 검색 조건에 테넌트 필터를 추가합니다.
+In a multi-tenant environment, add a tenant filter on top of a base search condition.
 
 ```java
 @Service
@@ -444,9 +444,9 @@ public class PostService extends DefaultSearchableService<Post, Long> {
 }
 ```
 
-#### 2. 권한 기반 필터 추가
+#### 2. Adding a Permission-Based Filter
 
-사용자 권한에 따라 검색 조건을 동적으로 확장합니다.
+Extend a search condition dynamically based on the user's permissions.
 
 ```java
 @Service
@@ -459,7 +459,7 @@ public class PostService extends DefaultSearchableService<Post, Long> {
         SearchConditionBuilder<PostSearchDTO> builder = SearchConditionBuilder
             .from(baseCondition, PostSearchDTO.class);
 
-        // 관리자가 아니면 다른 사용자의 비공개 게시글은 제외 (본인 게시글은 공개 여부와 무관하게 조회)
+        // Non-admins are excluded from other users' private posts (their own posts remain visible regardless of visibility)
         if (!currentUser.isAdmin()) {
             builder = builder.and(a -> a
                 .notEquals("visibility", "PRIVATE")
@@ -472,9 +472,9 @@ public class PostService extends DefaultSearchableService<Post, Long> {
 }
 ```
 
-#### 3. 컨트롤러에서 조건 확장
+#### 3. Extending Conditions in the Controller
 
-클라이언트 요청에 서버 측 조건을 추가합니다.
+Add server-side conditions to a client request.
 
 ```java
 @RestController
@@ -488,7 +488,7 @@ public class PostController {
             @RequestBody SearchCondition<PostSearchDTO> clientCondition,
             @AuthenticationPrincipal User currentUser
     ) {
-        // 클라이언트 조건에 서버 측 필터 추가
+        // Add server-side filters on top of the client's condition
         SearchCondition<PostSearchDTO> serverCondition = SearchConditionBuilder
             .from(clientCondition, PostSearchDTO.class)
             .and(a -> a.notEquals("status", PostStatus.DELETED))
@@ -500,12 +500,12 @@ public class PostController {
 }
 ```
 
-### 정렬 및 페이징 오버라이드
+### Overriding Sort and Paging
 
-기존 조건의 정렬이나 페이징을 변경합니다.
+Change the sort order or paging of an existing condition.
 
 ```java
-// 기존 조건
+// Existing condition
 SearchCondition<PostSearchDTO> original = SearchConditionBuilder
     .create(PostSearchDTO.class)
     .where(w -> w.equals("status", PostStatus.PUBLISHED))
@@ -514,43 +514,43 @@ SearchCondition<PostSearchDTO> original = SearchConditionBuilder
     .size(10)
     .build();
 
-// 정렬 변경
+// Change the sort order
 SearchCondition<PostSearchDTO> withNewSort = SearchConditionBuilder
     .from(original, PostSearchDTO.class)
-    .sort(s -> s.desc("createdAt"))  // 정렬 오버라이드
+    .sort(s -> s.desc("createdAt"))  // Override the sort
     .build();
 
-// 페이징 변경
+// Change the paging
 SearchCondition<PostSearchDTO> withNewPage = SearchConditionBuilder
     .from(original, PostSearchDTO.class)
-    .page(5)   // 페이지 오버라이드
-    .size(20)  // 사이즈 오버라이드
+    .page(5)   // Override the page
+    .size(20)  // Override the size
     .build();
 ```
 
-### 주의사항
+### Notes
 
-- **불변성**: `from()` 메서드는 항상 새로운 `SearchCondition` 객체를 생성합니다. 원본 객체는 변경되지 않습니다.
-- **DTO 클래스 필수**: `from()` 메서드에 DTO 클래스를 명시적으로 전달해야 합니다. 이는 `build()` 시점에 검증을 수행하기 위함입니다.
-- **검증 시점**: 모든 조건(기존 + 새로 추가된 조건)은 `build()` 호출 시 함께 검증됩니다.
+- **Immutability**: `from()` always creates a new `SearchCondition` object. The original object is never modified.
+- **DTO class required**: You must pass the DTO class explicitly to `from()`, since it is used to run validation at `build()` time.
+- **Validation timing**: All conditions — both the original ones and any newly added ones — are validated together when `build()` is called.
 
-## 다국어 지원
+## Internationalization
 
-라이브러리 내부 검증 오류 메시지는 `MessageUtils`가 조회합니다. 기본 제공 번들(`messages/message.properties`, `messages/message_ko.properties`)에 로케일별 문구가 들어 있고, 요청 로케일은 `LocaleContextHolder`에서 가져옵니다.
+`MessageUtils` looks up the library's internal validation error messages. Its bundled resource bundles (`messages/message.properties`, `messages/message_ko.properties`) hold the locale-specific text, and the request locale comes from `LocaleContextHolder`.
 
-### 라이브러리 내장 메시지 조회
+### Looking Up Built-in Library Messages
 
 ```java
 import dev.simplecore.searchable.core.i18n.MessageUtils;
 
 String message = MessageUtils.getMessage("validator.field.not.found", new Object[]{"title", "PostSearchDTO"});
 // locale=ko: "필드 title를 PostSearchDTO에서 찾을 수 없습니다"
-// locale=en(기본값): "Field title not found in PostSearchDTO"
+// locale=en (default): "Field title not found in PostSearchDTO"
 ```
 
-### 커스텀 메시지 등록
+### Registering Custom Messages
 
-`MessageUtils`는 Spring Boot 자동 구성으로 초기화되지 않습니다. `init()`을 호출하기 전에 `getMessage()`가 먼저 실행되면 라이브러리 내장 번들만 바라보는 기본 `MessageSource`로 고정되므로, 애플리케이션 메시지를 추가하려면 시작 시점에 `MessageUtils.init(...)`을 직접 호출해 `MessageSource`를 등록합니다.
+Spring Boot auto-configuration does not initialize `MessageUtils`. If `getMessage()` runs before `init()` is called, it locks onto a default `MessageSource` that only sees the library's built-in bundle. To add application messages, call `MessageUtils.init(...)` yourself at startup to register a `MessageSource`.
 
 ```java
 @Configuration
@@ -567,7 +567,7 @@ public class MessageConfig {
 }
 ```
 
-`messages/message`는 라이브러리가 제공하는 기본 번들이고, `messages/custom-message`는 애플리케이션이 추가하는 번들입니다. 두 번들을 함께 등록하면 라이브러리 내장 키와 커스텀 키를 모두 `MessageUtils.getMessage(...)`로 조회할 수 있습니다.
+`messages/message` is the default bundle the library provides, and `messages/custom-message` is the bundle your application adds. Registering both bundles together lets you look up both the library's built-in keys and your custom keys through `MessageUtils.getMessage(...)`.
 
 ```properties
 # messages/custom-message_ko.properties
@@ -593,25 +593,25 @@ public class PostService extends DefaultSearchableService<Post, Long> {
 }
 ```
 
-## 복합 키 지원
+## Composite Key Support
 
-복합 키 엔티티에 대한 자세한 내용은 다음 문서를 참조하세요:
+For details on composite key entities, see:
 
-- [2단계 쿼리 최적화 - 복합 키 지원](two-phase-query-optimization.md#복합-키-지원)
-- [설치 가이드 - 복합 키 엔티티 설정](installation.md#복합-키-엔티티-설정)
+- [Two-Phase Query Optimization - Composite Key Support](two-phase-query-optimization.md#composite-key-support)
+- [Installation Guide - Composite Key Entity Configuration](installation.md#composite-key-entity-configuration)
 
-### 간단한 사용 예제
+### Simple Usage Example
 
 ```java
-// @IdClass 방식
+// @IdClass approach
 @Service
 public class IdClassService extends DefaultSearchableService<TestIdClassEntity, TestIdClassEntity.CompositeKey> {
-    // 자동으로 복합 키 최적화 적용
+    // Composite key optimization applies automatically
 }
 
-// @EmbeddedId 방식  
+// @EmbeddedId approach
 @Service
 public class EmbeddedIdService extends DefaultSearchableService<TestCompositeKeyEntity, TestCompositeKeyEntity.CompositeKey> {
-    // 자동으로 복합 키 최적화 적용
+    // Composite key optimization applies automatically
 }
 ```

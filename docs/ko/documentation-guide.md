@@ -1,10 +1,10 @@
-# Documentation Guide
+# 문서 기여 가이드
 
-Searchable JPA 문서 시스템에 대한 가이드입니다. 문서 빌드, 로컬 미리보기, 기여 방법을 설명합니다.
+이 문서는 Searchable JPA 문서 시스템의 빌드, 로컬 미리보기, 기여 방법을 설명합니다.
 
 ## 문서 구조
 
-Searchable JPA 문서는 `docs/ko/` 폴더에 집중되어 있습니다.
+Searchable JPA 문서는 `docs/en/`(기본 언어인 영어)과 `docs/ko/`(한국어 번역) 폴더로 나뉘어 있습니다.
 
 ```
 searchable-jpa/
@@ -13,6 +13,10 @@ searchable-jpa/
 │   ├── .nojekyll           # GitHub Pages Jekyll 비활성화
 │   ├── _coverpage.md       # 커버 페이지
 │   ├── _navbar.md          # 상단 네비게이션
+│   ├── en/
+│   │   ├── _sidebar.md     # 사이드바 네비게이션
+│   │   ├── README.md       # 메인 페이지
+│   │   └── ...             # 기타 문서 (번역 진행 중)
 │   └── ko/
 │       ├── _sidebar.md     # 사이드바 네비게이션
 │       ├── README.md       # 메인 페이지
@@ -34,10 +38,11 @@ searchable-jpa/
 ```
 
 빌드 스크립트는 다음 작업을 수행합니다:
-- 모든 문서를 `build-docs/` 폴더로 복사
-- 상대 경로 링크를 Docsify 절대 경로로 변환
+- Docsify 설정 파일(`index.html`, `.nojekyll`, `_coverpage.md`, `_navbar.md`)을 `build-docs/`로 복사
+- 기본 언어인 영어 사이드바(`en/_sidebar.md`)는 `build-docs/en/`과 `build-docs/` 루트에, 한국어 사이드바(`ko/_sidebar.md`)는 `build-docs/ko/`에 복사
 - 커버 페이지의 버전 플레이스홀더(`{{VERSION}}`) 치환
-- Docsify 설정 파일 복사
+- `docs/en/`, `docs/ko/`의 문서를 각각 `build-docs/en/`, `build-docs/ko/`로 복사하고, 로케일별 `_images/` 폴더가 있으면 그 안의 SVG 이미지도 함께 복사
+- 상대 경로 링크(`./`)를 Docsify 절대 경로로 변환
 
 ### 2. 로컬 서버 실행
 
@@ -65,8 +70,8 @@ http://localhost:3000
 
 ### 새 문서 추가
 
-1. `docs/ko/` 폴더에 마크다운 파일 생성
-2. `docs/ko/_sidebar.md`에 네비게이션 링크 추가
+1. `docs/ko/` 폴더(한국어)와 `docs/en/` 폴더(영어)에 마크다운 파일 생성
+2. `docs/ko/_sidebar.md`와 `docs/en/_sidebar.md`에 네비게이션 링크 추가
 
 ```markdown
 * **카테고리명**
@@ -102,7 +107,7 @@ public class PostService extends DefaultSearchableService<Post, Long> {
 |-----|-----|
 | 값1 | 값2 |
 
-**알림 박스 (GitHub 스타일)**
+**인용구 표기 (GitHub 스타일)**
 
 ```markdown
 > [!TIP]
@@ -118,6 +123,8 @@ public class PostService extends DefaultSearchableService<Post, Long> {
 > 참고 내용
 ```
 
+`[!TIP]`, `[!WARNING]`, `[!IMPORTANT]`, `[!NOTE]` 같은 GitHub 스타일 표기는 별도의 알림 박스 플러그인 없이 일반 인용구로 렌더링됩니다. 강조할 내용은 굵게 표시하거나 별도 문단으로 작성합니다.
+
 **Mermaid 다이어그램**
 
 ```markdown
@@ -132,7 +139,7 @@ graph LR
 
 ### 자동 배포
 
-`master` 브랜치에 문서 변경사항이 push되면 GitHub Actions가 자동으로 배포합니다.
+`master` 브랜치에 문서 변경사항을 push하면 GitHub Actions가 자동으로 배포합니다.
 
 트리거 조건:
 - `docs/**` 파일 변경
@@ -180,8 +187,8 @@ https://simplecore-inc.github.io/searchable-jpa/
 ### 새 문서 추가
 
 1. 저장소 fork
-2. `docs/ko/` 폴더에 문서 작성
-3. `docs/ko/_sidebar.md`에 링크 추가
+2. `docs/ko/` 폴더(한국어)와 `docs/en/` 폴더(영어)에 문서 작성
+3. `docs/ko/_sidebar.md`와 `docs/en/_sidebar.md`에 링크 추가
 4. 로컬에서 빌드 및 확인
 5. PR 생성
 
@@ -189,7 +196,7 @@ https://simplecore-inc.github.io/searchable-jpa/
 
 - 파일명: kebab-case 사용 (예: `two-phase-query.md`)
 - 제목: 각 문서는 `# 제목`으로 시작
-- 언어: 한국어 문서는 `docs/ko/`, 영어 문서는 `docs/en/`
+- 언어: 영어 문서(기본)는 `docs/en/`, 한국어 문서(번역)는 `docs/ko/`
 
 ## 트러블슈팅
 
@@ -203,7 +210,7 @@ chmod +x scripts/build-docs.sh
 ### 링크가 작동하지 않음
 
 - 빌드 후 `build-docs/` 폴더에서 확인해야 합니다
-- 원본 `docs/` 폴더에서 직접 열면 일부 링크가 작동하지 않을 수 있습니다
+- 원본 `docs/` 폴더에서 직접 열면 일부 링크가 작동하지 않습니다
 
 ### 검색이 작동하지 않음
 
@@ -222,7 +229,7 @@ chmod +x scripts/build-docs.sh
 
 | 설정 | 설명 | 기본값 |
 |------|------|--------|
-| `themeColor` | 테마 색상 | `#6366f1` |
+| `themeColor` | 테마 색상 | `#ea580c` |
 | `maxLevel` | 사이드바 최대 헤딩 레벨 | `4` |
 | `subMaxLevel` | 본문 내 헤딩 표시 레벨 | `3` |
 | `search.maxAge` | 검색 캐시 유효 시간 (ms) | `86400000` (1일) |

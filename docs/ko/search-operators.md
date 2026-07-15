@@ -71,6 +71,8 @@ GET /api/posts/search?viewCount.lessThanOrEqualTo=1000
 
 ## 문자열 패턴 연산자 (String Pattern Operators)
 
+> **참고**: CONTAINS, STARTS_WITH, ENDS_WITH와 그 NOT_ 계열은 대소문자를 구분하며, 대소문자를 구분하지 않는 연산자는 별도로 제공하지 않습니다. 검색값에 `%`, `_`, `\` 문자가 있으면 자동으로 이스케이프되어 SQL 와일드카드가 아니라 문자 그대로 매칭됩니다(자세한 예제는 아래 [특수 문자 처리](#특수-문자-처리) 참고). 검색값을 빈 문자열로 주면 전체 조회로 동작하지 않고 오류가 발생합니다.
+
 ### CONTAINS
 문자열이 지정된 부분 문자열을 포함하는지 확인합니다.
 
@@ -137,7 +139,7 @@ GET /api/posts/search?title.notEndsWith=Draft
 필드 값이 NULL인지 확인합니다.
 
 ```java
-@SearchableField(operators = {IS_NULL})
+@SearchableField(operators = {IS_NULL, IS_NOT_NULL})
 private String description;
 
 // 사용 예제
@@ -169,7 +171,7 @@ GET /api/posts/search?description.isNotNull
 값이 지정된 목록에 포함되는지 확인합니다.
 
 ```java
-@SearchableField(operators = {IN})
+@SearchableField(operators = {IN, NOT_IN})
 private PostStatus status;
 
 // 사용 예제 (GET)
@@ -202,17 +204,19 @@ GET /api/posts/search?status.notIn=DELETED,ARCHIVED
 값이 지정된 범위 내에 있는지 확인합니다 (경계값 포함).
 
 ```java
-@SearchableField(operators = {BETWEEN})
+@SearchableField(operators = {BETWEEN, NOT_BETWEEN})
 private Long viewCount;
 
 // 숫자 범위
 GET /api/posts/search?viewCount.between=100,1000
 
-// 날짜 범위
+// 날짜/시간 범위
 GET /api/posts/search?createdAt.between=2024-01-01T00:00:00,2024-12-31T23:59:59
 
 // SQL: WHERE view_count BETWEEN 100 AND 1000
 ```
+
+> **참고**: LocalDateTime처럼 시각까지 다루는 필드에 날짜만 입력했을 때의 처리 방식은 아래 [날짜/시간 형식](#날짜-시간-형식)을 참고하세요.
 
 ```json
 {
@@ -263,11 +267,18 @@ GET /api/posts/search?viewCount.notBetween=100,1000
 - IN, NOT_IN
 - IS_NULL, IS_NOT_NULL
 
+### UUID
+- EQUALS, NOT_EQUALS
+- IN, NOT_IN
+- IS_NULL, IS_NOT_NULL
+
 ### 불린 (Boolean)
 - EQUALS, NOT_EQUALS
 - IS_NULL, IS_NOT_NULL
 
 ## 복합 검색 조건 예제
+
+> **참고**: `conditions` 배열의 각 항목은 `operator` 필드로 직전까지의 결과와 결합하는 방식을 지정합니다("and" 또는 "or", 생략하면 "and"). 배열의 첫 번째 항목은 결합할 대상이 없으므로 자신의 `operator` 값이 무시되고, 두 번째 항목부터는 각 항목 자신의 `operator` 값으로 앞의 결과와 결합합니다. 그룹(중첩된 `conditions`)을 감싸는 `operator`는 그 그룹 전체가 같은 배열의 다른 항목과 결합하는 방식만 정하며, 그룹 내부 자식끼리의 결합 방식에는 영향을 주지 않습니다. 그룹 내부를 OR로 묶으려면 그룹을 감싸는 조건뿐 아니라 그룹 안의 각 조건에도 `"operator": "or"`를 직접 지정해야 합니다.
 
 ### 여러 조건 조합
 
@@ -309,6 +320,7 @@ GET /api/posts/search?title.contains=Spring&viewCount.greaterThan=100
           "value": "PUBLISHED"
         },
         {
+          "operator": "or",
           "field": "status",
           "searchOperator": "equals",
           "value": "FEATURED"
@@ -336,6 +348,7 @@ GET /api/posts/search?title.contains=Spring&viewCount.greaterThan=100
               "value": "Spring"
             },
             {
+              "operator": "or",
               "field": "title",
               "searchOperator": "contains",
               "value": "Java"
@@ -370,6 +383,18 @@ publishedDate.equals=2024-01-01
 publishedDate.between=2024-01-01,2024-12-31
 ```
 
+### BETWEEN에 날짜만 입력한 경우
+LocalDateTime, ZonedDateTime, OffsetDateTime, Instant, Date처럼 시각까지 다루는 필드에 BETWEEN/NOT_BETWEEN 조건을 걸면서 날짜만 입력하면, 하한값은 해당 날짜의 00:00:00으로, 상한값은 해당 날짜의 23:59:59.999999999로 자동으로 채워집니다.
+
+```bash
+# createdAt: LocalDateTime 필드
+createdAt.between=2024-01-01,2024-12-31
+
+# 실제 조건: createdAt >= 2024-01-01T00:00:00 AND createdAt <= 2024-12-31T23:59:59.999999999
+```
+
+LocalDate와 LocalTime 필드는 애초에 날짜 또는 시간 단위만 다루므로 이런 보정 없이 입력한 값을 그대로 사용합니다.
+
 ## 특수 문자 처리
 
 ### URL 인코딩
@@ -382,6 +407,19 @@ GET /api/posts/search?title.contains=Spring%20Boot
 # 특수 문자
 GET /api/posts/search?title.contains=C%2B%2B
 ```
+
+### 와일드카드 문자 이스케이프
+CONTAINS, STARTS_WITH, ENDS_WITH 등 패턴 매칭 연산자에 전달한 값의 `%`, `_`, `\`는 SQL 와일드카드가 아니라 이스케이프 처리된 문자 그대로 매칭됩니다.
+
+```json
+{
+  "field": "title",
+  "searchOperator": "contains",
+  "value": "50% 할인"
+}
+```
+
+위 조건은 `title` 값에 `50% 할인`이라는 문자열이 그대로 들어 있는 행만 찾으며, `%`가 임의의 문자열을 대체하는 와일드카드로 동작하지 않습니다.
 
 ### 이스케이프 처리
 JSON에서 특수 문자 사용 시 이스케이프 처리가 필요합니다.
@@ -399,11 +437,11 @@ JSON에서 특수 문자 사용 시 이스케이프 처리가 필요합니다.
 ### 인덱스 활용
 - EQUALS, IN 연산자는 인덱스를 효율적으로 활용합니다
 - CONTAINS, STARTS_WITH는 적절한 인덱스 설정이 필요합니다
-- ENDS_WITH는 성능상 불리할 수 있습니다
+- ENDS_WITH는 검색어 앞에 와일드카드가 붙어 인덱스를 활용하지 못하므로 성능이 불리합니다
 
 ### 대용량 데이터
 - BETWEEN 연산자는 범위 검색에 효율적입니다
-- IN 연산자의 값 목록이 너무 크면 성능이 저하될 수 있습니다
+- IN 연산자의 값 목록이 너무 크면 성능이 저하됩니다
 - 복합 조건 사용 시 적절한 인덱스를 설정하세요
 
 ## 다음 단계

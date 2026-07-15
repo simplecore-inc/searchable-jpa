@@ -1,33 +1,33 @@
-# 설치 가이드
+# Installation Guide
 
-이 문서는 Searchable JPA를 프로젝트에 설치하고 설정하는 방법을 설명합니다.
+This document explains how to install and configure Searchable JPA in your project.
 
-## 버전 호환성
+## Version Compatibility
 
-| 라이브러리 버전 | Spring Boot 버전 | Java 버전 | Jakarta EE | 상태 |
+| Library Version | Spring Boot Version | Java Version | Jakarta EE | Status |
 |---------------|----------------|-----------|------------|------|
-| `1.0.0+` | `3.2.x+` | `17+` | Jakarta EE 9+ | 최신 버전 |
-| `0.1.x` | `2.7.x` | `8+` | javax.* | 지원 중단 예정 |
+| `1.0.0+` | `3.2.x+` | `17+` | Jakarta EE 9+ | Latest |
+| `0.1.x` | `2.7.x` | `8+` | javax.* | Deprecated |
 
-**중요**: 버전을 혼합해서 사용하지 마세요. 버전에 따라 Jakarta EE와 javax.* 패키지가 다르게 적용됩니다.
+**Important**: Do not mix versions. Jakarta EE and javax.* packages apply differently depending on the version you use.
 
-## 시스템 요구사항
+## System Requirements
 
-- **Java 17 이상** (1.0.0+ 버전)
-- **Java 8 이상** (0.1.x 버전)
-- **Spring Boot 3.2.x+** (1.0.0+ 버전, Jakarta EE 9+)
-- **Spring Boot 2.7.x** (0.1.x 버전, javax.* 패키지)
+- **Java 17 or higher** (version 1.0.0+)
+- **Java 8 or higher** (version 0.1.x)
+- **Spring Boot 3.2.x+** (version 1.0.0+, Jakarta EE 9+)
+- **Spring Boot 2.7.x** (version 0.1.x, javax.* packages)
 - Spring Data JPA
 
-## 의존성 추가
+## Adding the Dependency
 
-### GitHub Packages 인증 설정
+### Setting Up GitHub Packages Authentication
 
-Searchable JPA는 GitHub Packages에만 배포됩니다. 의존성을 내려받으려면 저장소 등록과 인증 정보 설정을 먼저 마쳐야 합니다.
+Searchable JPA is published only to GitHub Packages. Before you can resolve the dependency, register the repository and configure your credentials.
 
-#### Gradle 저장소 설정
+#### Gradle Repository Configuration
 
-`settings.gradle`에 다음을 추가하세요.
+Add the following to `settings.gradle`:
 
 ```gradle
 dependencyResolutionManagement {
@@ -44,9 +44,9 @@ dependencyResolutionManagement {
 }
 ```
 
-#### Maven 저장소 설정
+#### Maven Repository Configuration
 
-`pom.xml`에 저장소를 등록하세요.
+Register the repository in `pom.xml`:
 
 ```xml
 <repositories>
@@ -57,7 +57,7 @@ dependencyResolutionManagement {
 </repositories>
 ```
 
-`~/.m2/settings.xml`에 인증 정보를 추가하세요.
+Add your credentials to `~/.m2/settings.xml`:
 
 ```xml
 <settings>
@@ -71,7 +71,7 @@ dependencyResolutionManagement {
 </settings>
 ```
 
-> **중요**: GitHub 토큰에 `read:packages` 권한이 필요합니다. [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)에서 생성하세요.
+> **Important**: Your GitHub token needs the `read:packages` scope. Generate one at [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens).
 
 ### Gradle
 
@@ -124,7 +124,7 @@ dependencies {
 </dependencies>
 ```
 
-## 기본 설정
+## Basic Configuration
 
 ### application.yml
 
@@ -188,20 +188,20 @@ searchable.hibernate.order-updates=true
 searchable.hibernate.in-clause-parameter-padding=true
 ```
 
-## 엔티티 설정
+## Entity Configuration
 
-### 기본 엔티티 설정
+### Basic Entity Configuration
 
-> **상세한 엔티티 설정**: 완전한 엔티티 설정 예제는 [기본 사용법](basic-usage.md) 문서를 참조하세요.
+> **Detailed entity configuration**: See [Basic Usage](basic-usage.md) for a complete entity configuration example.
 
 ```java
 // See the basic usage guide for a complete entity configuration example
 // See the advanced features guide for composite key entity configuration examples
 ```
 
-### 복합 키 엔티티 설정
+### Composite Key Entity Configuration
 
-#### @IdClass 방식
+#### The @IdClass Approach
 
 ```java
 @Entity
@@ -257,7 +257,7 @@ public class MultiTenantEntity {
 }
 ```
 
-#### @EmbeddedId 방식
+#### The @EmbeddedId Approach
 
 ```java
 @Entity
@@ -311,9 +311,9 @@ public class EmbeddedKeyEntity {
 }
 ```
 
-## 저장소 설정
+## Repository Configuration
 
-### 기본 저장소
+### Basic Repository
 
 ```java
 @Repository
@@ -322,7 +322,7 @@ public interface PostRepository extends JpaRepository<Post, Long>, JpaSpecificat
 }
 ```
 
-### 복합 키 저장소
+### Composite Key Repository
 
 ```java
 // @IdClass approach
@@ -340,29 +340,29 @@ public interface EmbeddedKeyEntityRepository
 }
 ```
 
-## 서비스 설정
+## Service Configuration
 
-### SearchableService 구현
+### Implementing SearchableService
 
-> **상세한 서비스 구현**: 완전한 서비스 구현 예제는 [기본 사용법](basic-usage.md) 문서를 참조하세요.
+> **Detailed service implementation**: See [Basic Usage](basic-usage.md) for a complete service implementation example.
 
 ```java
 // See the basic usage guide for a service implementation example
 // See the advanced features guide for advanced service capabilities
 ```
 
-### DTO 클래스 정의
+### Defining the DTO Class
 
-> **상세한 DTO 설정**: 완전한 DTO 설정 예제는 [기본 사용법](basic-usage.md) 문서를 참조하세요.
+> **Detailed DTO configuration**: See [Basic Usage](basic-usage.md) for a complete DTO configuration example.
 
 ```java
 // See the basic usage guide for a DTO configuration example
 // See the advanced features guide for composite key DTO configuration
 ```
 
-## 검색 DTO 정의
+## Defining the Search DTO
 
-### 기본 검색 DTO
+### Basic Search DTO
 
 ```java
 public class PostSearchDTO {
@@ -385,7 +385,7 @@ public class PostSearchDTO {
 }
 ```
 
-### 복합 키 검색 DTO
+### Composite Key Search DTO
 
 ```java
 // Search DTO for the @IdClass approach
@@ -423,20 +423,20 @@ public class EmbeddedKeyEntitySearchDTO {
 }
 ```
 
-## 컨트롤러 설정
+## Controller Configuration
 
-### REST API 컨트롤러
+### REST API Controller
 
-> **상세한 컨트롤러 구현**: 완전한 컨트롤러 구현 예제는 [기본 사용법](basic-usage.md) 문서를 참조하세요.
+> **Detailed controller implementation**: See [Basic Usage](basic-usage.md) for a complete controller implementation example.
 
 ```java
 // See the basic usage guide for a controller implementation example
 // See the OpenAPI integration guide for OpenAPI integration details
 ```
 
-## 데이터베이스별 설정
+## Database-Specific Configuration
 
-Hibernate 6은 JDBC URL과 드라이버로 데이터베이스 dialect를 자동으로 인식하므로, 아래 예제처럼 `database-platform`을 별도로 지정할 필요가 없습니다.
+Hibernate 6 automatically detects the database dialect from the JDBC URL and driver, so you do not need to set `database-platform` separately, as shown in the examples below.
 
 ### MySQL
 
@@ -483,9 +483,9 @@ spring:
       ddl-auto: validate
 ```
 
-## 성능 최적화 설정
+## Performance Optimization Settings
 
-### 인덱스 생성
+### Creating Indexes
 
 ```sql
 -- Basic search indexes
@@ -507,7 +507,7 @@ CREATE INDEX idx_embedded_key_composite ON embedded_key_entities(tenant_id, enti
 CREATE INDEX idx_multi_tenant_name ON multi_tenant_entities(tenant_id, name);
 ```
 
-### Hibernate 최적화
+### Hibernate Optimization
 
 ```yaml
 searchable:
@@ -521,9 +521,9 @@ searchable:
     in-clause-parameter-padding: true # IN clause parameter padding optimization
 ```
 
-## 설치 검증
+## Verifying the Installation
 
-### 테스트 컨트롤러
+### Test Controller
 
 ```java
 @RestController
@@ -555,9 +555,9 @@ public class TestController {
 }
 ```
 
-### 애플리케이션 시작 확인
+### Confirming Application Startup
 
-Searchable JPA의 초기화 로그는 TRACE 레벨로 남습니다. Spring Boot 기본 로그 레벨(INFO)에서는 표시되지 않으므로, 로그로 설치를 확인하려면 다음 설정을 추가하세요.
+Searchable JPA logs its initialization at the TRACE level. Spring Boot's default log level (INFO) does not show TRACE output, so add the following configuration if you want to confirm the installation through logs.
 
 ```yaml
 logging:
@@ -565,7 +565,7 @@ logging:
     dev.simplecore.searchable: TRACE
 ```
 
-설정 후 애플리케이션을 시작하면 다음 로그가 출력됩니다.
+After adding this configuration, starting the application produces the following log output:
 
 ```
 TRACE d.s.s.a.SearchableJpaConfiguration - SearchableJpaConfiguration is being initialized
@@ -580,26 +580,26 @@ TRACE d.s.s.a.SearchableJpaConfiguration - These settings help prevent N+1 probl
 TRACE d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: searchable.hibernate.auto-optimization=false
 ```
 
-이 로그가 보이지 않아도 자동 최적화는 기본값으로 이미 적용된 상태입니다. 로그는 진행 상태를 확인하는 용도일 뿐입니다.
+Even without this log output, automatic optimization is already applied by default. The log is only a way to confirm that it ran.
 
-## 문제 해결
+## Troubleshooting
 
-### 일반적인 문제들
+### Common Issues
 
-1. **"Repository must implement JpaSpecificationExecutor" 오류**
-   - 저장소에 `JpaSpecificationExecutor<T>` 상속 추가
+1. **"Repository must implement JpaSpecificationExecutor" error**
+   - Add `JpaSpecificationExecutor<T>` to the repository's extends clause
 
-2. **"Could not determine primary key field for entity ..." 경고**
-   - 엔티티에 `@Id` 어노테이션이 있는지 확인
-   - 복합 키의 경우 `@IdClass` 또는 `@EmbeddedId` 설정 확인
-   - WARN 레벨 로그이며, 정렬 결과에 동일한 값이 있으면 페이지네이션 순서가 정확하지 않을 수 있음을 알려줌
+2. **"Could not determine primary key field for entity ..." warning**
+   - Check that the entity has an `@Id` annotation
+   - For composite keys, check the `@IdClass` or `@EmbeddedId` configuration
+   - This is a WARN-level log; it means pagination order may be inconsistent when the sorted results contain duplicate values
 
-3. **자동 설정이 작동하지 않는 경우**
-   - `spring-boot-starter-searchable-jpa` 의존성 확인
-   - Spring Boot 버전 호환성 확인
+3. **Auto-configuration does not work**
+   - Check the `spring-boot-starter-searchable-jpa` dependency
+   - Check Spring Boot version compatibility
 
-4. **복합 키 관련 오류**
-   - 복합 키 클래스에 `equals()`, `hashCode()` 구현 확인
-   - `Serializable` 인터페이스 구현 확인
+4. **Composite key errors**
+   - Check that the composite key class implements `equals()` and `hashCode()`
+   - Check that it implements the `Serializable` interface
 
-이제 Searchable JPA가 성공적으로 설치되었습니다. [기본 사용법](basic-usage.md)으로 넘어가서 첫 번째 검색 기능을 구현해보세요.
+Searchable JPA is now installed. Continue to [Basic Usage](basic-usage.md) to implement your first search feature.

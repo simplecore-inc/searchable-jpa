@@ -11,6 +11,6 @@
 - High-Performance Two-Phase Query Pagination
 - OpenAPI/Swagger Integration
 
+[Get Started](/en/installation.md)
 [한국어 문서](/ko/)
 [GitHub](https://github.com/simplecore-inc/searchable-jpa)
-[Get Started](/ko/installation.md)

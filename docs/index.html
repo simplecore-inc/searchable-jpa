@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Searchable JPA Documentation</title>
@@ -170,12 +170,14 @@
       maxLevel: 4,
       subMaxLevel: 3,
 
-      // Default to Korean (relative paths for versioned folders)
-      homepage: 'ko/README.md',
+      // Default to English (relative paths for versioned folders)
+      homepage: 'en/README.md',
 
       // Alias for sidebar/navbar loading (relative paths)
       alias: {
-        '/.*/_sidebar.md': 'ko/_sidebar.md',
+        '/ko/.*/_sidebar.md': 'ko/_sidebar.md',
+        '/ko/_sidebar.md': 'ko/_sidebar.md',
+        '/.*/_sidebar.md': 'en/_sidebar.md',
         '/.*/_navbar.md': '_navbar.md'
       },
 
@@ -186,12 +188,12 @@
         placeholder: {
           '/ko/': '검색...',
           '/en/': 'Search...',
-          '/': '검색...'
+          '/': 'Search...'
         },
         noData: {
           '/ko/': '결과 없음',
           '/en/': 'No results',
-          '/': '결과 없음'
+          '/': 'No results'
         },
         depth: 3,
         hideOtherSidebarContent: false,
@@ -246,13 +248,13 @@
           };
 
           function getLang(path) {
-            if (path && path.startsWith('/en/')) return 'en';
-            return 'ko'; // default
+            if (path && path.startsWith('/ko/')) return 'ko';
+            return 'en'; // default
           }
 
           hook.init(function() {
             var lang = getLang(window.location.hash.replace('#', ''));
-            var texts = i18n[lang] || i18n.ko;
+            var texts = i18n[lang] || i18n.en;
 
             // Update pagination text
             if (window.$docsify.pagination) {
@@ -270,7 +272,7 @@
 
           hook.doneEach(function() {
             var lang = getLang(vm.route.path);
-            var texts = i18n[lang] || i18n.ko;
+            var texts = i18n[lang] || i18n.en;
 
             // Update pagination buttons after each page load
             var prevBtn = document.querySelector('.pagination-item--previous .pagination-item-title');
@@ -287,9 +289,9 @@
             if (/githubusercontent\.com/.test(vm.route.file)) {
               return html;
             }
-            var lang = (vm.route.path && vm.route.path.startsWith('/en/')) ? 'en' : 'ko';
-            var editText = editTexts[lang] || editTexts.ko;
-            var url = 'https://github.com/simplecore-inc/searchable-jpa/blob/master/' + vm.route.file;
+            var lang = (vm.route.path && vm.route.path.startsWith('/ko/')) ? 'ko' : 'en';
+            var editText = editTexts[lang] || editTexts.en;
+            var url = 'https://github.com/simplecore-inc/searchable-jpa/blob/master/docs/' + vm.route.file;
             var editHtml = '\n\n---\n\n' +
               '<div style="text-align: right; font-size: 0.9em; color: #999;">' +
               '<a href="' + url + '" target="_blank" style="color: #999;">' + editText + '</a>' +

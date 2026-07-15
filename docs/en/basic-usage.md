@@ -1,10 +1,10 @@
-# 기본 사용법
+# Basic Usage
 
-이 문서는 Searchable JPA의 기본적인 사용 방법을 단계별로 설명합니다.
+This document walks through the basic usage of Searchable JPA step by step.
 
-## 1. 엔티티 정의
+## 1. Define the Entity
 
-먼저 검색할 JPA 엔티티를 정의합니다.
+Start by defining the JPA entity you want to search.
 
 ```java
 @Entity
@@ -51,9 +51,9 @@ public class Author {
 }
 ```
 
-## 2. 검색 DTO 정의
+## 2. Define the Search DTO
 
-검색 조건을 정의할 DTO 클래스를 작성하고 `@SearchableField` 어노테이션을 사용합니다.
+Write a DTO class that declares the search conditions, using the `@SearchableField` annotation.
 
 ```java
 public class PostSearchDTO {
@@ -64,7 +64,7 @@ public class PostSearchDTO {
     @SearchableField(operators = {EQUALS, CONTAINS, STARTS_WITH, ENDS_WITH}, sortable = true)
     private String title;
     
-    // 게시글 본문 - 임시 저장 상태에서는 비어 있을 수 있어 NULL 체크가 필요
+    // Post body - may be empty while the post is a draft, so a NULL check is needed
     @SearchableField(operators = {CONTAINS, IS_NULL, IS_NOT_NULL})
     private String content;
     
@@ -77,7 +77,7 @@ public class PostSearchDTO {
     @SearchableField(operators = {GREATER_THAN, LESS_THAN, BETWEEN}, sortable = true)
     private LocalDateTime createdAt;
     
-    // 중첩 필드 검색 - 연관 엔티티의 필드에 접근
+    // Nested field search - accesses a field on the associated entity
     @SearchableField(entityField = "author.name", operators = {EQUALS, CONTAINS})
     private String authorName;
     
@@ -88,27 +88,27 @@ public class PostSearchDTO {
 }
 ```
 
-### @SearchableField 어노테이션 속성
+### `@SearchableField` Annotation Attributes
 
-- **entityField**: 엔티티의 실제 필드명 (DTO 필드명과 다를 때 사용)
-- **operators**: 허용할 검색 연산자 배열
-- **sortable**: 정렬 가능 여부 (기본값: false)
+- **entityField**: The actual field name on the entity (used when it differs from the DTO field name)
+- **operators**: The array of search operators to allow
+- **sortable**: Whether the field can be sorted (default: `false`)
 
-## 3. Repository 정의
+## 3. Define the Repository
 
-표준 JPA Repository를 정의합니다. **JpaSpecificationExecutor 상속이 필수입니다.**
+Define a standard JPA Repository. **It must extend `JpaSpecificationExecutor`.**
 
 ```java
 @Repository
 public interface PostRepository extends JpaRepository<Post, Long>, JpaSpecificationExecutor<Post> {
-    // JpaSpecificationExecutor 상속 필수
-    // 추가 메서드가 필요한 경우 정의
+    // Extending JpaSpecificationExecutor is required
+    // Add further methods here if you need them
 }
 ```
 
-## 4. 서비스 정의
+## 4. Define the Service
 
-`DefaultSearchableService`를 상속받아 검색 서비스를 구현합니다.
+Implement the search service by extending `DefaultSearchableService`.
 
 ```java
 @Service
@@ -118,14 +118,14 @@ public class PostService extends DefaultSearchableService<Post, Long> {
         super(repository, entityManager);
     }
     
-    // 기본 검색 메서드가 자동으로 제공됨
-    // findAllWithSearch, findOneWithSearch, countWithSearch 등
+    // Basic search methods are provided automatically:
+    // findAllWithSearch, findOneWithSearch, countWithSearch, etc.
 }
 ```
 
-### 다른 클래스를 상속해야 하는 경우
+### When You Need to Extend a Different Class
 
-이미 다른 클래스를 상속하고 있어 `DefaultSearchableService`를 직접 상속할 수 없다면, `SearchableServiceSupport` 인터페이스와 `SearchableServiceDelegate`를 조합해 동일한 기능을 구현합니다.
+If your service already extends another class and can't extend `DefaultSearchableService` directly, combine the `SearchableServiceSupport` interface with `SearchableServiceDelegate` to get the same functionality.
 
 ```java
 public class PostService extends SomeOtherBaseClass
@@ -144,11 +144,11 @@ public class PostService extends SomeOtherBaseClass
 }
 ```
 
-`getSearchableDelegate()`가 반환하는 델리게이트가 `findAllWithSearch`, `findOneWithSearch`, `countWithSearch` 등 `SearchableService`의 모든 메서드를 실제로 처리합니다. 상속 구조에 제약이 없다면 `DefaultSearchableService`를 상속하는 방식이 더 간단합니다.
+The delegate returned by `getSearchableDelegate()` is what actually implements every `SearchableService` method, including `findAllWithSearch`, `findOneWithSearch`, and `countWithSearch`. If your class hierarchy has no such constraint, extending `DefaultSearchableService` directly is simpler.
 
-## 5. 컨트롤러 구현
+## 5. Implement the Controller
 
-### GET 방식 검색 (쿼리 파라미터)
+### GET-based Search (Query Parameters)
 
 ```java
 @RestController
@@ -172,23 +172,23 @@ public class PostController {
 }
 ```
 
-#### GET 방식 요청 예제
+#### GET Request Examples
 
 ```bash
-# 제목에 "Spring"이 포함된 게시글 검색
+# Search for posts whose title contains "Spring"
 GET /api/posts/search?title.contains=Spring
 
-# 상태가 PUBLISHED이고 조회수가 100 이상인 게시글
+# Posts with status PUBLISHED and view count of 100 or more
 GET /api/posts/search?status.equals=PUBLISHED&viewCount.greaterThan=100
 
-# 작성자 이름으로 검색하고 제목으로 정렬
+# Search by author name and sort by title
 GET /api/posts/search?authorName.contains=John&sort=title.asc
 
-# 페이징 포함
+# With pagination
 GET /api/posts/search?title.contains=Java&page=0&size=10
 ```
 
-### POST 방식 검색 (JSON 바디)
+### POST-based Search (JSON Body)
 
 ```java
 @PostMapping("/search")
@@ -199,7 +199,7 @@ public Page<Post> searchPosts(
 }
 ```
 
-#### POST 방식 요청 예제
+#### POST Request Example
 
 ```json
 {
@@ -236,84 +236,84 @@ public Page<Post> searchPosts(
 }
 ```
 
-### 검색 요청 처리 흐름
+### Search Request Processing Flow
 
-GET 요청의 쿼리 파라미터는 `SearchableParamsParser`가, POST 요청의 JSON 바디는 Jackson `SearchConditionDeserializer`가 각각 `SearchCondition`으로 변환합니다. 이후 `SearchableFieldValidator`와 `SearchConditionValidator`가 필드·연산자·정렬 조건을 검증하고, `SearchableSpecificationBuilder`가 JPA `Specification`으로 조립합니다. 마지막으로 `TwoPhaseQueryExecutor`가 ID 조회(Phase 1), 카운트 조회(Phase 3), 배치 조회(Phase 2) 순서로 실행해 `Page<T>` 결과를 컨트롤러에 반환합니다.
+For GET requests, `SearchableParamsParser` converts the query parameters into a `SearchCondition`; for POST requests, the Jackson `SearchConditionDeserializer` converts the JSON body the same way. `SearchableFieldValidator` and `SearchConditionValidator` then validate the fields, operators, and sort conditions, and `SearchableSpecificationBuilder` assembles the result into a JPA `Specification`. Finally, `TwoPhaseQueryExecutor` runs the ID query (Phase 1), the count query (Phase 3), and the batched fetch (Phase 2), in that order, and returns the resulting `Page<T>` to the controller.
 
-![검색 요청 처리 흐름](_images/search-request-flow.svg)
+![Search request processing flow](_images/search-request-flow.svg)
 
-*GET·POST 검색 요청이 검증과 두 단계 조회를 거쳐 `Page<T>` 결과로 반환되는 흐름*
+*How a GET or POST search request flows through validation and the two-phase query to produce a `Page<T>` result*
 
-## 6. 기본 검색 연산자 사용법
+## 6. Using the Basic Search Operators
 
-### 문자열 검색
+### String Search
 
 ```bash
-# 정확히 일치
+# Exact match
 title.equals=Spring Boot
 
-# 포함
+# Contains
 title.contains=Spring
 
-# 시작
+# Starts with
 title.startsWith=Spring
 
-# 끝
+# Ends with
 title.endsWith=Boot
 ```
 
-### 숫자/날짜 비교
+### Numeric/Date Comparison
 
 ```bash
-# 크다
+# Greater than
 viewCount.greaterThan=100
 
-# 작다
+# Less than
 viewCount.lessThan=1000
 
-# 범위 (BETWEEN)
+# Range (BETWEEN)
 viewCount.between=100,1000
 
-# 날짜 범위
+# Date range
 createdAt.between=2024-01-01T00:00:00,2024-12-31T23:59:59
 ```
 
-### NULL 체크
+### NULL Checks
 
 ```bash
-# NULL 값
+# NULL value
 content.isNull
 
-# NOT NULL 값
+# NOT NULL value
 content.isNotNull
 ```
 
-### IN 연산자
+### IN Operator
 
 ```bash
-# 여러 값 중 하나
+# One of several values
 status.in=PUBLISHED,DRAFT
 
-# 여러 값에 포함되지 않음
+# Not among several values
 status.notIn=DELETED,ARCHIVED
 ```
 
-## 7. 정렬
+## 7. Sorting
 
-### 단일 필드 정렬
+### Single-Field Sorting
 
 ```bash
 GET /api/posts/search?sort=title.asc
 GET /api/posts/search?sort=createdAt.desc
 ```
 
-### 다중 필드 정렬
+### Multi-Field Sorting
 
 ```bash
 GET /api/posts/search?sort=viewCount.desc,createdAt.desc
 ```
 
-### JSON 방식 정렬
+### Sorting via JSON
 
 ```json
 {
@@ -332,40 +332,40 @@ GET /api/posts/search?sort=viewCount.desc,createdAt.desc
 }
 ```
 
-## 8. 페이징
+## 8. Pagination
 
 ```bash
-# 첫 번째 페이지, 10개씩
+# First page, 10 items per page
 GET /api/posts/search?page=0&size=10
 
-# 두 번째 페이지, 20개씩
+# Second page, 20 items per page
 GET /api/posts/search?page=1&size=20
 ```
 
-## 9. 실제 사용 예제
+## 9. Practical Examples
 
-### 복합 검색 조건
+### Combined Search Conditions
 
 ```bash
-# 제목에 "Spring"이 포함되고, 상태가 PUBLISHED이며, 
-# 조회수가 100 이상인 게시글을 최신순으로 정렬
+# Posts whose title contains "Spring", with status PUBLISHED,
+# and a view count of 100 or more, sorted by most recent
 GET /api/posts/search?title.contains=Spring&status.equals=PUBLISHED&viewCount.greaterThan=100&sort=createdAt.desc&page=0&size=10
 ```
 
-### 중첩 필드 검색
+### Nested Field Search
 
 ```bash
-# 작성자 이름에 "John"이 포함된 게시글
+# Posts whose author name contains "John"
 GET /api/posts/search?authorName.contains=John
 
-# 작성자 이메일이 특정 도메인인 게시글
+# Posts whose author email is on a specific domain
 GET /api/posts/search?authorEmail.endsWith=@company.com
 ```
 
-## 다음 단계
+## Next Steps
 
-기본 사용법을 익혔다면 다음 문서를 참조하세요:
+Once you're comfortable with the basics, check out these documents:
 
-- [고급 기능](advanced-features.md) - 복잡한 검색 조건과 중첩 쿼리
-- [검색 연산자](search-operators.md) - 모든 검색 연산자 상세 설명
-- [OpenAPI 통합](openapi-integration.md) - Swagger 문서 자동 생성
+- [Advanced Features](advanced-features.md) - Complex search conditions and nested queries
+- [Search Operators](search-operators.md) - Detailed reference for every search operator
+- [OpenAPI Integration](openapi-integration.md) - Automatic Swagger documentation generation

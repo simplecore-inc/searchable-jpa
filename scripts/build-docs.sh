@@ -4,6 +4,7 @@
 set -e
 
 BUILD_DIR="build-docs"
+LOCALES=("en" "ko")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
@@ -19,7 +20,9 @@ echo "Building Searchable JPA documentation... (v${VERSION})"
 
 # 1. Initialize build directory
 rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR/ko"
+for locale in "${LOCALES[@]}"; do
+  mkdir -p "$BUILD_DIR/$locale"
+done
 
 # 2. Copy Docsify configuration files
 echo "Copying Docsify configuration files..."
@@ -27,22 +30,32 @@ cp docs/index.html "$BUILD_DIR/"
 cp docs/.nojekyll "$BUILD_DIR/"
 cp docs/_coverpage.md "$BUILD_DIR/"
 cp docs/_navbar.md "$BUILD_DIR/"
+
+# English is the default locale, so its sidebar also serves as the root sidebar.
+cp docs/en/_sidebar.md "$BUILD_DIR/en/"
+cp docs/en/_sidebar.md "$BUILD_DIR/_sidebar.md"
 cp docs/ko/_sidebar.md "$BUILD_DIR/ko/"
-cp docs/ko/_sidebar.md "$BUILD_DIR/_sidebar.md"
 
 # 2.5. Replace version placeholder (escape hyphens for shields.io badge)
 VERSION_ESCAPED=$(echo "$VERSION" | sed 's/-/--/g')
 sed -i.bak "s/{{VERSION}}/${VERSION_ESCAPED}/g" "$BUILD_DIR/_coverpage.md" && rm -f "$BUILD_DIR/_coverpage.md.bak"
 
-# 3. Copy all documentation from docs/ko/
+# 3. Copy all documentation and image assets for each locale
 echo "Copying documentation files..."
-find docs/ko -maxdepth 1 -name "*.md" -type f -exec cp {} "$BUILD_DIR/ko/" \;
+for locale in "${LOCALES[@]}"; do
+  find "docs/$locale" -maxdepth 1 -name "*.md" -type f -exec cp {} "$BUILD_DIR/$locale/" \;
+
+  if [ -d "docs/$locale/_images" ]; then
+    mkdir -p "$BUILD_DIR/$locale/_images"
+    cp docs/"$locale"/_images/*.svg "$BUILD_DIR/$locale/_images/" 2>/dev/null || true
+  fi
+done
 
 # 4. Link conversion function
 convert_links() {
   local file="$1"
 
-  # Get the directory path relative to build-docs (e.g., ko)
+  # Get the directory path relative to build-docs (e.g., ko, en)
   local dir_path
   dir_path=$(dirname "${file#$BUILD_DIR/}")
 
@@ -50,8 +63,8 @@ convert_links() {
   sed -i.bak "s|(\./|($dir_path/|g" "$file" && rm -f "${file}.bak"
 
   # Common link conversions
-  sed -i.bak -e 's|(/ko/|(ko/|g' \
-             -e 's|\.\./\.\./README\.md|ko/README.md|g' \
+  sed -i.bak -e 's|(/en/|(en/|g' \
+             -e 's|(/ko/|(ko/|g' \
              -e 's|\.\./\.\./LICENSE|https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE|g' \
              "$file" && rm -f "${file}.bak"
 }

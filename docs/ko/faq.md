@@ -14,7 +14,7 @@
 
 ### Q: 자동 설정이 작동하지 않아요.
 
-**A:** 다음 사항을 확인해주세요:
+**A:** 다음 사항을 확인하세요:
 
 1. **의존성 확인**:
 ```gradle
@@ -24,14 +24,11 @@ dependencies {
 }
 ```
 
-2. **패키지 스캔 확인**:
-```java
-@SpringBootApplication
-public class Application {
-    public static void main(String[] args) {
-        SpringApplication.run(Application.class, args);
-    }
-}
+2. **자동 설정 제외 여부 확인**: Searchable JPA의 자동 설정은 클래스패스에 스타터 JAR가 있으면 동작하며, `@ComponentScan` 범위와는 무관합니다. 다음 설정으로 의도치 않게 제외되지 않았는지 확인합니다.
+```yaml
+spring:
+  autoconfigure:
+    exclude: []  # SearchableJpaConfiguration이 들어 있으면 제거합니다
 ```
 
 3. **설정 파일 확인**:
@@ -72,7 +69,7 @@ spring:
 
 ### Q: SearchableService를 어떻게 구현하나요?
 
-A: `DefaultSearchableService`를 상속받아 구현합니다.
+**A:** `DefaultSearchableService`를 상속받아 구현합니다.
 
 > **상세한 서비스 구현**: 완전한 서비스 구현 예제는 [기본 사용법](basic-usage.md) 문서를 참조하세요.
 
@@ -83,7 +80,7 @@ A: `DefaultSearchableService`를 상속받아 구현합니다.
 
 ### Q: SearchableField 어노테이션을 어떻게 사용하나요?
 
-A: DTO 클래스의 필드에 `@SearchableField` 어노테이션을 추가합니다.
+**A:** DTO 클래스의 필드에 `@SearchableField` 어노테이션을 추가합니다.
 
 > **상세한 DTO 설정**: 완전한 DTO 설정 예제는 [기본 사용법](basic-usage.md) 문서를 참조하세요.
 
@@ -118,7 +115,7 @@ public class EmbeddedIdEntityService extends DefaultSearchableService<TestCompos
 
 ### Q: DTO 클래스는 어떻게 정의해야 하나요?
 
-A: `@SearchableField` 어노테이션을 사용하여 정의합니다.
+**A:** `@SearchableField` 어노테이션을 사용하여 정의합니다.
 
 > **상세한 DTO 설정**: 완전한 DTO 설정 예제는 [기본 사용법](basic-usage.md) 문서를 참조하세요.
 
@@ -218,24 +215,17 @@ CREATE INDEX idx_posts_created_at ON posts(created_at DESC);
 CREATE INDEX idx_posts_status_created_at ON posts(status, created_at DESC);
 
 -- 복합 키 인덱스
-CREATE INDEX idx_composite_tenant_entity ON test_idclass_entity(tenant_id, entity_id);
+CREATE INDEX idx_composite_tenant_entity ON test_id_class_entity(tenant_id, entity_id);
 ```
 
 ### Q: 2단계 쿼리 최적화는 언제 적용되나요?
 
-**A:** 다음 조건에서 자동으로 적용됩니다:
+**A:** 조건 없이 모든 검색·페이징 쿼리에 항상 적용됩니다. 1단계에서 조건과 정렬을 반영해 ID만 조회하고, 2단계에서 그 ID를 배치 IN 절로 묶어 fetch join과 함께 엔티티 전체를 조회합니다.
 
-- 복잡한 JOIN이 포함된 검색
-- 복합 키 엔티티 검색
-- ToMany 관계가 포함된 검색
-- 대용량 데이터 검색
+배치 크기와 기본 페이지 크기는 다음과 같이 고정 값이며, 별도의 설정 속성으로 바꿀 수 없습니다:
 
-```java
-// 로그로 확인 가능
-logging:
-  level:
-    dev.simplecore.searchable.core.service.specification.TwoPhaseQueryExecutor: DEBUG
-```
+- IN 절 배치 크기: 500건
+- 기본 페이지 크기: 20건
 
 ## 복합 키 관련
 
@@ -246,15 +236,14 @@ logging:
 **@IdClass 방식**:
 - 장점: 엔티티 클래스가 깔끔함
 - 단점: 복합 키 클래스 별도 정의 필요
-- 쿼리: 복합 OR 조건 사용
 
 **@EmbeddedId 방식**:
-- 장점: 타입 안전성, 더 최적화된 쿼리
+- 장점: 타입 안전성이 보장됨
 - 단점: 엔티티 접근 시 `entity.getId().getTenantId()` 형태
-- 쿼리: IN 조건으로 최적화
+
+두 방식 모두 2단계 조회에서 동일하게 각 키 필드를 `AND`로 묶고 여러 키를 `OR`로 연결하는 조건을 사용합니다. 실질적인 차이는 쿼리 전략이 아니라 타입 안전성과 코드 접근 방식에 있습니다.
 
 ```java
-// 성능상 @EmbeddedId가 약간 유리 (IN 조건 최적화)
 // 복합 키 엔티티 설정 예제는 고급 기능 문서 참조
 ```
 
@@ -280,7 +269,7 @@ CREATE INDEX idx_partial_tenant_name ON entity_table(tenant_id, name);
 
 ### Q: "Repository must implement JpaSpecificationExecutor" 에러가 발생해요.
 
-**A:** 레포지토리에 `JpaSpecificationExecutor`를 추가해야 합니다:
+**A:** 저장소에 `JpaSpecificationExecutor`를 추가해야 합니다:
 
 ```java
 // 잘못된 예
@@ -292,24 +281,25 @@ public interface PostRepository extends JpaRepository<Post, Long>, JpaSpecificat
 }
 ```
 
-### Q: "Unable to determine ID field name" 에러가 발생해요.
+### Q: "No composite key fields found for entity" 에러가 발생해요.
 
-**A:** 엔티티에 `@Id` 어노테이션이 없거나 복합 키 설정이 잘못되었을 수 있습니다:
+**A:** `@IdClass`나 `@EmbeddedId`로 지정한 복합 키 클래스에서 키 필드를 찾지 못한 경우 발생합니다. 복합 키 설정을 다시 확인합니다:
 
 ```java
 // 엔티티 ID 설정 예제는 기본 사용법 문서 참조
 // 복합 키 엔티티 설정 예제는 고급 기능 문서 참조
 ```
 
+엔티티에 `@Id` 자체가 없는 경우에는 이 에러 대신 JPA 메타모델 조회나 Criteria API 단계에서 실패가 발생합니다.
+
 ### Q: SQL Server에서 "Incorrect syntax near ','" 에러가 발생해요.
 
-**A:** 이는 복합 키 COUNT 쿼리 문제로, 자동으로 해결됩니다. 최신 버전을 사용하세요:
+**A:** 이는 복합 키 COUNT 쿼리 문제로, 자동으로 해결됩니다. 최신 버전을 사용하세요. 생성되는 COUNT 쿼리를 직접 확인하려면 Hibernate SQL 로그를 켭니다:
 
 ```yaml
-# 로그로 확인
 logging:
   level:
-    dev.simplecore.searchable.core.service.specification.TwoPhaseQueryExecutor: DEBUG
+    org.hibernate.SQL: DEBUG
 ```
 
 ## 고급 사용법
@@ -380,12 +370,12 @@ long deletedCount = postService.deleteWithSearch(searchCondition);
 ```yaml
 logging:
   level:
-    # Searchable JPA 로그
-    dev.simplecore.searchable: DEBUG
+    # Searchable JPA의 join 경로·fetch 필드 진단 로그
+    dev.simplecore.searchable: TRACE
     
     # Hibernate SQL 로그
     org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.type.descriptor.jdbc.BasicBinder: TRACE
     
     # Spring Data JPA 로그
     org.springframework.data.jpa: DEBUG
@@ -393,15 +383,7 @@ logging:
 
 ### Q: 성능 메트릭을 수집하고 싶어요.
 
-**A:** 로그 레벨을 조정하여 성능 정보를 확인할 수 있습니다:
-
-```yaml
-logging:
-  level:
-    dev.simplecore.searchable.core.service.specification.TwoPhaseQueryExecutor: DEBUG
-```
-
-또는 AOP를 사용하여 성능 모니터링을 구현할 수 있습니다:
+**A:** Searchable JPA는 별도의 성능 로그를 남기지 않으므로, AOP로 실행 시간을 직접 측정합니다:
 
 ```java
 @Aspect
