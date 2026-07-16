@@ -1,22 +1,22 @@
-# OpenAPI 통합
+# OpenAPI Integration
 
-Searchable JPA는 OpenAPI 3.0과 Swagger UI를 지원합니다. 검색 API 문서를 자동으로 생성하고, 대화형 API 테스트 환경을 제공합니다.
+Searchable JPA supports OpenAPI 3.0 and Swagger UI. It automatically generates documentation for the search API and provides an interactive API testing environment.
 
-## 설정
+## Setup
 
-### 1. 의존성 추가
+### 1. Add the Dependency
 
 ```gradle
 dependencies {
-    // Searchable JPA 스타터 (OpenAPI 기능 포함)
+    // Searchable JPA starter (includes OpenAPI support)
     implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:${version}'
 
-    // SpringDoc OpenAPI (Spring Boot 3.x 버전)
+    // SpringDoc OpenAPI (for Spring Boot 3.x)
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
 }
 ```
 
-### 2. OpenAPI 설정
+### 2. Configure OpenAPI
 
 ```java
 @Configuration
@@ -28,17 +28,17 @@ public class OpenApiConfig {
             .info(new Info()
                 .title("Post Search API")
                 .version("1.0")
-                .description("Searchable JPA를 사용한 게시글 검색 API")
+                .description("Post search API built with Searchable JPA")
             )
             .servers(List.of(
-                new Server().url("http://localhost:8080").description("개발 서버"),
-                new Server().url("https://api.example.com").description("운영 서버")
+                new Server().url("http://localhost:8080").description("Development server"),
+                new Server().url("https://api.example.com").description("Production server")
             ));
     }
 }
 ```
 
-### 3. 자동 설정 활성화
+### 3. Enable Auto-Configuration
 
 ```yaml
 # application.yml
@@ -53,24 +53,24 @@ springdoc:
     operations-sorter: method
     tags-sorter: alpha
     
-# Searchable JPA Swagger 설정
+# Searchable JPA Swagger configuration
 searchable:
   swagger:
     enabled: true
 ```
 
-## @SearchableParams 어노테이션
+## The @SearchableParams Annotation
 
-`@SearchableParams` 어노테이션을 사용하면 GET 방식 검색 파라미터의 OpenAPI 문서를 자동으로 생성합니다.
+The `@SearchableParams` annotation automatically generates OpenAPI documentation for GET-based search parameters.
 
-### 기본 사용법
+### Basic Usage
 
 ```java
 @RestController
 @RequestMapping("/api/posts")
 public class PostController {
     
-    @Operation(summary = "게시글 검색", description = "다양한 조건으로 게시글을 검색합니다")
+    @Operation(summary = "Search posts", description = "Searches posts using various conditions")
     @GetMapping("/search")
     public Page<Post> searchPosts(
         @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params
@@ -82,15 +82,15 @@ public class PostController {
 }
 ```
 
-### 생성되는 문서
+### Generated Documentation
 
-위 코드는 다음과 같은 OpenAPI 문서를 자동으로 생성합니다:
+The code above automatically generates the following OpenAPI document:
 
 ```yaml
 /api/posts/search:
   get:
-    summary: 게시글 검색
-    description: 다양한 조건으로 게시글을 검색합니다
+    summary: Search posts
+    description: Searches posts using various conditions
     parameters:
       - name: id.equals
         in: query
@@ -175,42 +175,42 @@ components:
       enum: [PUBLISHED, DRAFT, DELETED]
 ```
 
-파라미터 설명은 필드 설명과 연산자 이름을 `-`로 이어 붙인 형식입니다(예: `Post id - equals`). Enum 타입 필드(`status`)는 별도 스키마로 등록되고, 파라미터는 그 스키마를 `$ref`로 참조합니다. `sort` 파라미터는 `explode: true`로 각 정렬 값을 개별 파라미터로 전달합니다. `page`와 `size`에만 파라미터 자체에 `example`이 붙고, 나머지 검색 필드 파라미터에는 예제 값이 없습니다.
+Each parameter description joins the field description and the operator name with a `-` (for example, `Post id - equals`). Enum-typed fields (`status`) are registered as a separate schema, and the parameter references that schema via `$ref`. The `sort` parameter uses `explode: true` so each sort value is passed as an individual parameter. Only `page` and `size` carry an `example` directly on the parameter; the other search field parameters have no example value.
 
-날짜/시간 필드의 단일 값 연산자 파라미터에는 타입에 맞는 OpenAPI `format`이 부여됩니다: `LocalDate`는 `date`, `LocalTime`은 `partial-time`, `LocalDateTime`·`Instant`·`OffsetDateTime`·`ZonedDateTime`은 `date-time`(RFC 3339)입니다. 이 `format`은 프론트엔드 코드 생성 도구가 알맞은 날짜/시간 선택기를 고르도록 돕습니다. IN, BETWEEN처럼 여러 값을 받는 연산자는 콤마로 구분한 문자열로 표현됩니다.
+Single-value operators on date/time fields carry an OpenAPI `format` matching the field type: `LocalDate` uses `date`, `LocalTime` uses `partial-time`, and `LocalDateTime`, `Instant`, `OffsetDateTime`, and `ZonedDateTime` use `date-time` (RFC 3339). This `format` helps frontend code generators pick an appropriate date/time picker. Multi-value operators such as IN and BETWEEN are represented as a comma-separated string.
 
-## 고급 문서화
+## Advanced Documentation
 
-### 1. 상세한 필드 문서화
+### 1. Detailed Field Documentation
 
 ```java
 public class PostSearchDTO {
 
-    @Schema(description = "게시글 ID")
+    @Schema(description = "Post ID")
     @SearchableField(operators = {EQUALS})
     private Long id;
 
-    @Schema(description = "검색할 게시글 제목")
-    @Size(max = 100, message = "제목은 100자를 초과할 수 없습니다")
+    @Schema(description = "Post title to search")
+    @Size(max = 100, message = "Title must not exceed 100 characters")
     @SearchableField(operators = {EQUALS, CONTAINS, STARTS_WITH}, sortable = true)
     private String title;
 
-    @Schema(description = "게시글 상태")
+    @Schema(description = "Post status")
     @SearchableField(operators = {EQUALS, NOT_EQUALS, IN, NOT_IN})
     private PostStatus status;
 
-    @Schema(description = "조회수 범위")
+    @Schema(description = "View count range")
     @SearchableField(operators = {GREATER_THAN, LESS_THAN, BETWEEN})
     private Long viewCount;
 }
 ```
 
 > [!NOTE]
-> 필드마다 GET 검색 파라미터 스키마를 새로 만들고, `@Schema`의 `description`만 그대로 반영합니다. `minimum`, `maxLength`, `example`은 GET 파라미터 스키마에 나타나지 않습니다 — `title`의 `@Size(max = 100)`도 런타임 검증에는 적용되지만 생성된 파라미터 스키마에는 나타나지 않습니다.
+> Each field's GET search parameter schema is generated fresh, carrying over only the `description` from `@Schema`. `minimum`, `maxLength`, and `example` never appear in the generated parameter schema — `title`'s `@Size(max = 100)` is still enforced at runtime validation, but it has no effect on the generated parameter schema.
 >
-> `@Schema(allowableValues = ...)`와 `implementation`은 필드 타입이 `String`일 때만 읽습니다. `status`처럼 실제 Enum 타입 필드는 이 속성 없이도 Enum 상수를 그대로 읽어 값 목록을 만들므로, `PostStatus`의 허용 값은 `PUBLISHED`, `DRAFT`, `DELETED`로 표시됩니다.
+> `@Schema(allowableValues = ...)` and `implementation` are read only when the field type is `String`. For an actual enum-typed field like `status`, the generator reads the enum constants directly regardless of these attributes, so the allowed values for `PostStatus` are shown as `PUBLISHED`, `DRAFT`, and `DELETED`.
 
-### 2. 커스텀 예제 생성
+### 2. Generating Custom Examples
 
 ```java
 @Configuration
@@ -222,15 +222,15 @@ public class CustomOpenApiConfig {
             .info(new Info()
                 .title("Searchable JPA API")
                 .version("1.0.0")
-                .description("Searchable JPA를 사용한 검색 API"))
+                .description("Search API built with Searchable JPA"))
             .addServersItem(new Server().url("http://localhost:8080"));
     }
 
-    // 추가적인 커스터마이징이 필요한 경우
+    // For additional customization
     @Bean
     public OperationCustomizer customOperationCustomizer() {
         return (operation, handlerMethod) -> {
-            // 커스텀 작업 추가 로직
+            // Custom operation logic
             return operation;
         };
     }
@@ -238,13 +238,13 @@ public class CustomOpenApiConfig {
 ```
 
 > [!WARNING]
-> 이 설정을 `GroupedOpenApi`와 함께 사용하면 `OperationCustomizer` 빈이 `searchConditionCustomizer`와 `customOperationCustomizer` 두 개가 됩니다. `GroupedOpenApi` 빈이 단일 `OperationCustomizer`를 자동 주입받도록 작성돼 있으면 "required a single bean, but 2 were found" 오류가 발생합니다. 해결 방법은 아래 "GroupedOpenApi 사용 시 주의사항"을 참고하세요.
+> Combining this configuration with `GroupedOpenApi` results in two `OperationCustomizer` beans: `searchConditionCustomizer` and `customOperationCustomizer`. If a `GroupedOpenApi` bean is written to auto-inject a single `OperationCustomizer`, it fails with "required a single bean, but 2 were found". See "GroupedOpenApi Considerations" below for the fix.
 
-### 3. GroupedOpenApi 사용 시 주의사항
+### 3. GroupedOpenApi Considerations
 
-`GroupedOpenApi`는 격리된 API 그룹을 만들기 때문에 전역으로 등록된 `OperationCustomizer` 빈을 자동으로 적용받지 않습니다. `SearchableOpenApiConfiguration`이 등록하는 `searchConditionCustomizer` 빈도 마찬가지이므로, `GroupedOpenApi`에 명시적으로 연결하지 않으면 검색 파라미터 문서가 조용히 사라집니다.
+Because `GroupedOpenApi` creates isolated API groups, it does not automatically pick up globally registered `OperationCustomizer` beans. This includes the `searchConditionCustomizer` bean registered by `SearchableOpenApiConfiguration` — unless you wire it into `GroupedOpenApi` explicitly, the search parameter documentation silently disappears from that group.
 
-1. **`@Qualifier`로 지정**
+1. **Inject with `@Qualifier`**
 
 ```java
 @Bean
@@ -258,7 +258,7 @@ public GroupedOpenApi postApi(
 }
 ```
 
-2. **`List<OperationCustomizer>` 전체 주입**
+2. **Inject the full `List<OperationCustomizer>`**
 
 ```java
 @Bean
@@ -274,34 +274,34 @@ public GroupedOpenApi postApi(List<OperationCustomizer> customizers) {
 ```
 
 > [!WARNING]
-> `OperationCustomizer` 빈이 여러 개 등록된 상태에서 `GroupedOpenApi` 빈이 `@Qualifier` 없이 단일 `OperationCustomizer` 파라미터로 자동 주입받으면, springdoc은 "required a single bean, but 2 were found" 오류를 던집니다. `@Qualifier("searchConditionCustomizer")`로 원하는 빈을 지정하거나 `List<OperationCustomizer>`로 전체를 주입해 해결합니다.
+> If multiple `OperationCustomizer` beans are registered and a `GroupedOpenApi` bean auto-injects a single `OperationCustomizer` parameter without `@Qualifier`, springdoc throws "required a single bean, but 2 were found". Resolve this by naming the bean you want with `@Qualifier("searchConditionCustomizer")`, or by injecting the full `List<OperationCustomizer>` instead.
 
-![OpenAPI 커스터마이저 연결 구조](_images/openapi-customizer-wiring.svg)
+![OpenAPI customizer wiring diagram](_images/openapi-customizer-wiring.svg)
 
-*searchConditionCustomizer 빈이 등록되어 springdoc 전역 OperationCustomizer로 적용되는 과정과, GroupedOpenApi에서 별도로 주입해야 하는 이유*
+*How the searchConditionCustomizer bean is registered and applied as springdoc's global OperationCustomizer, and why GroupedOpenApi needs it injected separately*
 
-## POST 방식 검색 문서화
+## Documenting POST-Based Search
 
-### SearchCondition 스키마
+### The SearchCondition Schema
 
 ```java
 @RestController
 public class PostController {
     
     @Operation(
-        summary = "게시글 검색 (POST)",
-        description = "JSON 형태의 복잡한 검색 조건으로 게시글을 검색합니다"
+        summary = "Search posts (POST)",
+        description = "Searches posts using complex JSON search conditions"
     )
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-        description = "검색 조건",
+        description = "Search condition",
         required = true,
         content = @Content(
             mediaType = "application/json",
             schema = @Schema(implementation = SearchCondition.class),
             examples = {
                 @ExampleObject(
-                    name = "기본 검색",
-                    summary = "제목과 상태로 검색",
+                    name = "Basic search",
+                    summary = "Search by title and status",
                     value = """
                         {
                           "conditions": [
@@ -332,8 +332,8 @@ public class PostController {
                         """
                 ),
                 @ExampleObject(
-                    name = "복합 조건 검색",
-                    summary = "OR 조건을 포함한 복합 검색",
+                    name = "Complex condition search",
+                    summary = "Complex search including OR conditions",
                     value = """
                         {
                           "conditions": [
@@ -389,69 +389,69 @@ public class PostController {
 }
 ```
 
-## 응답 스키마 문서화
+## Documenting Response Schemas
 
-### 페이징 응답
+### Paged Response
 
 ```java
-@Schema(description = "페이징된 게시글 검색 결과")
+@Schema(description = "Paged post search result")
 public class PostPageResponse {
     
-    @Schema(description = "게시글 목록")
+    @Schema(description = "List of posts")
     private List<Post> content;
     
-    @Schema(description = "페이지 정보")
+    @Schema(description = "Page information")
     private PageInfo pageable;
     
-    @Schema(description = "전체 요소 수")
+    @Schema(description = "Total number of elements")
     private long totalElements;
     
-    @Schema(description = "전체 페이지 수")
+    @Schema(description = "Total number of pages")
     private int totalPages;
     
-    @Schema(description = "현재 페이지가 마지막 페이지인지 여부")
+    @Schema(description = "Whether the current page is the last page")
     private boolean last;
     
-    @Schema(description = "현재 페이지 요소 수")
+    @Schema(description = "Number of elements in the current page")
     private int numberOfElements;
 }
 ```
 
-2단계 쿼리 최적화는 내부 실행 방식이므로 응답 구조는 위 표준 페이징 응답과 동일합니다. 별도의 응답 스키마가 필요하지 않습니다.
+Two-phase query optimization is an internal execution detail, so the response structure is identical to the standard paged response shown above. No separate response schema is required.
 
-## 에러 응답 문서화
+## Documenting Error Responses
 
 ```java
-@Schema(description = "API 에러 응답")
+@Schema(description = "API error response")
 public class ErrorResponse {
     
-    @Schema(description = "에러 코드", example = "VALIDATION_ERROR")
+    @Schema(description = "Error code", example = "VALIDATION_ERROR")
     private String code;
     
-    @Schema(description = "에러 메시지", example = "검색 조건이 올바르지 않습니다")
+    @Schema(description = "Error message", example = "The search condition is invalid")
     private String message;
     
-    @Schema(description = "상세 에러 정보")
+    @Schema(description = "Detailed error information")
     private List<FieldError> errors;
     
-    @Schema(description = "요청 시각")
+    @Schema(description = "Request timestamp")
     private LocalDateTime timestamp;
 }
 
 @ApiResponses({
     @ApiResponse(
         responseCode = "200",
-        description = "검색 성공",
+        description = "Search succeeded",
         content = @Content(schema = @Schema(implementation = PostPageResponse.class))
     ),
     @ApiResponse(
         responseCode = "400",
-        description = "잘못된 요청",
+        description = "Bad request",
         content = @Content(schema = @Schema(implementation = ErrorResponse.class))
     ),
     @ApiResponse(
         responseCode = "500",
-        description = "서버 오류",
+        description = "Server error",
         content = @Content(schema = @Schema(implementation = ErrorResponse.class))
     )
 })
@@ -461,18 +461,18 @@ public Page<Post> searchPosts(@RequestBody SearchCondition<PostSearchDTO> condit
 }
 ```
 
-## 태그와 그룹화
+## Tags and Grouping
 
 ```java
 @RestController
 @RequestMapping("/api/posts")
-@Tag(name = "게시글 검색", description = "게시글 검색 관련 API")
+@Tag(name = "Post Search", description = "Post search related APIs")
 public class PostController {
     
     @Operation(
-        summary = "게시글 검색 (GET)",
-        description = "쿼리 파라미터를 사용한 게시글 검색",
-        tags = {"게시글 검색", "GET 방식"}
+        summary = "Search posts (GET)",
+        description = "Searches posts using query parameters",
+        tags = {"Post Search", "GET-based"}
     )
     @GetMapping("/search")
     public Page<Post> searchPostsGet(/* ... */) {
@@ -480,9 +480,9 @@ public class PostController {
     }
     
     @Operation(
-        summary = "게시글 검색 (POST)",
-        description = "JSON 바디를 사용한 게시글 검색",
-        tags = {"게시글 검색", "POST 방식"}
+        summary = "Search posts (POST)",
+        description = "Searches posts using a JSON body",
+        tags = {"Post Search", "POST-based"}
     )
     @PostMapping("/search")
     public Page<Post> searchPostsPost(/* ... */) {
@@ -491,15 +491,15 @@ public class PostController {
 }
 ```
 
-2단계 쿼리 최적화는 모든 검색 쿼리에 자동으로 적용되므로 별도의 엔드포인트가 필요하지 않습니다.
+Two-phase query optimization is applied automatically to every search query, so no separate endpoint is required.
 
-## 보안 문서화
+## Documenting Security
 
 ```java
 @SecurityRequirement(name = "bearerAuth")
 @Operation(
-    summary = "관리자 게시글 검색",
-    description = "관리자 권한이 필요한 게시글 검색"
+    summary = "Admin post search",
+    description = "Post search that requires administrator privileges"
 )
 @PreAuthorize("hasRole('ADMIN')")
 @GetMapping("/admin/search")
@@ -507,7 +507,7 @@ public Page<Post> adminSearch(/* ... */) {
     // ...
 }
 
-// OpenAPI 설정에서 보안 스키마 정의
+// Define the security scheme in the OpenAPI configuration
 @Bean
 public OpenAPI secureOpenAPI() {
     return new OpenAPI()
@@ -522,16 +522,16 @@ public OpenAPI secureOpenAPI() {
 }
 ```
 
-## 실제 사용 예제
+## Practical Examples
 
-### Swagger UI에서 테스트
+### Testing in Swagger UI
 
-1. **기본 검색 테스트**
+1. **Basic search test**
    ```
    GET /api/posts/search?title.contains=Spring&status.equals=PUBLISHED&page=0&size=10
    ```
 
-2. **복합 조건 검색 테스트**
+2. **Complex condition search test**
    ```json
    POST /api/posts/search
    {
@@ -562,36 +562,36 @@ public OpenAPI secureOpenAPI() {
    }
    ```
 
-## 문서 접근
+## Accessing the Documentation
 
 - **Swagger UI**: `http://localhost:8080/swagger-ui.html`
 - **OpenAPI JSON**: `http://localhost:8080/api-docs`
 - **OpenAPI YAML**: `http://localhost:8080/api-docs.yaml`
 
-## 프로덕션 고려사항
+## Production Considerations
 
-### 1. 보안 설정
+### 1. Security Configuration
 
 ```yaml
 # application-prod.yml
 springdoc:
   api-docs:
-    enabled: false  # 프로덕션에서는 비활성화
+    enabled: false  # Disable in production
   swagger-ui:
-    enabled: false  # 프로덕션에서는 비활성화
+    enabled: false  # Disable in production
 ```
 
-### 2. 문서 최적화
+### 2. Documentation Optimization
 
 ```java
 @Profile("!prod")
 @Configuration
 public class OpenApiConfig {
-    // 개발/테스트 환경에서만 활성화
+    // Enabled only in development/test environments
 }
 ```
 
-## 다음 단계
+## Next Steps
 
-- [API 레퍼런스](api-reference.md) - 전체 API 문서
-- [FAQ](faq.md) - 자주 묻는 질문
+- [API Reference](api-reference.md) - Full API documentation
+- [FAQ](faq.md) - Frequently asked questions

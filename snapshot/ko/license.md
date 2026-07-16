@@ -1,6 +1,6 @@
 # 라이선스
 
-Searchable JPA는 [SimpleCORE License 1.0 (SCL-1.0)](https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE) 라이선스를 따릅니다.
+Searchable JPA는 [SimpleCORE License 1.0 (SCL-1.0)](https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE)을 따릅니다.
 
 ## SimpleCORE License 1.0 (SCL-1.0)
 
@@ -23,9 +23,9 @@ Copyright (c) 2025 SimpleCORE
 
 ### 보증 면책
 
-이 소프트웨어는 "있는 그대로" 제공되며, 상품성, 특정 목적에의 적합성 및 비침해에 대한 보증을 포함하여 명시적이거나 묵시적인 어떠한 종류의 보증도 없습니다.
+이 소프트웨어는 "있는 그대로" 제공되며, 상품성, 특정 목적에의 적합성, 비침해를 포함해 명시적이든 묵시적이든 어떠한 보증도 하지 않습니다.
 
-## 라이선스 문의
+## 문의
 
 라이선스 관련 문의: [license@simplecore.kr](mailto:license@simplecore.kr)
 

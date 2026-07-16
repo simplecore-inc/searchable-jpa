@@ -2,13 +2,14 @@
 
 ## 목차
 
-1. [N+1 문제와 해결 방법](#n-1-문제와-해결책)
-2. [JPA 관계형 매핑 개요](#jpa-관계형-매핑-개요)
+1. [JPA 관계형 매핑 개요](#jpa-관계형-매핑-개요)
+2. [N+1 문제와 해결책](#n-1-문제와-해결책)
 3. [관계형 매핑별 특징](#관계형-매핑별-특징)
-4. [2단계 쿼리 최적화 시스템](#2단계-쿼리-최적화-시스템)
-5. [자동 Primary Key 정렬의 이유](#자동-primary-key-정렬의-이유)
-6. [구현 상세](#구현-상세)
-7. [명시적 Fetch Join (fetchFields)](#명시적-fetch-join-fetchfields)
+4. [ToOne 관계 자동 Fetch Join](#toone-관계-자동-fetch-join)
+5. [2단계 쿼리 최적화 시스템](#2단계-쿼리-최적화-시스템)
+6. [자동 Primary Key 정렬의 이유](#자동-primary-key-정렬의-이유)
+7. [구현 상세](#구현-상세)
+8. [명시적 Fetch Join (fetchFields)](#명시적-fetch-join-fetchfields)
 
 ## 자동화된 최적화 전략
 
@@ -42,7 +43,7 @@ public class PostController {
 }
 ```
 
-### 자동화된 기능들
+### 자동화된 기능
 
 1. **자동 Primary Key 정렬**: 동일한 값으로 인한 레코드 누락 방지
 2. **2단계 쿼리 최적화**: 모든 쿼리에 자동 적용으로 일관된 성능 보장
@@ -178,21 +179,23 @@ SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
 
 **생성되는 SQL:**
 ```sql
--- 1단계: ID만 조회 (JOIN 포함)
-SELECT DISTINCT p.id 
-FROM post p 
-LEFT JOIN author a ON p.author_id = a.id 
-WHERE LOWER(a.name) LIKE '%john%' 
-ORDER BY a.name ASC, p.id ASC
+-- 1단계: ID만 조회 (일반 JOIN, PK가 아닌 필드로 정렬하므로 GROUP BY + 집계 함수로 안정화됨)
+SELECT p.id, MIN(a.name) AS sort_key
+FROM post p
+LEFT JOIN author a ON p.author_id = a.id
+WHERE LOWER(a.name) LIKE '%john%'
+GROUP BY p.id
+ORDER BY MIN(a.name) ASC, p.id ASC
 LIMIT 10 OFFSET 0;
 
--- 2단계: 전체 엔티티 조회
+-- 2단계: 전체 엔티티 조회 (Fetch JOIN, ORDER BY 없이 조회한 뒤 1단계 ID 순서로 애플리케이션 계층에서 재정렬)
 SELECT p.*, a.*
 FROM post p
 LEFT JOIN author a ON p.author_id = a.id
-WHERE p.id IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-ORDER BY a.name ASC, p.id ASC;
+WHERE p.id IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
 ```
+
+정렬 기준이 되는 필드가 기본 키가 아닐 때는 항상 `GROUP BY <기본 키>`와 결정값 집계 함수(오름차순은 `MIN`/`LEAST`, 내림차순은 `MAX`/`GREATEST`)를 적용합니다. 정렬 경로가 관계를 거치더라도 페이지 경계에서 ID가 중복되거나 누락되지 않도록 하기 위한 장치이며, 자세한 내용은 [2단계 쿼리 최적화 시스템](#2단계-쿼리-최적화-시스템)에서 다룹니다.
 
 #### 자동 JOIN 처리 전략
 
@@ -211,25 +214,29 @@ public Page<T> findAllWithSearch(SearchCondition<?> searchCondition) {
 ```java
 public Page<T> buildAndExecuteWithTwoPhaseOptimization() {
     PageRequest pageRequest = buildPageRequest();
-    
-    // 모든 쿼리에 2단계 최적화 적용
-    return twoPhaseQueryExecutor.executeWithTwoPhaseOptimization(pageRequest);
+
+    // Merge explicit fetchFields with auto-detected common ToOne fields
+    Set<String> allFetchFields = new HashSet<>();
+    allFetchFields.addAll(condition.getFetchFields());
+    allFetchFields.addAll(getCachedCommonToOneFields());
+
+    return twoPhaseQueryExecutor.executeWithTwoPhaseOptimization(pageRequest, allFetchFields);
 }
 
-public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest) {
-    // Phase 1: Get IDs only
+public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest, Set<String> fetchFields) {
+    // Phase 1: get the IDs for the requested page
     List<Object> ids = executePhaseOneQuery(pageRequest);
-    
+
+    // Phase 3: total count is always computed independently of Phase 1,
+    // so a page offset past the last page still reports the true total
+    long totalCount = executeCountQuery();
+
     if (ids.isEmpty()) {
-        return new PageImpl<>(Collections.emptyList(), pageRequest, 0);
+        return new PageImpl<>(Collections.emptyList(), pageRequest, totalCount);
     }
 
-    // Phase 2: Get full entities using batched IN clauses
-    List<T> entities = executePhaseTwoQuery(ids, pageRequest.getSort());
-    
-    // Phase 3: Get total count for accurate pagination
-    long totalCount = executeCountQuery();
-    
+    // Phase 2: load full entities for the collected IDs and restore Phase 1 order
+    List<T> entities = executePhaseTwoQuery(ids, fetchFields);
     return new PageImpl<>(entities, pageRequest, totalCount);
 }
 ```
@@ -272,7 +279,7 @@ public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest) {
 1. **DTO 프로젝션 사용** (더 나은 성능):
 ```java
 @SearchableField(entityField = "tags.name")
-private String tagNames; // 태그명들을 문자열로 조회
+private String tagNames; // 태그명을 하나의 문자열로 조회
 ```
 
 2. **배치 크기 설정** (2단계 쿼리와 함께):
@@ -286,81 +293,69 @@ spring:
 
 ---
 
-## 동적 EntityGraph
+## ToOne 관계 자동 Fetch Join
 
-### EntityGraph 자동 생성
+### ToOne 관계 자동 감지
 
-searchable-jpa는 검색 조건에 사용된 관계형 필드들을 기반으로 **동적 EntityGraph**를 자동 생성합니다:
+`RelationshipAnalyzer`는 JPA 메타모델을 조회해 엔티티의 `@ManyToOne`, `@OneToOne` 필드를 자동으로 찾아냅니다. 검색 조건에서 실제로 참조했는지와 무관하게, 엔티티에 선언된 ToOne 관계는 모두 N+1 방지 대상으로 감지됩니다:
 
 ```java
-// 검색 조건에 관계형 필드가 포함된 경우
+// author, category가 검색 조건에 등장하지 않아도
 SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
     .create(PostSearchDTO.class)
-    .where(w -> w
-        .contains("authorName", "John")  // author 관계 사용
-        .equals("categoryName", "Tech")) // category 관계 사용
+    .where(w -> w.contains("title", "Spring"))
     .build();
 
-// 자동으로 EntityGraph 생성 및 적용
-// ToOne 관계만 포함 (author, category)
-// ToMany 관계 제외 (메모리 페이징 방지)
+// @ManyToOne author, @ManyToOne category는 자동으로 감지되어
+// 조회 시 Fetch Join 대상에 포함됩니다.
 ```
 
-### EntityGraph 최적화 전략
+`@ManyToMany`, `@OneToMany` 컬렉션을 거쳐야 도달하는 중첩 ToOne 경로(예: `comments.author`)도 함께 감지되지만, 이 경로는 ToMany 관계를 거치므로 아래에서 설명하는 이유로 즉시 Fetch Join하지 않고 2단계 쿼리의 Phase 2에서 처리합니다.
 
-**포함되는 관계:**
-- `@OneToOne`, `@ManyToOne` 관계
-- 중첩된 ToOne 관계 (`author.department.name`)
+### 쿼리 유형별 JOIN 전략
 
-**제외되는 관계:**
-- `@OneToMany`, `@ManyToMany` 관계
-- ToMany 관계는 2단계 쿼리로 처리
+같은 관계 경로라도 쿼리 목적(개수 산정인지, 엔티티 로딩인지)과 관계의 다중성(ToOne인지 ToMany인지)에 따라 다른 JOIN 방식을 적용합니다. 페이지네이션 없이 단건 조회·삭제·개수 산정을 수행하는 경로는 `JoinStrategyManager.applyJoins()`가 이 전략을 담당하고, 논리는 다음과 같이 요약됩니다(중첩 경로 처리와 예외 시 폴백은 생략한 단순화 예시입니다):
 
 ```java
-/**
- * 동적 EntityGraph 생성 로직
- */
-public jakarta.persistence.EntityGraph<T> createDynamicEntityGraph(Set<String> relationshipPaths) {
-    jakarta.persistence.EntityGraph<T> entityGraph = entityManager.createEntityGraph(entityClass);
+public void applyJoins(Root<T> root, Set<String> paths, boolean isCountQuery) {
+    for (String path : paths) {
+        boolean isToMany = relationshipAnalyzer.isToManyPath(root, path);
 
-    for (String path : relationshipPaths) {
-        // ToOne 관계만 EntityGraph에 추가
-        if (!isToManyPath(path)) {
-            entityGraph.addAttributeNodes(path);
+        if (isToMany) {
+            // ToMany는 카운트 쿼리든 조회 쿼리든 항상 일반 JOIN만 사용해
+            // ID 단위 페이지네이션에서 행이 늘어나는 것을 막는다
+            root.join(path, JoinType.LEFT);
+        } else if (isCountQuery) {
+            root.join(path, JoinType.LEFT);
+        } else {
+            // ToOne은 조회 쿼리에서 Fetch Join으로 N+1을 방지한다
+            root.fetch(path, JoinType.LEFT);
         }
     }
 
-    return entityGraph;
+    if (!isCountQuery) {
+        // 검색 조건에 등장하지 않아도 자동 감지된 ToOne 필드를 추가로 Fetch Join
+        for (String field : relationshipAnalyzer.detectCommonToOneFields()) {
+            root.fetch(field, JoinType.LEFT);
+        }
+    }
 }
 ```
 
-### EntityGraph 적용 시점
+페이지네이션이 적용되는 `findAllWithSearch` 흐름(2단계 쿼리)에서는 같은 정책을 `TwoPhaseQueryExecutor`가 두 단계로 나누어 적용합니다.
 
-EntityGraph는 다음 경우에 자동으로 적용됩니다:
+- **Phase 1(ID 조회)과 카운트 쿼리**: 검색 조건이 참조한 경로에만 일반 JOIN을 적용합니다(`applyRegularJoinsOnly`). ToOne·ToMany를 구분하지 않고 Fetch Join은 전혀 사용하지 않으므로, ID 목록과 총 개수가 관계로 인해 부풀려지지 않습니다.
+- **Phase 2(엔티티 로딩)**: 검색 조건에 명시된 `fetchFields`와 자동 감지된 ToOne 필드를 합친 집합에 Fetch Join을 적용합니다(`SpecificationQuerySupport.applyFetchJoins`). 최상위 ToMany 관계는 `fetchFields`로 명시했을 때만 Fetch Join되며, Phase 1에서는 절대 적용하지 않습니다 — Phase 1에서 ToMany를 Fetch Join하면 페이지네이션 대상인 ID 행 자체가 늘어나기 때문입니다. 다만 `comments.author`처럼 ToMany 관계 너머의 중첩 ToOne 필드가 자동 감지되면, 그 경로의 중간 단계인 ToMany 관계도 Phase 2에서 함께 Fetch Join됩니다.
+- Phase 2 조회에는 항상 `query.distinct(true)`를 적용해, Fetch Join된 컬렉션 때문에 같은 부모 엔티티가 여러 행으로 나타나는 문제를 결과 단계에서 한 행으로 되돌립니다.
 
-1. **관계형 필드 검색**: `author.name`, `category.title` 등
-2. **중첩 관계 검색**: `author.department.name`
-3. **다중 관계 검색**: 여러 ToOne 관계 동시 검색
+![조인 전략 결정 흐름](_images/join-strategy-decision.svg)
 
-### 메모리 효율성
+*쿼리 유형(카운트/Phase 1/Phase 2)과 관계 다중성(ToOne/ToMany)에 따른 JOIN 전략 결정 흐름*
 
-```sql
--- EntityGraph 적용 전 (N+1 문제 가능)
-SELECT p.* FROM posts p WHERE p.title LIKE '%Spring%';
--- 각 Post마다 Author 조회 (N+1 문제!)
-
--- EntityGraph 적용 후 (최적화)
-SELECT p.*, a.* FROM posts p
-LEFT JOIN author a ON p.author_id = a.id
-WHERE p.title LIKE '%Spring%';
--- 한 번의 쿼리로 모든 데이터 조회
-```
-
-**EntityGraph의 장점:**
-- ✔ N+1 문제 자동 방지
-- ✔ 메모리 효율성 향상
-- ✔ 쿼리 수 최소화
-- ✔ ToMany 관계에 의한 카티시안 곱 방지
+**적용 효과:**
+- ✔ ToOne 관계의 N+1 문제 자동 방지
+- ✔ Phase 1과 카운트 쿼리는 일반 JOIN만 사용해 HHH000104(메모리 페이징) 경고 없음
+- ✔ ToMany 관계로 인한 중복 행은 DISTINCT로 정리되어 한 엔티티당 한 행만 반환
 
 ---
 
@@ -370,12 +365,19 @@ WHERE p.title LIKE '%Spring%';
 
 **1. 일정한 성능**
 ```sql
--- 1단계: 항상 빠른 ID 조회
-SELECT p.id FROM posts p WHERE p.status = 'PUBLISHED' 
-ORDER BY p.created_at DESC LIMIT 10 OFFSET 100;
+-- 1단계: 항상 빠른 ID 조회 (필터가 참조하는 관계가 없으므로 JOIN 없이 조회,
+-- PK가 아닌 created_at으로 정렬하므로 GROUP BY + 집계 함수로 안정화됨)
+SELECT p.id, MAX(p.created_at) AS sort_key
+FROM posts p
+WHERE p.status = 'PUBLISHED'
+GROUP BY p.id
+ORDER BY MAX(p.created_at) DESC, p.id ASC
+LIMIT 10 OFFSET 100;
 
--- 2단계: 효율적인 IN 쿼리
-SELECT p.*, a.* FROM posts p 
+-- 2단계: 효율적인 IN 쿼리 (author는 필터에 없어도 자동 감지된 ToOne 관계로 Fetch Join되며,
+-- ORDER BY 없이 조회한 뒤 1단계 ID 순서로 애플리케이션 계층에서 재정렬)
+SELECT p.*, a.*
+FROM posts p
 LEFT JOIN author a ON p.author_id = a.id
 WHERE p.id IN (101, 102, 103, 104, 105, 106, 107, 108, 109, 110);
 ```
@@ -385,15 +387,36 @@ WHERE p.id IN (101, 102, 103, 104, 105, 106, 107, 108, 109, 110);
 - 2단계에서 실제 필요한 데이터만 로드
 
 **3. 복합 키 지원**
+
+`@IdClass`와 `@EmbeddedId` 모두 동일한 OR-of-AND 조건으로 조회됩니다. 차이는 각 ID 필드를 `@EmbeddedId` 속성 경로를 거쳐 읽는지, 엔티티 필드에서 직접 읽는지뿐이며 생성되는 SQL 형태는 같습니다.
+
 ```sql
 -- @IdClass 방식
 SELECT * FROM test_idclass_entity t
-WHERE (t.tenant_id = 'tenant1' AND t.entity_id = 1) 
+WHERE (t.tenant_id = 'tenant1' AND t.entity_id = 1)
    OR (t.tenant_id = 'tenant1' AND t.entity_id = 2);
 
--- @EmbeddedId 방식 (최적화된 IN 조건)
+-- @EmbeddedId 방식 (같은 형태의 OR-of-AND 조건)
 SELECT * FROM test_composite_key_entity t
-WHERE (t.entity_id, t.tenant_id) IN ((1, 'tenant1'), (2, 'tenant1'));
+WHERE (t.tenant_id = 'tenant1' AND t.entity_id = 1)
+   OR (t.tenant_id = 'tenant1' AND t.entity_id = 2);
+```
+
+### 정렬 안정화: GROUP BY와 집계 함수
+
+기본 키가 아닌 필드로 정렬할 때는 항상 `GROUP BY <기본 키>`와 결정값 집계 함수를 적용합니다. 정렬 필드가 관계를 거치는지와 무관하게, 기본 키 이외의 모든 정렬 조건에 동일하게 적용되는 규칙입니다.
+
+- 오름차순 정렬에는 `LEAST`(구현상 `MIN`과 동일하게 동작), 내림차순 정렬에는 `GREATEST`(`MAX`와 동일)를 사용해 그룹당 정렬 기준값을 하나로 고정합니다.
+- 정렬 경로가 다대일 관계나 다대다·일대다 관계를 거치더라도, 이 방식 덕분에 페이지 경계에서 ID가 중복되거나 누락되지 않습니다.
+- 단일 기본 키 엔티티는 `TwoPhaseQueryExecutor`가, 복합 키(`@IdClass`, `@EmbeddedId`) 엔티티는 `CompositeKeyQueryExecutor`가 각각 같은 방식으로 처리합니다.
+
+```sql
+-- author.name으로 정렬하는 경우 (ToOne 관계를 거치는 정렬)
+SELECT p.id, MIN(a.name) AS sort_key
+FROM post p
+LEFT JOIN author a ON p.author_id = a.id
+GROUP BY p.id
+ORDER BY MIN(a.name) ASC, p.id ASC;
 ```
 
 ---
@@ -419,21 +442,23 @@ ID | CREATED_AT          | TITLE
 4  | 2023-01-01 09:00:00 | Post D
 ```
 
-**1페이지 결과 (LIMIT 2):**
+정렬 값이 동일한 행 사이의 순서는 데이터베이스가 보장하지 않으므로, 쿼리를 실행할 때마다 Post A/B/C의 순서가 달라질 수 있습니다.
+
+**1페이지 쿼리 결과 (LIMIT 2 OFFSET 0):**
 ```
-[Post A, Post B] // cursor = '2023-01-01 10:00:00'
+[Post A, Post B]
 ```
 
-**2페이지 쿼리:**
+**2페이지 쿼리 (LIMIT 2 OFFSET 2):**
 ```sql
-SELECT * FROM posts 
-WHERE created_at < '2023-01-01 10:00:00'  -- Post C가 제외됨!
-ORDER BY created_at DESC LIMIT 2;
+SELECT * FROM posts
+ORDER BY created_at DESC LIMIT 2 OFFSET 2;
+-- 동일한 created_at 행들의 순서가 이번 실행에서는 다르게 결정될 수 있음
 ```
 
 **2페이지 결과:**
 ```
-[Post D, ...] // Post C가 누락됨!
+[Post B, Post D] // Post B가 중복되고 Post C가 누락될 수 있음!
 ```
 
 ### 해결책: 자동 Primary Key 정렬
@@ -451,15 +476,17 @@ searchable-jpa는 **자동으로 Primary Key를 보조 정렬 기준으로 추�
 
 **생성되는 SQL:**
 ```sql
--- 1단계: ID 조회
-SELECT p.id FROM posts p
-ORDER BY p.created_at DESC, p.id ASC LIMIT 2 OFFSET 0;
+-- 1단계: ID 조회 (PK가 아닌 created_at으로 정렬하므로 GROUP BY + 집계 함수로 안정화됨)
+SELECT p.id, MAX(p.created_at) AS sort_key
+FROM posts p
+GROUP BY p.id
+ORDER BY MAX(p.created_at) DESC, p.id ASC
+LIMIT 2 OFFSET 0;
 -- 결과: [1, 2]
 
--- 2단계: 전체 엔티티 조회
-SELECT * FROM posts p WHERE p.id IN (1, 2)
-ORDER BY p.created_at DESC, p.id ASC;
--- 결과: [Post A(id=1), Post B(id=2)]
+-- 2단계: 전체 엔티티 조회 (ORDER BY 없이 조회)
+SELECT * FROM posts p WHERE p.id IN (1, 2);
+-- 1단계 ID 순서([1, 2])대로 애플리케이션 계층에서 재정렬한 결과: [Post A(id=1), Post B(id=2)]
 ```
 
 이렇게 하면 **모든 레코드가 누락 없이 일관된 순서로 조회**됩니다.
@@ -489,11 +516,11 @@ private List<Sort.Order> ensureUniqueSorting(List<Sort.Order> sortOrders) {
                 sortOrders = new ArrayList<>(sortOrders);
                 sortOrders.add(Sort.Order.by(primaryKeyField));
 
-                log.debug("Automatically added primary key field '{}' to sort criteria for cursor-based pagination uniqueness",
+                log.trace("Automatically added primary key field '{}' to sort criteria for deterministic pagination ordering",
                         primaryKeyField);
             }
         } else {
-            log.warn("Could not determine primary key field for entity {}. Cursor-based pagination may not work correctly with duplicate sort values.",
+            log.warn("Could not determine primary key field for entity {}. Pagination may not work correctly with duplicate sort values.",
                     entityClass.getSimpleName());
         }
 
@@ -510,20 +537,20 @@ private List<Sort.Order> ensureUniqueSorting(List<Sort.Order> sortOrders) {
 ### 2단계 쿼리 실행 과정
 
 ```java
-public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest) {
-    // Phase 1: Get IDs only with conditions and pagination
+public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest, Set<String> fetchFields) {
+    // Phase 1: get the IDs for the requested page
     List<Object> ids = executePhaseOneQuery(pageRequest);
-    
+
+    // Phase 3: total count is always computed independently of Phase 1,
+    // so a page offset past the last page still reports the true total
+    long totalCount = executeCountQuery();
+
     if (ids.isEmpty()) {
-        return new PageImpl<>(Collections.emptyList(), pageRequest, 0);
+        return new PageImpl<>(Collections.emptyList(), pageRequest, totalCount);
     }
 
-    // Phase 2: Get full entities using batched IN clauses
-    List<T> entities = executePhaseTwoQuery(ids, pageRequest.getSort());
-    
-    // Phase 3: Get total count for accurate pagination
-    long totalCount = executeCountQuery();
-    
+    // Phase 2: load full entities for the collected IDs and restore Phase 1 order
+    List<T> entities = executePhaseTwoQuery(ids, fetchFields);
     return new PageImpl<>(entities, pageRequest, totalCount);
 }
 ```
@@ -531,33 +558,33 @@ public Page<T> executeWithTwoPhaseOptimization(PageRequest pageRequest) {
 ### 배치 처리 최적화
 
 ```java
-// 대용량 ID 목록을 배치로 분할하여 처리
+// Oracle의 IN절 상한(1000)에 여유를 두어 500건 단위로 배치를 나눈다
 private static final int MAX_IN_CLAUSE_SIZE = 500;
 
-private List<T> executeBatchedInQueries(List<Object> ids, Sort sort) {
-    List<T> allResults = new ArrayList<>();
-
-    // Split IDs into batches
-    for (int i = 0; i < ids.size(); i += MAX_IN_CLAUSE_SIZE) {
-        int endIndex = Math.min(i + MAX_IN_CLAUSE_SIZE, ids.size());
-        List<Object> batchIds = ids.subList(i, endIndex);
-
-        log.debug("Executing batch {}/{} with {} IDs",
-            (i / MAX_IN_CLAUSE_SIZE) + 1,
-            (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE,
-            batchIds.size());
-
-        // Execute query for this batch
-        List<T> batchResults = executeSingleInQuery(batchIds, sort);
-        allResults.addAll(batchResults);
+private List<T> executePhaseTwoQuery(List<Object> ids, Set<String> fetchFields) {
+    if (ids.isEmpty()) {
+        return Collections.emptyList();
     }
 
-    log.debug("Executed {} batches, total results: {}",
-        (ids.size() + MAX_IN_CLAUSE_SIZE - 1) / MAX_IN_CLAUSE_SIZE,
-        allResults.size());
+    List<T> loaded = new ArrayList<>();
+    for (int i = 0; i < ids.size(); i += MAX_IN_CLAUSE_SIZE) {
+        List<Object> batch = ids.subList(i, Math.min(i + MAX_IN_CLAUSE_SIZE, ids.size()));
+        loaded.addAll(loadBatch(batch, fetchFields));
+    }
 
-    // Final ordering is maintained by reorderEntitiesByIds in executeSingleInQuery
-    return allResults;
+    // Phase 2 자체는 정렬하지 않고, 1단계에서 정해진 ID 순서로 재정렬한다
+    return reorderEntitiesByIds(loaded, ids);
+}
+
+private List<T> loadBatch(List<Object> ids, Set<String> fetchFields) {
+    String primaryKeyField = SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass);
+    Specification<T> spec = (root, query, cb) -> {
+        query.distinct(true); // ToMany Fetch Join으로 인한 중복 행 방지
+        SpecificationQuerySupport.applyFetchJoins(root, query, fetchFields);
+        return root.get(primaryKeyField).in(ids);
+    };
+
+    return specificationExecutor.findAll(spec, Sort.unsorted());
 }
 ```
 
@@ -636,7 +663,7 @@ searchable-jpa는 **명시적으로 Fetch Join할 필드를 지정**할 수 있�
 │   - 조건 필터링, 정렬, 페이징                                  │
 ├─────────────────────────────────────────────────────────────┤
 │ 2단계: 전체 엔티티 조회 (Fetch JOIN)                          │
-│   - 명시적 fetchFields에 대해 Fetch Join 적용                 │
+│   - 명시적 fetchFields에 Fetch Join 적용                     │
 │   - 자동 감지된 ToOne 필드도 Fetch Join 적용                  │
 │   - Lazy 필드가 즉시 로딩되어 프록시가 초기화됨                  │
 └─────────────────────────────────────────────────────────────┘
@@ -859,14 +886,16 @@ public class PostService extends DefaultSearchableService<Post, Long> {
 
 #### ToMany 관계 Fetch 시 주의
 
-ToMany 관계(`@OneToMany`, `@ManyToMany`)를 Fetch Join하면 **카티시안 곱**이 발생할 수 있습니다:
+ToMany 관계(`@OneToMany`, `@ManyToMany`)를 Fetch Join하면 **카티시안 곱**이 발생합니다. 2단계 쿼리는 Phase 1(ID 조회)에서 ToMany를 절대 Fetch Join하지 않고 Phase 2 결과에 `distinct(true)`를 적용하므로, 카티시안 곱으로 인해 페이지 결과가 부풀려지거나 HHH000104 경고가 발생하는 문제는 발생하지 않습니다.
+
+다만 이는 Hibernate의 **MultipleBagFetchException**과는 별개의 문제입니다. 정렬 순서가 없는 `List` 타입 컬렉션(bag) 두 개 이상을 한 쿼리에서 동시에 Fetch Join하면, 2단계 쿼리 여부와 무관하게 이 예외가 발생합니다:
 
 ```java
-// 주의: 여러 ToMany 관계를 동시에 fetch하면 문제 발생 가능
+// 주의: List 타입 ToMany 관계 두 개를 동시에 fetch하면 예외 발생
 .fetchFields("comments", "tags")  // MultipleBagFetchException 위험!
 ```
 
-searchable-jpa는 이를 방지하기 위해 **2단계 쿼리**를 사용하지만, 다수의 ToMany 관계를 fetch할 때는 성능에 주의해야 합니다.
+이 예외는 컬렉션 필드를 `Set`으로 선언하거나, 한 번에 하나의 ToMany 관계만 fetchFields에 포함해 피할 수 있습니다.
 
 #### 권장 사항
 

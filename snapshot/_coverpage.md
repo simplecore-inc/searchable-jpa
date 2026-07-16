@@ -2,15 +2,15 @@
 
 # Searchable JPA
 
-![version](https://img.shields.io/badge/version-1.0.5--SNAPSHOT-blue)
+![version](https://img.shields.io/badge/version-1.1.0--SNAPSHOT-blue)
 
-> Dynamic Search, Sorting, and Cursor Pagination for Spring Data JPA
+> Dynamic Search, Sorting, and Pagination for Spring Data JPA
 
 - Java 17+ / Spring Boot 3.2+
-- 20+ Search Operators
-- High-Performance Cursor-Based Pagination
+- 18 Search Operators
+- High-Performance Two-Phase Query Pagination
 - OpenAPI/Swagger Integration
 
+[Get Started](en/installation.md)
 [한국어 문서](ko/)
 [GitHub](https://github.com/simplecore-inc/searchable-jpa)
-[Get Started](ko/installation.md)
