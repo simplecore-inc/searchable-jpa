@@ -215,24 +215,28 @@ public class SearchableSpecificationBuilder<T> {
 
     private Specification<T> buildSpecification() {
         return (root, query, cb) -> {
-            boolean isCountQuery = query.getResultType().equals(Long.class);
+            // True for any query that does not select the entity itself — a count, but also a
+            // grouped aggregate. Such a query cannot carry fetch joins: Hibernate refuses a
+            // fetch whose owner is absent from the select list, so the whole query fails rather
+            // than merely loading less than it could have.
+            boolean isProjectionQuery = !root.getJavaType().isAssignableFrom(query.getResultType());
 
             // Always extract join paths from conditions (needed for filtering)
             Set<String> conditionJoinPaths = extractJoinPaths(condition.getNodes());
 
-            log.trace("Applying joins - condition paths: {}, query type: {}, isCountQuery: {}",
-                    conditionJoinPaths, query.getResultType(), isCountQuery);
+            log.trace("Applying joins - condition paths: {}, query type: {}, isProjectionQuery: {}",
+                    conditionJoinPaths, query.getResultType(), isProjectionQuery);
 
             // For non-count queries, add common ToOne fields to prevent N+1 problems
             Set<String> allJoinPaths = new HashSet<>(conditionJoinPaths);
-            if (!isCountQuery) {
+            if (!isProjectionQuery) {
                 Set<String> commonToOneFields = getCachedCommonToOneFields();
-                log.trace("Adding common ToOne fields for non-count query: {}", commonToOneFields);
+                log.trace("Adding common ToOne fields for entity query: {}", commonToOneFields);
                 allJoinPaths.addAll(commonToOneFields);
             }
 
             // Apply joins (with different strategy for count vs select queries)
-            joinStrategyManager.applyJoins(root, allJoinPaths, isCountQuery);
+            joinStrategyManager.applyJoins(root, allJoinPaths, isProjectionQuery);
 
             // Apply distinct only if we have actual joins
             if (!root.getJoins().isEmpty()) {

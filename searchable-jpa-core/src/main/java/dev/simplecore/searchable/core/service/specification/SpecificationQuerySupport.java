@@ -122,7 +122,11 @@ final class SpecificationQuerySupport {
      * and skipped rather than aborting the query.
      */
     static void applyFetchJoins(Root<?> root, CriteriaQuery<?> query, Set<String> fetchFields) {
-        if (fetchFields == null || fetchFields.isEmpty() || Long.class.equals(query.getResultType())) {
+        // A query that does not select the entity cannot carry fetch joins — Hibernate refuses a
+        // fetch whose owner is absent from the select list. That covers a count and equally a
+        // grouped aggregate over the same conditions.
+        if (fetchFields == null || fetchFields.isEmpty()
+                || !root.getJavaType().isAssignableFrom(query.getResultType())) {
             return;
         }
 
