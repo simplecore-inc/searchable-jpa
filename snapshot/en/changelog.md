@@ -8,9 +8,22 @@ This document records the notable changes to the searchable-jpa library.
 
 ## Recent Changes
 
-### 1.1.0-SNAPSHOT (in development)
+### v1.1.1
 
-This development version addresses findings from a code review and includes breaking changes.
+#### New Features
+- **Counting rows per time bucket**
+  - `TimeBucketCounter` takes the same `SearchCondition` the list is read with and counts rows per equal-width bucket of a period, in the database
+  - The starter registers a `timeBucketCounter` bean automatically (`@ConditionalOnMissingBean`, so a bean you define yourself takes precedence)
+  - `EpochMillisFunctionContributor` registers the `epoch_millis` function with a per-database expression; on databases it does not cover, counting falls back to one conditional sum per bucket
+  - [Detailed documentation](en/advanced-features.md#counting-rows-per-time-bucket)
+
+---
+
+## Changes by Version
+
+### v1.1.0
+
+This release includes breaking changes.
 
 #### Breaking Changes
 - **Consolidated exception hierarchy** [`622d7f6`](https://github.com/simplecore-inc/searchable-jpa/commit/622d7f6)
@@ -33,10 +46,6 @@ This development version addresses findings from a code review and includes brea
 - **Service, utilities, and exceptions**: honors inherited fields from `@MappedSuperclass`, and adds support for parsing UUID values
 - **Configuration**: adds `searchable.date-time.default-timezone` to set the timezone used to interpret search values
 - **OpenAPI**: preserves enum values in IN/NOT_IN/BETWEEN schemas, generates distinct upper and lower bounds for BETWEEN examples, documents inherited fields, guards array-type schema generation against NPEs, and assigns a per-type `format` (date/partial-time/date-time) to date/time parameters
-
----
-
-## Changes by Version
 
 ### v1.0.11
 - Introduced `SearchableServiceDelegate` and `SearchableServiceSupport` ([`194f6e7`](https://github.com/simplecore-inc/searchable-jpa/commit/194f6e7))

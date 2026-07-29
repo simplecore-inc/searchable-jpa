@@ -615,3 +615,111 @@ public class EmbeddedIdService extends DefaultSearchableService<TestCompositeKey
     // Composite key optimization applies automatically
 }
 ```
+
+## Counting Rows per Time Bucket
+
+When a chart of activity over time sits beside a list, the two disagree as soon as they are counted under different conditions. `TimeBucketCounter` takes the same `SearchCondition` the list is read with, so narrowing the search narrows the chart with it.
+
+Counting happens in the database. Rows in the period are never carried into the application to be divided by time, so the amount of data transferred does not grow with the number of matching rows.
+
+### Time Axis Field Requirements
+
+The field the period is measured on must be of type `Instant`.
+
+```java
+@Entity
+@Table(name = "access_logs")
+public class AccessLog {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // The field the period is measured on
+    @Column(name = "occurred_at")
+    private Instant occurredAt;
+
+    @Enumerated(EnumType.STRING)
+    private AccessResult result;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+    // getters, setters...
+}
+```
+
+As with every other search feature, the repository must extend `JpaSpecificationExecutor`.
+
+```java
+@Repository
+public interface AccessLogRepository extends JpaRepository<AccessLog, Long>, JpaSpecificationExecutor<AccessLog> {
+}
+```
+
+### Usage Example
+
+With the starter on the classpath, the `timeBucketCounter` bean is registered automatically — inject it and use it directly. See the [Auto-Configuration Guide](auto-configuration.md#time-bucket-counting) for the registration conditions.
+
+```java
+@Service
+public class AccessLogStatsService {
+
+    private final AccessLogRepository repository;
+    private final TimeBucketCounter timeBucketCounter;
+
+    public AccessLogStatsService(AccessLogRepository repository, TimeBucketCounter timeBucketCounter) {
+        this.repository = repository;
+        this.timeBucketCounter = timeBucketCounter;
+    }
+
+    // Divides the last 24 hours into 24 one-hour buckets
+    public List<Long> hourlyCounts(SearchCondition<AccessLogSearchDTO> condition, Instant now) {
+        Instant to = now.truncatedTo(ChronoUnit.HOURS).plus(1, ChronoUnit.HOURS);
+        Instant from = to.minus(24, ChronoUnit.HOURS);
+
+        return timeBucketCounter.count(
+                AccessLog.class,
+                repository,
+                condition,
+                "occurredAt",
+                from,
+                to,
+                24);
+    }
+}
+```
+
+When a controller returns the list and the chart together, pass the one parsed search condition to both.
+
+```java
+@GetMapping("/api/access-logs")
+public AccessLogPageResponse search(@SearchableParams(AccessLogSearchDTO.class) SearchCondition<AccessLogSearchDTO> condition,
+                                    @RequestParam Instant from,
+                                    @RequestParam Instant to) {
+    Page<AccessLog> page = accessLogService.findAllWithSearch(condition);
+    List<Long> counts = timeBucketCounter.count(
+            AccessLog.class, repository, condition, "occurredAt", from, to, 48);
+
+    return new AccessLogPageResponse(page, counts);
+}
+```
+
+### Counting Rules
+
+- **The period includes its start and excludes its end.** A row landing exactly on `to` belongs to the next period, so reading consecutive periods never counts a row twice.
+- **Every bucket is divided the same way.** A row on a bucket boundary is counted once, by the later bucket.
+- **Bucket width is computed from the whole period.** When the period does not divide evenly, the remainder spreads across the buckets instead of piling into the last one.
+- **The result always has exactly as many entries as buckets requested**, oldest first. A bucket with no matching rows holds `0`.
+- **The bucket count must be between 1 and 512.** A value outside that range, or a `from` that is not before `to`, raises `IllegalArgumentException`.
+
+### Indexing
+
+The query slices the period by the time axis field, so without an index on that column every chart reads the whole table. A composite index covering the search condition alongside it helps further.
+
+```sql
+CREATE INDEX idx_access_logs_occurred_at ON access_logs (occurred_at);
+```
+
+The shape of the counting query depends on the database. See [Auto-Configuration Guide - Time Bucket Counting](auto-configuration.md#time-bucket-counting) for details.

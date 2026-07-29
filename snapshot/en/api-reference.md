@@ -501,6 +501,55 @@ Page<Post> result = postService.findAllWithSearch(condition);
 // Internally converted into a two-phase query for execution
 ```
 
+## Time Bucket Counting
+
+### TimeBucketCounter
+
+Divides a period into buckets of equal width and counts the rows in each. It takes the same `SearchCondition` the list is read with, so the list and the counts always follow the same conditions.
+
+```java
+public class TimeBucketCounter {
+    // Maximum number of buckets a single call may request
+    public static final int MAX_BUCKETS = 512;
+
+    public TimeBucketCounter(EntityManager entityManager)
+
+    // Counts matching rows per bucket across the period
+    public <T> List<Long> count(Class<T> entityType,
+                                JpaSpecificationExecutor<T> repository,
+                                SearchCondition<?> condition,
+                                String timeAxisField,
+                                Instant from,
+                                Instant to,
+                                int buckets)
+}
+```
+
+**count() Parameters**
+
+| Parameter | Description |
+|-----------|-------------|
+| `entityType` | The entity class being counted |
+| `repository` | That entity's repository (must extend `JpaSpecificationExecutor`) |
+| `condition` | The search condition the list is currently filtered by |
+| `timeAxisField` | Name of the entity field the period is measured on (of type `Instant`) |
+| `from` | Start of the period, inclusive |
+| `to` | End of the period, exclusive |
+| `buckets` | Number of buckets to divide the period into (1 to `MAX_BUCKETS`) |
+
+**Return Value**
+
+A `List<Long>` holding one count per bucket, oldest first. Its length always equals `buckets`, and a bucket with no matching rows holds `0`.
+
+**Exceptions**
+
+| Exception | Raised When |
+|-----------|-------------|
+| `IllegalArgumentException` | `from` or `to` is null, or `to` is not after `from` |
+| `IllegalArgumentException` | `buckets` is below 1 or above `MAX_BUCKETS` (512) |
+
+With the starter on the classpath, the `timeBucketCounter` bean is registered automatically. See [Advanced Features - Counting Rows per Time Bucket](advanced-features.md#counting-rows-per-time-bucket) for usage examples, and the [Auto-Configuration Guide - Time Bucket Counting](auto-configuration.md#time-bucket-counting) for registration conditions and per-database behavior.
+
 ## Exception Classes
 
 ### SearchableException

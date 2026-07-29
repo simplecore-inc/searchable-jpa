@@ -196,6 +196,10 @@ INFO  SearchableJpaConfiguration - Searchable Hibernate auto-optimization is dis
    - Automatic recognition of the SearchableParams annotation
    - Automatic API documentation generation
 
+3. **Time Bucket Counting**
+   - Registration of the `TimeBucketCounter` bean
+   - Registration of the Hibernate function the counting query uses
+
 ![Auto-configuration bean wiring diagram](_images/auto-configuration-wiring.svg)
 
 *How `searchable.*` settings in application.yml bind to SearchableProperties, which SearchableJpaConfiguration and SearchableOpenApiConfiguration then read to conditionally register beans*
@@ -312,6 +316,39 @@ Sets the application timezone used to interpret timezone-less date/time search v
   - The OpenAPI and OperationCustomizer classes are on the classpath.
   - The `searchConditionCustomizer` bean is created only after the `RequestMappingHandlerMapping` bean is registered (it runs in the order defined by `@AutoConfigureAfter(WebMvcAutoConfiguration.class)`).
 
+## Time Bucket Counting
+
+Two things that `TimeBucketCounter` needs are prepared automatically. See [Advanced Features - Counting Rows per Time Bucket](advanced-features.md#counting-rows-per-time-bucket) for how to use it.
+
+### The timeBucketCounter Bean
+
+`SearchableJpaConfiguration` registers a `TimeBucketCounter` bean with the `EntityManager` injected. Inject it rather than constructing one per service.
+
+```java
+@Bean
+@ConditionalOnMissingBean
+public TimeBucketCounter timeBucketCounter(EntityManager entityManager)
+```
+
+Because of `@ConditionalOnMissingBean`, an application that defines its own bean of the same type keeps it.
+
+### The epoch_millis Function
+
+Dividing a period into buckets needs the stored instant as a number, and there is no portable way to ask for one. So `EpochMillisFunctionContributor` registers a per-database expression under the name `epoch_millis`. It works through Hibernate's `FunctionContributor` SPI (`META-INF/services`), so having the library on the classpath is enough — nothing needs to be configured.
+
+| Database | Registered Expression |
+|----------|----------------------|
+| SQLite | The stored column value as-is (the driver already stores it as an integer of milliseconds) |
+| PostgreSQL, CockroachDB | `extract(epoch from ...)` converted to milliseconds |
+| H2 | `datediff('MILLISECOND', ...)` |
+| MySQL, MariaDB | `unix_timestamp(...)` converted to milliseconds |
+| Oracle | The date difference from the epoch converted to milliseconds |
+| SQL Server | `datediff_big(millisecond, ...)` |
+
+On a database that is not listed, no function is registered and `TimeBucketCounter` counts with one conditional sum per bucket instead. The result is the same, but the statement carries one expression per bucket, so the listed databases scale better on large tables.
+
+> ⚠ **Function name collision**: `epoch_millis` is registered in the application-wide Hibernate function registry. If you already register a function under that name, the later registration wins — rename one of them so the names do not collide.
+
 ## Disabling Auto-Configuration
 
 You can disable specific pieces of auto-configuration as follows:
@@ -366,6 +403,8 @@ public class SearchableCustomConfiguration {
 ```
 
 Write `CustomSearchConditionCustomizer` either by implementing `OperationCustomizer` directly, or by wrapping `OpenApiDocCustomiser` and overriding only the parts you need.
+
+The `timeBucketCounter` bean is replaced the same way: define your own bean of type `TimeBucketCounter` and it is used instead of the auto-registered one (see [Time Bucket Counting](#time-bucket-counting)).
 
 ## Verifying the Configuration
 

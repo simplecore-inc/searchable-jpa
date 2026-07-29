@@ -82,7 +82,7 @@ public class SearchCondition<D> {
 }
 ```
 
-`@JsonProperty("conditions")`는 `nodes` 필드를 JSON에서 `conditions` 키로 노출하지만, 자바 필드명과 게터는 각각 `nodes`, `getNodes()`입니다. `fetchFields`는 지연 로딩 관계를 명시적으로 fetch join하기 위한 서버 전용 속성이며, JSON 역직렬화 시에는 무시됩니다.
+`@JsonProperty("conditions")`는 `nodes` 필드를 JSON에서 `conditions` 키로 노출하지만, Java 필드명과 게터는 각각 `nodes`, `getNodes()`입니다. `fetchFields`는 지연 로딩 관계를 명시적으로 fetch join하기 위한 서버 전용 속성이며, JSON 역직렬화 시에는 무시됩니다.
 
 #### 주요 메서드
 
@@ -500,6 +500,55 @@ Page<Post> result = postService.findAllWithSearch(condition);
 
 // Internally converted into a two-phase query for execution
 ```
+
+## 시간 구간 집계
+
+### TimeBucketCounter
+
+기간을 같은 폭의 구간으로 나눠 구간별 건수를 세는 클래스입니다. 목록 조회에 쓰는 `SearchCondition`을 그대로 받으므로 목록과 집계 결과가 항상 같은 조건을 따릅니다.
+
+```java
+public class TimeBucketCounter {
+    // Maximum number of buckets a single call may request
+    public static final int MAX_BUCKETS = 512;
+
+    public TimeBucketCounter(EntityManager entityManager)
+
+    // Counts matching rows per bucket across the period
+    public <T> List<Long> count(Class<T> entityType,
+                                JpaSpecificationExecutor<T> repository,
+                                SearchCondition<?> condition,
+                                String timeAxisField,
+                                Instant from,
+                                Instant to,
+                                int buckets)
+}
+```
+
+**count() 파라미터**
+
+| 파라미터 | 설명 |
+|---------|------|
+| `entityType` | 집계 대상 엔티티 클래스 |
+| `repository` | 해당 엔티티의 Repository (`JpaSpecificationExecutor` 상속 필요) |
+| `condition` | 목록 조회에 사용 중인 검색 조건 |
+| `timeAxisField` | 기간을 측정할 엔티티 필드명 (`Instant` 타입) |
+| `from` | 기간의 시작 시각 (포함) |
+| `to` | 기간의 종료 시각 (제외) |
+| `buckets` | 기간을 나눌 구간 수 (1 ~ `MAX_BUCKETS`) |
+
+**반환값**
+
+구간별 건수를 오래된 구간부터 담은 `List<Long>`입니다. 길이는 항상 `buckets`와 같고, 행이 없는 구간은 `0`입니다.
+
+**예외**
+
+| 예외 | 발생 조건 |
+|------|----------|
+| `IllegalArgumentException` | `from` 또는 `to`가 null이거나, `to`가 `from`보다 뒤가 아닌 경우 |
+| `IllegalArgumentException` | `buckets`가 1 미만이거나 `MAX_BUCKETS`(512) 초과인 경우 |
+
+스타터를 사용하면 `timeBucketCounter` 빈이 자동 등록됩니다. 사용 예제는 [고급 기능 - 시간 구간별 건수 집계](advanced-features.md#시간-구간별-건수-집계), 등록 조건과 데이터베이스별 동작은 [자동 설정 가이드 - 시간 구간 집계](auto-configuration.md#시간-구간-집계)를 참조하세요.
 
 ## 예외 클래스
 

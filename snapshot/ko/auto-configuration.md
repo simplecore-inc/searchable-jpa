@@ -196,6 +196,10 @@ INFO  SearchableJpaConfiguration - Searchable Hibernate auto-optimization is dis
    - SearchableParams 어노테이션 자동 인식
    - API 문서 자동 생성
 
+3. **시간 구간 집계**
+   - `TimeBucketCounter` 빈 등록
+   - 집계에 사용할 Hibernate 함수 등록
+
 ![자동 설정 빈 구성도](_images/auto-configuration-wiring.svg)
 
 *application.yml의 `searchable.*` 설정이 SearchableProperties로 바인딩되고, SearchableJpaConfiguration과 SearchableOpenApiConfiguration이 이를 읽어 조건에 따라 빈을 등록하는 과정*
@@ -312,6 +316,39 @@ searchable.hibernate.in-clause-parameter-padding=true
   - OpenAPI와 OperationCustomizer 클래스가 클래스패스에 있습니다.
   - `RequestMappingHandlerMapping` 빈이 등록된 뒤에만 `searchConditionCustomizer` 빈이 생성됩니다(WebMvcAutoConfiguration 이후 순서로 동작합니다).
 
+## 시간 구간 집계
+
+기간별 건수 집계(`TimeBucketCounter`)에 필요한 두 가지가 자동으로 준비됩니다. 사용 방법은 [고급 기능 - 시간 구간별 건수 집계](advanced-features.md#시간-구간별-건수-집계)에서 다룹니다.
+
+### timeBucketCounter 빈
+
+`SearchableJpaConfiguration`이 `EntityManager`를 주입해 `TimeBucketCounter` 빈을 등록합니다. 서비스마다 직접 생성하지 않고 주입해서 사용합니다.
+
+```java
+@Bean
+@ConditionalOnMissingBean
+public TimeBucketCounter timeBucketCounter(EntityManager entityManager)
+```
+
+`@ConditionalOnMissingBean`이 적용되어 있으므로, 애플리케이션이 같은 타입의 빈을 직접 정의하면 그 빈이 사용됩니다.
+
+### epoch_millis 함수 등록
+
+기간을 구간으로 나누려면 저장된 시각을 숫자로 읽어야 하는데, 이를 표준 방식으로 요청할 방법이 없습니다. 그래서 `EpochMillisFunctionContributor`가 데이터베이스별 표현을 `epoch_millis`라는 이름으로 등록합니다. Hibernate의 `FunctionContributor` SPI(`META-INF/services`)로 동작하므로 라이브러리가 클래스패스에 있으면 별도 설정 없이 등록됩니다.
+
+| 데이터베이스 | 등록되는 표현 |
+|-------------|--------------|
+| SQLite | 저장된 컬럼 값을 그대로 사용 (드라이버가 이미 밀리초 정수로 저장) |
+| PostgreSQL, CockroachDB | `extract(epoch from ...)` 결과를 밀리초로 환산 |
+| H2 | `datediff('MILLISECOND', ...)` |
+| MySQL, MariaDB | `unix_timestamp(...)`를 밀리초로 환산 |
+| Oracle | 기준 시각과의 날짜 차이를 밀리초로 환산 |
+| SQL Server | `datediff_big(millisecond, ...)` |
+
+목록에 없는 데이터베이스에서는 함수를 등록하지 않으며, `TimeBucketCounter`가 구간마다 조건부 합계를 세는 방식으로 집계합니다. 결과는 같지만 구간 수만큼 조건식이 늘어나므로, 행이 많은 테이블에서는 위 목록의 데이터베이스가 유리합니다.
+
+> ⚠ **함수 이름 충돌**: `epoch_millis`는 애플리케이션 전체의 Hibernate 함수 레지스트리에 등록됩니다. 같은 이름의 함수를 이미 등록해 두었다면 나중에 등록된 쪽이 남으므로, 이름이 겹치지 않도록 한쪽을 다른 이름으로 바꾸세요.
+
 ## 자동 설정 비활성화
 
 특정 자동 설정을 비활성화하려면 다음과 같이 설정할 수 있습니다:
@@ -366,6 +403,8 @@ public class SearchableCustomConfiguration {
 ```
 
 `CustomSearchConditionCustomizer`는 `OperationCustomizer`를 직접 구현하거나, `OpenApiDocCustomiser`를 감싸서 필요한 부분만 재정의하는 방식으로 작성합니다.
+
+`timeBucketCounter` 빈도 같은 방식으로 교체합니다. `TimeBucketCounter` 타입의 빈을 직접 정의하면 자동 등록된 빈 대신 그 빈이 사용됩니다([시간 구간 집계](#시간-구간-집계) 참조).
 
 ## 설정 검증
 
