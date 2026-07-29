@@ -58,6 +58,7 @@ When upgrading to Spring Boot 3.x, the following changes are required:
 - **Type Safety**: Compile-time validation and type-safe builder patterns
 - **OpenAPI Integration**: Automatic Swagger documentation generation
 - **Multiple Data Types**: Support for strings, numbers, dates, enums, and nested objects
+- **Time Bucket Counting**: Counts rows per time bucket in the database, under the same search condition as the list
 
 ## Quick Start
 

@@ -615,3 +615,111 @@ public class EmbeddedIdService extends DefaultSearchableService<TestCompositeKey
     // 자동으로 복합 키 최적화 적용
 }
 ```
+
+## 시간 구간별 건수 집계
+
+목록 화면 옆에 기간별 건수 그래프를 함께 그릴 때, 그래프가 목록과 다른 조건으로 집계되면 두 결과가 어긋납니다. `TimeBucketCounter`는 목록 조회에 쓰는 `SearchCondition`을 그대로 받아 같은 조건으로 집계하므로, 검색 조건을 좁히면 그래프도 함께 좁아집니다.
+
+집계는 데이터베이스에서 수행합니다. 기간에 속한 행을 애플리케이션으로 가져와 나누지 않으므로 대상 행이 많아도 전송량이 늘지 않습니다.
+
+### 시간 축 필드 요구 사항
+
+집계 기준이 되는 필드는 `Instant` 타입이어야 합니다.
+
+```java
+@Entity
+@Table(name = "access_logs")
+public class AccessLog {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // The field the period is measured on
+    @Column(name = "occurred_at")
+    private Instant occurredAt;
+
+    @Enumerated(EnumType.STRING)
+    private AccessResult result;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+    // getters, setters...
+}
+```
+
+Repository는 다른 검색 기능과 마찬가지로 `JpaSpecificationExecutor`를 상속해야 합니다.
+
+```java
+@Repository
+public interface AccessLogRepository extends JpaRepository<AccessLog, Long>, JpaSpecificationExecutor<AccessLog> {
+}
+```
+
+### 사용 예제
+
+스타터를 사용하면 `timeBucketCounter` 빈이 자동 등록되므로 주입해서 바로 사용합니다. 자세한 등록 조건은 [자동 설정 가이드](auto-configuration.md#시간-구간-집계)를 참조하세요.
+
+```java
+@Service
+public class AccessLogStatsService {
+
+    private final AccessLogRepository repository;
+    private final TimeBucketCounter timeBucketCounter;
+
+    public AccessLogStatsService(AccessLogRepository repository, TimeBucketCounter timeBucketCounter) {
+        this.repository = repository;
+        this.timeBucketCounter = timeBucketCounter;
+    }
+
+    // Divides the last 24 hours into 24 one-hour buckets
+    public List<Long> hourlyCounts(SearchCondition<AccessLogSearchDTO> condition, Instant now) {
+        Instant to = now.truncatedTo(ChronoUnit.HOURS).plus(1, ChronoUnit.HOURS);
+        Instant from = to.minus(24, ChronoUnit.HOURS);
+
+        return timeBucketCounter.count(
+                AccessLog.class,
+                repository,
+                condition,
+                "occurredAt",
+                from,
+                to,
+                24);
+    }
+}
+```
+
+목록과 그래프를 같은 컨트롤러에서 함께 내려줄 때는 파싱한 검색 조건 하나를 양쪽에 넘깁니다.
+
+```java
+@GetMapping("/api/access-logs")
+public AccessLogPageResponse search(@SearchableParams(AccessLogSearchDTO.class) SearchCondition<AccessLogSearchDTO> condition,
+                                    @RequestParam Instant from,
+                                    @RequestParam Instant to) {
+    Page<AccessLog> page = accessLogService.findAllWithSearch(condition);
+    List<Long> counts = timeBucketCounter.count(
+            AccessLog.class, repository, condition, "occurredAt", from, to, 48);
+
+    return new AccessLogPageResponse(page, counts);
+}
+```
+
+### 집계 규칙
+
+- **기간은 시작을 포함하고 끝을 제외합니다.** `to`에 정확히 걸린 행은 다음 기간에 속하므로, 기간을 이어 붙여 조회해도 같은 행이 두 번 세어지지 않습니다.
+- **각 구간도 같은 방식으로 나뉩니다.** 구간 경계에 걸린 행은 뒤쪽 구간 하나에만 포함됩니다.
+- **구간 폭은 기간 전체에서 계산합니다.** 기간이 구간 수로 나누어떨어지지 않아도 나머지가 마지막 구간에 몰리지 않고 고르게 분산됩니다.
+- **반환값은 항상 요청한 구간 수만큼의 길이**이며, 오래된 구간부터 순서대로 담깁니다. 해당 구간에 행이 없으면 `0`입니다.
+- **구간 수는 1~512개**입니다. 범위를 벗어나거나 `from`이 `to`보다 뒤이면 `IllegalArgumentException`이 발생합니다.
+
+### 인덱스
+
+집계 쿼리는 시간 축 필드로 기간을 잘라내므로, 해당 컬럼에 인덱스가 없으면 매번 테이블 전체를 읽습니다. 검색 조건과 함께 쓰는 복합 인덱스를 두면 더 유리합니다.
+
+```sql
+CREATE INDEX idx_access_logs_occurred_at ON access_logs (occurred_at);
+```
+
+집계 쿼리의 형태는 데이터베이스에 따라 달라집니다. 자세한 내용은 [자동 설정 가이드 - 시간 구간 집계](auto-configuration.md#시간-구간-집계)에서 다룹니다.

@@ -8,9 +8,22 @@
 
 ## 최근 변경 사항
 
-### 1.1.0-SNAPSHOT (개발 중)
+### v1.1.1
 
-코드 리뷰 지적 사항을 정리한 개발 버전으로, 이전 버전과 호환되지 않는 변경을 포함합니다.
+#### 추가된 기능
+- **시간 구간별 건수 집계**
+  - `TimeBucketCounter`가 목록 조회에 쓰는 `SearchCondition`을 그대로 받아, 기간을 같은 폭의 구간으로 나눠 구간별 건수를 데이터베이스에서 집계
+  - 스타터가 `timeBucketCounter` 빈을 자동 등록(`@ConditionalOnMissingBean`이므로 직접 정의한 빈이 우선)
+  - `EpochMillisFunctionContributor`가 `epoch_millis` 함수를 데이터베이스별 표현으로 등록하고, 등록 대상이 아닌 데이터베이스에서는 구간별 조건부 합계로 집계
+  - [상세 문서](/ko/advanced-features.md#시간-구간별-건수-집계)
+
+---
+
+## 버전별 변경 사항
+
+### v1.1.0
+
+이전 버전과 호환되지 않는 변경을 포함합니다.
 
 #### 호환성이 깨지는 변경
 - **예외 계층 통합** [`622d7f6`](https://github.com/simplecore-inc/searchable-jpa/commit/622d7f6)
@@ -33,10 +46,6 @@
 - 서비스/유틸/예외: `@MappedSuperclass` 상속 필드 반영, UUID 값 파싱 지원
 - 설정: 검색값 해석 기준 시간대를 지정하는 `searchable.date-time.default-timezone` 추가
 - OpenAPI: IN/NOT_IN/BETWEEN 스키마에서 enum 값 유지, BETWEEN 예제의 상한/하한을 다른 값으로 생성, 상속 필드 문서화, 배열 타입 스키마 NPE 방어, 날짜/시간 파라미터에 타입별 `format`(date/partial-time/date-time) 부여
-
----
-
-## 버전별 변경 사항
 
 ### v1.0.11
 - `SearchableServiceDelegate`/`SearchableServiceSupport` 도입 ([`194f6e7`](https://github.com/simplecore-inc/searchable-jpa/commit/194f6e7))

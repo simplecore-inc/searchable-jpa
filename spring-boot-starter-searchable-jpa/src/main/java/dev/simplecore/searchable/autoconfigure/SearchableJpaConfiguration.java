@@ -1,5 +1,6 @@
 package dev.simplecore.searchable.autoconfigure;
 
+import dev.simplecore.searchable.core.service.bucket.TimeBucketCounter;
 import dev.simplecore.searchable.core.utils.SearchableTimeZoneHolder;
 import dev.simplecore.searchable.properties.SearchableProperties;
 import org.slf4j.Logger;
@@ -7,8 +8,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -141,4 +144,19 @@ public class SearchableJpaConfiguration {
         log.trace("These settings help prevent N+1 problems and improve performance automatically.");
         log.trace("To disable auto-optimization, set: searchable.hibernate.auto-optimization=false");
     }
-} 
+
+    /**
+     * The counter a time-range strip reads its heights from.
+     *
+     * <p>Offered here so a host application injects it rather than constructing one per service,
+     * and conditionally so an application that defines its own keeps it.
+     *
+     * @param entityManager where the counting query is run
+     * @return the counter
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public TimeBucketCounter timeBucketCounter(EntityManager entityManager) {
+        return new TimeBucketCounter(entityManager);
+    }
+}

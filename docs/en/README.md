@@ -22,6 +22,7 @@ Searchable JPA is a library that extends Spring Data JPA to provide dynamic sear
 | **Type Safety** | Compile-time validation and a type-safe builder pattern |
 | **OpenAPI Integration** | Automatic Swagger documentation generation |
 | **Various Data Types** | Support for strings, numbers, dates, enums, and nested objects |
+| **Time Bucket Counting** | Counts rows per time bucket in the database, under the same search condition as the list |
 
 ## Quick Start
 

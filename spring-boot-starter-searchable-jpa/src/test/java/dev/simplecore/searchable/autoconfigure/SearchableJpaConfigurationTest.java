@@ -1,5 +1,7 @@
 package dev.simplecore.searchable.autoconfigure;
 
+import dev.simplecore.searchable.core.service.bucket.TimeBucketCounter;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -7,13 +9,17 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.env.ConfigurableEnvironment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 /**
  * Verifies Category 8 (Spring Boot starter) issues 8-1 through 8-3.
  */
 class SearchableJpaConfigurationTest {
 
+    private final EntityManager entityManager = mock(EntityManager.class);
+
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withBean(EntityManager.class, () -> entityManager)
             .withConfiguration(AutoConfigurations.of(SearchableJpaConfiguration.class));
 
     // ---- baseline: defaults are applied when auto-optimization is on ----
@@ -69,5 +75,22 @@ class SearchableJpaConfigurationTest {
             assertThat(context).hasFailed();
             assertThat(context.getStartupFailure()).hasStackTraceContaining("defaultBatchFetchSize");
         });
+    }
+
+    // ---- time bucket counting ----
+
+    @Test
+    @DisplayName("the starter registers a TimeBucketCounter bean")
+    void registersTimeBucketCounter() {
+        runner.run(context -> assertThat(context).hasSingleBean(TimeBucketCounter.class));
+    }
+
+    @Test
+    @DisplayName("a TimeBucketCounter defined by the application replaces the auto-registered one")
+    void applicationDefinedTimeBucketCounterWins() {
+        TimeBucketCounter custom = new TimeBucketCounter(entityManager);
+
+        runner.withBean("customTimeBucketCounter", TimeBucketCounter.class, () -> custom)
+                .run(context -> assertThat(context).getBean(TimeBucketCounter.class).isSameAs(custom));
     }
 }
