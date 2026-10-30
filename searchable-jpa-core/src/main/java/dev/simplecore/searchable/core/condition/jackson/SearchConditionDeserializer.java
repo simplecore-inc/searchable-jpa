@@ -37,22 +37,9 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
             throw new IllegalStateException("Generic type information is not available. Make sure the SearchCondition is properly typed.");
         }
         
-        JavaType dtoType = type.containedType(0);
-        this.dtoClass = dtoType.getRawClass();
-        log.trace("Found DTO class in createContextual: {}", dtoClass.getName());
-
-        try {
-            JsonDeserializer<?> deserializer = ctxt.findRootValueDeserializer(
-                ctxt.constructType(Node.class)
-            );
-            if (deserializer instanceof NodeDeserializer) {
-                ((NodeDeserializer) deserializer).setDtoClass(dtoClass);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to set DTO class in NodeDeserializer", e);
-        }
-        
-        return this;
+        SearchConditionDeserializer contextual = new SearchConditionDeserializer();
+        contextual.dtoClass = type.containedType(0).getRawClass();
+        return contextual;
     }
     
     @Override
@@ -92,10 +79,22 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
         
         // pagination
         if (jsonNode.has("page")) {
-            searchCondition.setPage(jsonNode.get("page").asInt());
+            searchCondition.setPage(readInteger(jsonNode.get("page"), "page"));
         }
         if (jsonNode.has("size")) {
-            searchCondition.setSize(jsonNode.get("size").asInt());
+            searchCondition.setSize(readInteger(jsonNode.get("size"), "size"));
+        }
+
+        if (searchCondition.getSort() != null) {
+            Sort mapped = new Sort();
+            for (SearchCondition.Order order : searchCondition.getSort().getOrders()) {
+                if (order == null || order.getDirection() == null) {
+                    throw new SearchableValidationException("Sort direction must be asc or desc");
+                }
+                mapped.addOrder(new SearchCondition.Order(order.getField(), order.getDirection(),
+                        dev.simplecore.searchable.core.utils.SearchableFieldUtils.getSortFieldFromDto(dtoClass, order.getField())));
+            }
+            searchCondition.setSort(mapped);
         }
 
         // Only validate if DTO class is available
@@ -123,24 +122,19 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
             Condition condition = (Condition) node;
             String fieldName = condition.getField();
             
-            try {
-                java.lang.reflect.Field field = dtoClass.getDeclaredField(fieldName);
-                SearchableField annotation = field.getAnnotation(SearchableField.class);
-                
-                if (annotation != null && !annotation.entityField().isEmpty()) {
-                    condition.setEntityField(annotation.entityField());
-                } else {
-                    condition.setEntityField(fieldName);
-                }
-            } catch (NoSuchFieldException e) {
-                log.warn("Field {} not found in {}", fieldName, dtoClass.getName());
-                condition.setEntityField(fieldName);
-            }
+            condition.setEntityField(dev.simplecore.searchable.core.utils.SearchableFieldUtils.getEntityFieldFromDto(dtoClass, fieldName));
         } else if (node instanceof Group) {
             Group group = (Group) node;
             for (Node childNode : group.getNodes()) {
                 setEntityFieldsRecursively(childNode, dtoClass);
             }
         }
+    }
+    private Integer readInteger(JsonNode node, String name) {
+        if (node.isNull()) return null;
+        if (!node.isIntegralNumber() || !node.canConvertToInt()) {
+            throw new SearchableValidationException(name + " must be a 32-bit integer");
+        }
+        return node.intValue();
     }
 } 

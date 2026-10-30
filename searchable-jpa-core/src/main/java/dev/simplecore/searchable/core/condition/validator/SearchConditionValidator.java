@@ -6,6 +6,9 @@ import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.core.exception.SearchableValidationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
 import dev.simplecore.searchable.core.utils.SearchableValueParser;
+import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
+import java.lang.reflect.Field;
+import org.springframework.util.ClassUtils;
 
 import jakarta.validation.*;
 import java.beans.Introspector;
@@ -137,39 +140,34 @@ public class SearchConditionValidator<D> {
         validateValue(pd.getPropertyType(), condition.getValue(), condition.getSearchOperator(), fieldName);
         validateSecondValueForBetween(pd.getPropertyType(), condition, fieldName);
 
-        // Validate constraints
-        try {
-            Object tempObject = dtoClass.getDeclaredConstructor().newInstance();
-            java.lang.reflect.Field field = dtoClass.getDeclaredField(fieldName);
-            field.setAccessible(true);
-
-            // For IN/NOT_IN operators, validate each value individually
-            if (condition.getValue() instanceof Collection &&
-                    (condition.getSearchOperator() == SearchOperator.IN ||
-                            condition.getSearchOperator() == SearchOperator.NOT_IN)) {
-                for (Object value : (Collection<?>) condition.getValue()) {
-                    Object convertedValue = value instanceof String
-                            ? SearchableValueParser.parseValue((String) value, field.getType())
-                            : value;
-                    field.set(tempObject, convertedValue);
-                    Set<ConstraintViolation<Object>> violations = VALIDATOR.validate(tempObject);
-                    if (!violations.isEmpty()) {
-                        throw new SearchableValidationException(violations.iterator().next().getMessage());
-                    }
-                }
-            } else {
-                Object convertedValue = condition.getValue() instanceof String
-                        ? SearchableValueParser.parseValue((String) condition.getValue(), field.getType())
-                        : condition.getValue();
-                field.set(tempObject, convertedValue);
-                Set<ConstraintViolation<Object>> violations = VALIDATOR.validate(tempObject);
-                if (!violations.isEmpty()) {
-                    throw new SearchableValidationException(violations.iterator().next().getMessage());
-                }
-            }
-        } catch (ReflectiveOperationException e) {
-            throw new SearchableValidationException(MessageUtils.getMessage("validator.field.validation.failed", new Object[]{fieldName}));
+        // Validate only the searched property, not unrelated required DTO fields.
+        if (condition.getSearchOperator() == SearchOperator.IS_NULL ||
+                condition.getSearchOperator() == SearchOperator.IS_NOT_NULL) {
+            return;
         }
+        if (condition.getValue() instanceof Collection<?> values) {
+            for (Object value : values) validateConstraints(fieldName, pd.getPropertyType(), value);
+        } else {
+            validateConstraints(fieldName, pd.getPropertyType(), condition.getValue());
+        }
+        if (condition.getSearchOperator() == SearchOperator.BETWEEN ||
+                condition.getSearchOperator() == SearchOperator.NOT_BETWEEN) {
+            validateConstraints(fieldName, pd.getPropertyType(), condition.getValue2());
+        }
+    }
+
+    private void validateConstraints(String fieldName, Class<?> type, Object value) {
+        Object converted = value instanceof String ? SearchableValueParser.parseValue((String) value, type) : value;
+        Set<? extends ConstraintViolation<?>> violations = VALIDATOR.validateValue(dtoClass, fieldName, converted);
+        if (!violations.isEmpty()) {
+            throw new SearchableValidationException(violations.iterator().next().getMessage());
+        }
+    }
+
+    private Field requireField(String name) throws NoSuchFieldException {
+        Field field = SearchableFieldUtils.findFieldInHierarchy(dtoClass, name);
+        if (field == null) throw new NoSuchFieldException(name);
+        return field;
     }
 
     /**
@@ -182,7 +180,7 @@ public class SearchConditionValidator<D> {
      */
     private boolean isJsonTypedFieldInDto(String fieldName) {
         try {
-            java.lang.reflect.Field field = dtoClass.getDeclaredField(fieldName);
+            java.lang.reflect.Field field = requireField(fieldName);
             Class<?> fieldType = field.getType();
             return java.util.Map.class.isAssignableFrom(fieldType) ||
                    Collection.class.isAssignableFrom(fieldType) ||
@@ -223,7 +221,7 @@ public class SearchConditionValidator<D> {
         }
 
         try {
-            SearchableField annotation = dtoClass.getDeclaredField(fieldName).getAnnotation(SearchableField.class);
+            SearchableField annotation = requireField(fieldName).getAnnotation(SearchableField.class);
             if (annotation == null) {
                 throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.searchable", new Object[]{fieldName}));
             }
@@ -241,11 +239,11 @@ public class SearchConditionValidator<D> {
      */
     private void validateOperator(SearchOperator operator, String fieldName) {
         try {
-            SearchableField annotation = dtoClass.getDeclaredField(fieldName).getAnnotation(SearchableField.class);
+            SearchableField annotation = requireField(fieldName).getAnnotation(SearchableField.class);
             if (annotation == null) {
                 throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.searchable", new Object[]{fieldName}));
             }
-            if (!Arrays.asList(annotation.operators()).contains(operator)) {
+            if (operator == null || (annotation.operators().length > 0 && !Arrays.asList(annotation.operators()).contains(operator))) {
                 throw new SearchableValidationException(
                         MessageUtils.getMessage("validator.operator.not.allowed",
                                 new Object[]{operator, fieldName, Arrays.toString(annotation.operators())})
@@ -343,7 +341,7 @@ public class SearchConditionValidator<D> {
      */
     private void validateSingleValue(Class<?> targetType, Object value, String fieldName) {
         try {
-            if (targetType.isInstance(value)) {
+            if (ClassUtils.resolvePrimitiveIfNecessary(targetType).isInstance(value)) {
                 return;
             }
 
