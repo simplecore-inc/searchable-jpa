@@ -3,8 +3,8 @@
 # Searchable JPA
 
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2%2B-green.svg)](https://spring.io/projects/spring-boot)
-[![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-9%2B-blue.svg)](https://jakarta.ee/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1%2B-green.svg)](https://spring.io/projects/spring-boot)
+[![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-11-blue.svg)](https://jakarta.ee/)
 [![License](https://img.shields.io/badge/License-SCL--1.0-blue.svg)](../../LICENSE)
 
 Spring Data JPA를 확장하여 동적 검색, 정렬, 페이지네이션 기능을 제공하는 라이브러리입니다.
@@ -143,8 +143,9 @@ spring-boot-starter-searchable-jpa   Spring Boot 자동 설정 스타터
 
 | 라이브러리 버전 | Spring Boot 버전 | Jakarta EE | 상태 |
 |----------------|------------------|------------|------|
-| `1.0.0+` | `3.2.x+` | jakarta.* | 최신 |
-| `0.1.x` | `2.7.x` | javax.* | Deprecated |
+| `2.x` | `4.1.x+` | jakarta.* (Jakarta EE 11) | 최신 |
+| `1.x` | `3.2.x` ~ `3.5.x` | jakarta.* (Jakarta EE 9+) | 유지보수 |
+| `0.1.x` | `2.7.x` | javax.* | 유지보수 종료 |
 
 ## 튜토리얼
 
@@ -164,8 +165,8 @@ spring-boot-starter-searchable-jpa   Spring Boot 자동 설정 스타터
 ## 요구 사항
 
 - Java 17+
-- Spring Boot 3.2.x+
-- Gradle 8.5+
+- Spring Boot 4.1.x+ (1.x 버전은 3.2.x+)
+- Gradle 8.14+ (1.x 버전은 8.5+)
 
 ## 라이선스
 

@@ -11,8 +11,8 @@ dependencies {
     // Searchable JPA starter (includes OpenAPI support)
     implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:${version}'
 
-    // SpringDoc OpenAPI (for Spring Boot 3.x)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+    // SpringDoc OpenAPI (for Spring Boot 4.x; use SpringDoc 2.x with Spring Boot 3.x)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0'
 }
 ```
 

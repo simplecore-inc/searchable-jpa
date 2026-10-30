@@ -6,7 +6,7 @@
 
 > Dynamic Search, Sorting, and Pagination for Spring Data JPA
 
-- Java 17+ / Spring Boot 3.2+
+- Java 17+ / Spring Boot 4.1+ (3.2+ on 1.x)
 - 18 Search Operators
 - High-Performance Two-Phase Query Pagination
 - OpenAPI/Swagger Integration

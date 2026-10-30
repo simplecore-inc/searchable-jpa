@@ -1,8 +1,8 @@
 # Searchable JPA
 
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.5-green.svg)](https://spring.io/projects/spring-boot)
-[![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-9%2B-blue.svg)](https://jakarta.ee/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1%2B-green.svg)](https://spring.io/projects/spring-boot)
+[![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-11-blue.svg)](https://jakarta.ee/)
 [![License](https://img.shields.io/badge/License-SimpleCORE%201.0-blue.svg)](LICENSE)
 
 Searchable JPA is a library that extends Spring Data JPA to provide dynamic search, sorting, and pagination functionality. It allows complex search conditions to be implemented using simple annotations and builder patterns, and provides high-performance pagination for large datasets through two-phase query optimization.
@@ -13,14 +13,30 @@ Searchable JPA is a library that extends Spring Data JPA to provide dynamic sear
 
 | Library Version | Spring Boot Version | Jakarta EE | Status |
 |----------------|---------------------|------------|--------|
-| `0.1.x` | `2.7.x` | javax.* | Deprecated |
-| `1.0.0+` | `3.2.x+` | jakarta.* | Latest |
+| `2.x` | `4.1.x+` | jakarta.* (Jakarta EE 11) | Latest |
+| `1.x` | `3.2.x` ~ `3.5.x` | jakarta.* (Jakarta EE 9+) | Maintained |
+| `0.1.x` | `2.7.x` | javax.* | Unmaintained |
 
 ### Important: Version Compatibility Notice
 
-- **1.0.0+ versions**: Only supports Spring Boot 3.2.x+ (Jakarta EE 9+)
-- **0.1.x versions**: Only supports Spring Boot 2.7.x (uses javax.* packages)
+- **2.x versions**: Only supports Spring Boot 4.1.x+ (Jakarta EE 11), built from `master`
+- **1.x versions**: Only supports Spring Boot 3.2.x - 3.5.x (Jakarta EE 9+), maintained on `spring-boot-3x`
+- **0.1.x versions**: Only supports Spring Boot 2.7.x (uses javax.* packages), no longer maintained
 - **No mixing with lower versions**: Using different versions simultaneously may cause classpath conflicts
+
+### Spring Boot 3.x → 4.x Migration
+
+Move to the 2.x line together with Spring Boot 4:
+
+```gradle
+// 1.x version (Spring Boot 3.x)
+implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.x'
+
+// 2.x version (Spring Boot 4.x)
+implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:2.x'
+```
+
+SpringDoc moves from 2.x to 3.x with Spring Boot 4.
 
 ### Spring Boot 2.x → 3.x Migration
 
@@ -42,13 +58,11 @@ When upgrading to Spring Boot 3.x, the following changes are required:
 ## System Requirements
 
 - **Java**: 17+
-- **Spring Boot**: 3.2.5+ (1.0.0+ versions)
+- **Spring Boot**: 4.1.x+ (2.x versions)
+- **Spring Boot**: 3.2.x - 3.5.x (1.x versions)
 - **Spring Boot**: 2.7.x (0.1.x versions)
-- **Jakarta EE**: 9+ (1.0.0+ versions)
+- **Jakarta EE**: 11 (2.x versions), 9+ (1.x versions)
 - **javax.* support**: 2.7.x and below (0.1.x versions)
-
-## Spring Boot 3.2.5 Migration Completed
-
 
 ## Key Features
 
@@ -65,7 +79,7 @@ When upgrading to Spring Boot 3.x, the following changes are required:
 ### 1. Add Dependency
 
 ```gradle
-implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.0.0-SNAPSHOT'
+implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:${version}'
 ```
 
 ### 2. Application Configuration (Optional)

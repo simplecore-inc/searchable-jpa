@@ -428,7 +428,7 @@ TRACE d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: se
 ### Auto-Configuration Is Not Applied
 
 1. **Check the dependency**: Confirm that `spring-boot-starter-searchable-jpa` was added correctly.
-2. **Check auto-configuration registration**: Spring Boot 3.x loads auto-configurations through the SPI mechanism, reading them from `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` rather than through component scanning. As long as `spring-boot-starter-searchable-jpa` is on the classpath, it registers automatically regardless of where your `@SpringBootApplication` class's package is located.
+2. **Check auto-configuration registration**: Spring Boot 3.x and 4.x load auto-configurations through the SPI mechanism, reading them from `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` rather than through component scanning. As long as `spring-boot-starter-searchable-jpa` is on the classpath, it registers automatically regardless of where your `@SpringBootApplication` class's package is located.
 3. **Check the configuration file**: Verify that the settings in `application.yml` or `application.properties` are correct.
 
 ### Performance Problems

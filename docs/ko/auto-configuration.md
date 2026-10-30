@@ -318,7 +318,7 @@ searchable.hibernate.in-clause-parameter-padding=true
 
 ## 시간 구간 집계
 
-기간별 건수 집계(`TimeBucketCounter`)에 필요한 두 가지가 자동으로 준비됩니다. 사용 방법은 [고급 기능 - 시간 구간별 건수 집계](advanced-features.md#시간-구간별-건수-집계)에서 다룹니다.
+기간별 건수 집계(`TimeBucketCounter`)에 필요한 `timeBucketCounter` 빈과 `epoch_millis` 함수를 자동으로 등록합니다. 사용 방법은 [고급 기능 - 시간 구간별 건수 집계](advanced-features.md#시간-구간별-건수-집계)에서 다룹니다.
 
 ### timeBucketCounter 빈
 
@@ -366,7 +366,7 @@ public class Application {
 }
 ```
 
-두 자동 설정을 모두 끄려면 `exclude` 목록에 함께 지정합니다.
+`SearchableJpaConfiguration`과 `SearchableOpenApiConfiguration`을 모두 끄려면 `exclude` 목록에 두 클래스를 함께 지정합니다.
 
 ```java
 @SpringBootApplication(exclude = {SearchableJpaConfiguration.class, SearchableOpenApiConfiguration.class})
@@ -428,7 +428,7 @@ TRACE d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: se
 ### 자동 설정이 적용되지 않는 경우
 
 1. **의존성 확인**: `spring-boot-starter-searchable-jpa`가 올바르게 추가되었는지 확인합니다.
-2. **자동 설정 등록 확인**: Spring Boot 3.x는 컴포넌트 스캔이 아니라 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`에 등록된 자동 설정을 SPI 방식으로 로드합니다. `spring-boot-starter-searchable-jpa`가 클래스패스에 있으면 `@SpringBootApplication`의 패키지 위치와 무관하게 자동 등록됩니다.
+2. **자동 설정 등록 확인**: Spring Boot 3.x와 4.x는 컴포넌트 스캔이 아니라 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`에 등록된 자동 설정을 SPI 방식으로 로드합니다. `spring-boot-starter-searchable-jpa`가 클래스패스에 있으면 `@SpringBootApplication`의 패키지 위치와 무관하게 자동 등록됩니다.
 3. **설정 파일 확인**: `application.yml` 또는 `application.properties`의 설정이 올바른지 확인합니다.
 
 ### 성능 문제가 있는 경우

@@ -6,10 +6,12 @@
 
 **A:** Searchable JPA supports different Spring Boot versions depending on the library version. Key compatibility details:
 
-- **Version 1.0.0+**: Supports only Spring Boot 3.2.x+ (Jakarta EE 9+)
-- **Version 0.1.x**: Supports only Spring Boot 2.7.x (uses javax.* packages)
+- **Version 2.x**: Supports only Spring Boot 4.1.x+ (Jakarta EE 11)
+- **Version 1.x**: Supports only Spring Boot 3.2.x - 3.5.x (Jakarta EE 9+)
+- **Version 0.1.x**: Supports only Spring Boot 2.7.x (uses javax.* packages, unmaintained)
 - Java 17+: supported
-- JPA 3.0+: supported (version 1.0.0+)
+- JPA 3.2: supported (version 2.x)
+- JPA 3.0+: supported (version 1.x)
 - JPA 2.2+: supported (version 0.1.x)
 
 ### Q: Auto-configuration does not work.

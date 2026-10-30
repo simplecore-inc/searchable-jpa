@@ -6,16 +6,18 @@ This document explains how to install and configure Searchable JPA in your proje
 
 | Library Version | Spring Boot Version | Java Version | Jakarta EE | Status |
 |---------------|----------------|-----------|------------|------|
-| `1.0.0+` | `3.2.x+` | `17+` | Jakarta EE 9+ | Latest |
-| `0.1.x` | `2.7.x` | `8+` | javax.* | Deprecated |
+| `2.x` | `4.1.x+` | `17+` | Jakarta EE 11 | Latest |
+| `1.x` | `3.2.x` ~ `3.5.x` | `17+` | Jakarta EE 9+ | Maintained |
+| `0.1.x` | `2.7.x` | `8+` | javax.* | Unmaintained |
 
 **Important**: Do not mix versions. Jakarta EE and javax.* packages apply differently depending on the version you use.
 
 ## System Requirements
 
-- **Java 17 or higher** (version 1.0.0+)
+- **Java 17 or higher** (versions 2.x and 1.x)
 - **Java 8 or higher** (version 0.1.x)
-- **Spring Boot 3.2.x+** (version 1.0.0+, Jakarta EE 9+)
+- **Spring Boot 4.1.x+** (version 2.x, Jakarta EE 11)
+- **Spring Boot 3.2.x - 3.5.x** (version 1.x, Jakarta EE 9+)
 - **Spring Boot 2.7.x** (version 0.1.x, javax.* packages)
 - Spring Data JPA
 
@@ -86,8 +88,9 @@ dependencies {
     // Database driver (e.g., H2)
     runtimeOnly 'com.h2database:h2'
 
-    // OpenAPI integration (optional) - Spring Boot 3.x
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+    // OpenAPI integration (optional) - SpringDoc 3.x for Spring Boot 4 (searchable-jpa 2.x),
+    // SpringDoc 2.x for Spring Boot 3 (searchable-jpa 1.x)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0'
 }
 ```
 
@@ -115,7 +118,7 @@ dependencies {
         <scope>runtime</scope>
     </dependency>
 
-    <!-- OpenAPI integration (optional) - Spring Boot 3.x -->
+    <!-- OpenAPI integration (optional) - SpringDoc 3.x for Spring Boot 4, 2.x for Spring Boot 3 -->
     <dependency>
         <groupId>org.springdoc</groupId>
         <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
