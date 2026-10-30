@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Searchable JPA Documentation Build Script
 # Copies and transforms documentation for Docsify deployment
-set -e
+set -euo pipefail
 
 BUILD_DIR="build-docs"
 LOCALES=("en" "ko")
@@ -11,8 +11,8 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_ROOT"
 
 # Use DOCS_VERSION env var if set, otherwise extract from build.gradle
-if [ -n "$DOCS_VERSION" ]; then
-  VERSION="$DOCS_VERSION"
+if [ -n "${DOCS_VERSION:-}" ]; then
+  VERSION="${DOCS_VERSION:-}"
 else
   VERSION=$(grep "version = " build.gradle | head -1 | sed "s/.*version = '\([^']*\)'.*/\1/")
 fi
@@ -27,6 +27,7 @@ done
 # 2. Copy Docsify configuration files
 echo "Copying Docsify configuration files..."
 cp docs/index.html "$BUILD_DIR/"
+cp -R docs/assets "$BUILD_DIR/assets"
 cp docs/.nojekyll "$BUILD_DIR/"
 cp docs/_coverpage.md "$BUILD_DIR/"
 cp docs/_navbar.md "$BUILD_DIR/"
@@ -60,11 +61,10 @@ convert_links() {
   dir_path=$(dirname "${file#$BUILD_DIR/}")
 
   # Convert ./ relative links to absolute paths based on file location
-  sed -i.bak "s|(\./|($dir_path/|g" "$file" && rm -f "${file}.bak"
+  sed -i.bak "s|(\./|(/$dir_path/|g" "$file" && rm -f "${file}.bak"
 
   # Common link conversions
-  sed -i.bak -e 's|(/en/|(en/|g' \
-             -e 's|(/ko/|(ko/|g' \
+  sed -i.bak -e "s|(/$dir_path/_images/|(./_images/|g" \
              -e 's|\.\./\.\./LICENSE|https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE|g' \
              "$file" && rm -f "${file}.bak"
 }
