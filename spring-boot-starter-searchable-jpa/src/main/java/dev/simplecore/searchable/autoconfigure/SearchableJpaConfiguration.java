@@ -123,8 +123,8 @@ public class SearchableJpaConfiguration {
         hibernateOptimizations.put("spring.jpa.properties.hibernate.query.in_clause_parameter_padding", 
                 String.valueOf(hibernateProps.isInClauseParameterPadding()));
         
-        // Connection optimization
-        hibernateOptimizations.put("spring.jpa.properties.hibernate.connection.provider_disables_autocommit", "true");
+        // Do not claim the connection provider disables auto-commit. That guarantee
+        // belongs to the host datasource; setting it blindly breaks transaction rollback.
         
         // Add optimizations to environment
         MutablePropertySources propertySources = environment.getPropertySources();

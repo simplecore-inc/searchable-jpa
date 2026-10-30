@@ -30,6 +30,7 @@ class SearchableJpaConfigurationTest {
         runner.run(context -> {
             ConfigurableEnvironment environment = (ConfigurableEnvironment) context.getEnvironment();
             assertThat(environment.getPropertySources().contains("searchableHibernateOptimizations")).isTrue();
+            assertThat(environment.getProperty("spring.jpa.properties.hibernate.connection.provider_disables_autocommit")).isNull();
             assertThat(environment.getProperty("spring.jpa.properties.hibernate.default_batch_fetch_size"))
                     .isEqualTo("100");
         });
