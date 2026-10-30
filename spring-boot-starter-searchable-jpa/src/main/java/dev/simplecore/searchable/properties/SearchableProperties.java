@@ -27,6 +27,17 @@ public class SearchableProperties {
     @Valid
     private DateTimeProperties dateTime = new DateTimeProperties();
 
+    private PatternMatchingProperties patternMatching = new PatternMatchingProperties();
+
+    @Data
+    public static class PatternMatchingProperties {
+        /**
+         * Whether CONTAINS, STARTS_WITH and ENDS_WITH ignore case by lower-casing the column and the
+         * pattern. Off by default: patterns match as the database compares strings.
+         */
+        private boolean caseInsensitive = false;
+    }
+
     @Data
     public static class SwaggerProperties {
         private boolean enabled = true;

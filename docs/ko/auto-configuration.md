@@ -12,6 +12,8 @@ searchable:
     enabled: true
   date-time:
     default-timezone: Asia/Seoul
+  pattern-matching:
+    case-insensitive: false
   hibernate:
     auto-optimization: true
     auto-fetch-collections: true
@@ -33,7 +35,8 @@ searchable:
 | `max-page-size` | 1000 | 실행할 페이지의 최대 크기입니다. 양수여야 합니다. |
 | `swagger.enabled` | true | 라이브러리의 API 문서 사용자 정의 기능을 켭니다. Swagger 접근 제어는 별도입니다. |
 | `date-time.default-timezone` | 미지정 | 시간대 없는 입력값을 해석할 때 가장 먼저 확인합니다. |
-| `hibernate.auto-optimization` | true | 아래 표의 Hibernate 기본값 여섯 개를 등록합니다. |
+| `pattern-matching.case-insensitive` | false | true이면 CONTAINS · STARTS_WITH · ENDS_WITH가 열과 값을 모두 소문자로 바꿔 비교하므로 대소문자를 구분하지 않습니다. |
+| `hibernate.auto-optimization` | true | 아래 표의 Hibernate 기본값을 등록합니다. |
 | `hibernate.auto-fetch-collections` | true | 직접 연결된 컬렉션 내부의 to-one 경로를 자동 탐지합니다. false이면 이 추가 탐지를 끕니다. |
 | `hibernate.default-batch-fetch-size` | 100 | Hibernate 지연 로딩의 배치 크기입니다. 양수여야 합니다. |
 | `hibernate.jdbc-batch-size` | 1000 | Hibernate JDBC 명령문의 배치 크기입니다. 양수여야 합니다. |
@@ -76,6 +79,10 @@ JDBC 명령문의 배치 크기와 서비스가 엔티티 200건씩 처리하는
 JSON 변환, 빌더와 쿼리 구성 단계에서 구조를 검사합니다. DTO를 사용하는 진입점에서는 검색 필드 허용 여부, 연산자, 정렬 허용 여부와 값도 검증합니다. 직접 생성한 `SearchCondition`은 신뢰할 수 있는 서버 코드용입니다. 외부 입력을 받는 DTO 검증을 대신하지 않습니다. HTTP 본문 크기, 문자열 길이, 요청 빈도와 쿼리 시간 제한은 애플리케이션에서 설정하세요.
 
 페이지 기본값과 최대값은 실제 영속성 단위에서 읽습니다. starter를 사용하지 않을 때는 EntityManagerFactory에 `searchable.default_page_size`, `searchable.max_page_size`, `searchable.auto_fetch_collections` 속성을 지정할 수 있습니다. starter는 `spring.jpa.properties`를 통해 전달합니다. 별도 영속성 단위를 구성할 때는 속성을 직접 전달하세요. 페이지 설정값은 양수이며 기본값이 최대값 이하여야 합니다.
+
+## 대소문자를 구분하지 않는 패턴 검색
+
+패턴 연산자는 데이터베이스의 문자열 비교 규칙을 따르며, PostgreSQL은 대소문자를 구분합니다. `searchable.pattern-matching.case-insensitive: true`로 설정하면 `lower(열)`과 소문자로 바꾼 값을 비교합니다. 이 검색에 쓸 인덱스도 같은 식으로 만듭니다. 예를 들어 `pg_trgm` 확장을 설치하고 `create index on plans using gin (lower(name) gin_trgm_ops)`로 만듭니다.
 
 ## 시간대 결정 순서
 

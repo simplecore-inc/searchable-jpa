@@ -6,6 +6,7 @@ import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.core.exception.SearchableOperationException;
 import dev.simplecore.searchable.core.service.join.JoinManager;
 import dev.simplecore.searchable.core.utils.JsonTypeDetector;
+import dev.simplecore.searchable.core.utils.SearchablePatternMatchingHolder;
 import dev.simplecore.searchable.core.utils.SearchableValueParser;
 import lombok.NonNull;
 
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -172,6 +174,10 @@ public class PredicateBuilder<T> {
         }
         Expression<String> stringPath = getStringPath(path);
         String pattern = patternBuilder.apply(escapePattern(raw));
+        if (SearchablePatternMatchingHolder.isCaseInsensitive()) {
+            stringPath = cb.lower(stringPath);
+            pattern = pattern.toLowerCase(Locale.ROOT);
+        }
         // Specify the ESCAPE character so the '\'-escaped %/_ are treated as literals (ANSI SQL:
         // without ESCAPE, the backslash is not recognized as an escape on many databases).
         Predicate predicate = cb.like(stringPath, pattern, LIKE_ESCAPE_CHAR);

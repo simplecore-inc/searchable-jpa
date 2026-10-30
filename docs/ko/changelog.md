@@ -1,5 +1,9 @@
 # 변경 사항
 
+## 2.0.1
+
+- CONTAINS · STARTS_WITH · ENDS_WITH가 대소문자를 구분하지 않게 하는 `searchable.pattern-matching.case-insensitive` 설정을 추가했습니다. 기본값은 꺼져 있습니다.
+
 ## 2.0.0
 
 Boot 4와 Boot 3 계열에 같은 오류 수정을 적용하며 각 계열의 프레임워크 주 버전은 유지합니다.

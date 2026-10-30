@@ -1,6 +1,7 @@
 package dev.simplecore.searchable.autoconfigure;
 
 import dev.simplecore.searchable.core.service.bucket.TimeBucketCounter;
+import dev.simplecore.searchable.core.utils.SearchablePatternMatchingHolder;
 import dev.simplecore.searchable.core.utils.SearchableTimeZoneHolder;
 import dev.simplecore.searchable.properties.SearchableProperties;
 import jakarta.annotation.PostConstruct;
@@ -66,6 +67,13 @@ public class SearchableJpaConfiguration {
         ZoneId zone = resolveApplicationZoneId();
         SearchableTimeZoneHolder.setZoneId(zone);
         log.info("Searchable value parser timezone set to: {}", zone);
+    }
+
+    @PostConstruct
+    public void configurePatternMatching() {
+        boolean caseInsensitive = searchableProperties.getPatternMatching().isCaseInsensitive();
+        SearchablePatternMatchingHolder.setCaseInsensitive(caseInsensitive);
+        log.info("Searchable pattern operators ignore case: {}", caseInsensitive);
     }
 
     private ZoneId resolveApplicationZoneId() {

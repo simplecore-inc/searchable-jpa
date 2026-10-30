@@ -12,6 +12,8 @@ searchable:
     enabled: true
   date-time:
     default-timezone: Asia/Seoul
+  pattern-matching:
+    case-insensitive: false
   hibernate:
     auto-optimization: true
     auto-fetch-collections: true
@@ -33,7 +35,8 @@ searchable:
 | `max-page-size` | 1000 | Maximum executed page size; positive |
 | `swagger.enabled` | true | Enables this library's operation customizer, not access control for Swagger endpoints |
 | `date-time.default-timezone` | unset | First choice for interpreting timezone-less input |
-| `hibernate.auto-optimization` | true | Adds the six Hibernate defaults in the next table |
+| `pattern-matching.case-insensitive` | false | When true, CONTAINS, STARTS_WITH and ENDS_WITH lower-case both the column and the value, so matching ignores case |
+| `hibernate.auto-optimization` | true | Adds the Hibernate defaults in the next table |
 | `hibernate.auto-fetch-collections` | true | Includes automatically detected to-one paths through direct collections; false disables that extra detection |
 | `hibernate.default-batch-fetch-size` | 100 | Positive Hibernate lazy-load batch size |
 | `hibernate.jdbc-batch-size` | 1000 | Positive Hibernate JDBC statement batch size |
@@ -76,6 +79,10 @@ JDBC statement batching and the service's 200-entity write chunks are different 
 Structural checks apply to parsed JSON, builders and conditions passed to query construction. DTO-aware entry points also validate field permissions, operators, sort permissions and values. A manually constructed `SearchCondition` is trusted server code; it is not a replacement for DTO validation on untrusted input. HTTP body size, string lengths, request rate and database query timeout remain application-level controls.
 
 Page size defaults and maxima are evaluated against the active persistence unit. Without the starter, equivalent EntityManagerFactory properties are `searchable.default_page_size`, `searchable.max_page_size` and `searchable.auto_fetch_collections`. The starter exposes them via `spring.jpa.properties`. Configure custom persistence units explicitly. Keep their page settings positive and the default no greater than the maximum.
+
+## Case-insensitive pattern matching
+
+Pattern operators match as the database compares strings, which is case-sensitive on PostgreSQL. With `searchable.pattern-matching.case-insensitive: true` the library compares `lower(column)` with the lower-cased value. An index that serves these searches is built on the same expression, for example `create index on plans using gin (lower(name) gin_trgm_ops)` with the `pg_trgm` extension.
 
 ## Timezone resolution
 

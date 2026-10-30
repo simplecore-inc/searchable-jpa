@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+
+- Add `searchable.pattern-matching.case-insensitive` so CONTAINS, STARTS_WITH and ENDS_WITH can ignore case. Off by default.
+
 ## 2.0.0
 
 The same corrections are maintained on the Boot 4 and Boot 3 lines; each line retains its framework major version.
