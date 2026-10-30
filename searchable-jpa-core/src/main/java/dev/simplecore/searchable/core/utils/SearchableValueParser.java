@@ -2,12 +2,13 @@ package dev.simplecore.searchable.core.utils;
 
 import dev.simplecore.searchable.core.exception.SearchableParseException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.text.Normalizer;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.Temporal;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Map;
@@ -119,8 +120,8 @@ public class SearchableValueParser {
 
         try {
             // Handle temporal types with special between logic
-            if (java.time.temporal.Temporal.class.isAssignableFrom(targetType) ||
-                    java.util.Date.class.isAssignableFrom(targetType)) {
+            if (Temporal.class.isAssignableFrom(targetType) ||
+                    Date.class.isAssignableFrom(targetType)) {
                 return parseTemporalValueForBetween(value, targetType, isEndValue);
             }
 
@@ -161,8 +162,8 @@ public class SearchableValueParser {
             }
 
             // Handle temporal types
-            if (java.time.temporal.Temporal.class.isAssignableFrom(targetType) ||
-                    java.util.Date.class.isAssignableFrom(targetType)) {
+            if (Temporal.class.isAssignableFrom(targetType) ||
+                    Date.class.isAssignableFrom(targetType)) {
                 return parseTemporalValue(value, targetType);
             }
 
@@ -197,7 +198,7 @@ public class SearchableValueParser {
             value = value.substring(1);
         }
         // Normalize Unicode
-        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFKC);
+        return Normalizer.normalize(value, Normalizer.Form.NFKC);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

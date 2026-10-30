@@ -1,16 +1,19 @@
 package dev.simplecore.searchable.core.service.specification;
 
-import lombok.extern.slf4j.Slf4j;
-
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.metamodel.Attribute;
 import jakarta.persistence.metamodel.EntityType;
 import jakarta.persistence.metamodel.ManagedType;
 import jakarta.persistence.metamodel.PluralAttribute;
 import java.lang.reflect.Field;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Analyzes entity relationships to detect ToOne, ToMany, and nested relationships.
@@ -53,7 +56,9 @@ public class RelationshipAnalyzer<T> {
 
             // ENHANCEMENT: Detect nested ToOne relationships in ManyToMany related entities
             try {
-                Set<String> nestedToOneFields = detectNestedToOneRelationships();
+                Object configured = entityManager.getEntityManagerFactory().getProperties().get("searchable.auto_fetch_collections");
+                Set<String> nestedToOneFields = configured != null && !Boolean.parseBoolean(configured.toString())
+                        ? Collections.emptySet() : detectNestedToOneRelationships();
                 commonFields.addAll(nestedToOneFields);
             } catch (Exception e) {
                 log.warn("Failed to detect nested ToOne relationships, continuing without them: {}", e.getMessage());
@@ -68,8 +73,8 @@ public class RelationshipAnalyzer<T> {
             // Fallback to reflection if metamodel fails
             Field[] fields = entityClass.getDeclaredFields();
             for (Field field : fields) {
-                if (field.isAnnotationPresent(jakarta.persistence.ManyToOne.class) ||
-                        field.isAnnotationPresent(jakarta.persistence.OneToOne.class)) {
+                if (field.isAnnotationPresent(ManyToOne.class) ||
+                        field.isAnnotationPresent(OneToOne.class)) {
                     commonFields.add(field.getName());
                     log.trace("DetectCommonToOneFields: Found ToOne field via reflection: {}", field.getName());
                 }
@@ -174,8 +179,8 @@ public class RelationshipAnalyzer<T> {
             // Fallback to reflection
             Field[] fields = entityClass.getDeclaredFields();
             for (Field field : fields) {
-                if (field.isAnnotationPresent(jakarta.persistence.ManyToOne.class) ||
-                        field.isAnnotationPresent(jakarta.persistence.OneToOne.class)) {
+                if (field.isAnnotationPresent(ManyToOne.class) ||
+                        field.isAnnotationPresent(OneToOne.class)) {
                     toOneFields.add(field.getName());
                     log.trace("DetectToOneFieldsForEntity: Found ToOne field '{}' via reflection in entity: {}",
                             field.getName(), entityClass.getSimpleName());
@@ -218,7 +223,7 @@ public class RelationshipAnalyzer<T> {
             // Fallback to reflection if metamodel fails
             Field[] fields = entityClass.getDeclaredFields();
             for (Field field : fields) {
-                if (field.isAnnotationPresent(jakarta.persistence.ManyToMany.class)) {
+                if (field.isAnnotationPresent(ManyToMany.class)) {
                     manyToManyFields.add(field.getName());
                     log.trace("DetectManyToManyFields: Found ManyToMany field via reflection: {}", field.getName());
                 }

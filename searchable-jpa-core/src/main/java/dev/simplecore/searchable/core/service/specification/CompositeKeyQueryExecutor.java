@@ -4,12 +4,6 @@ import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.exception.SearchableOperationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceUnitUtil;
 import jakarta.persistence.TypedQuery;
@@ -28,6 +22,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 /**
  * Handles two-phase pagination for composite-key entities ({@code @IdClass} and {@code @EmbeddedId}).
@@ -130,7 +129,7 @@ class CompositeKeyQueryExecutor<T> {
         query.orderBy(orders);
 
         TypedQuery<Object[]> typedQuery = entityManager.createQuery(query);
-        typedQuery.setFirstResult((int) pageRequest.getOffset());
+        typedQuery.setFirstResult(Math.toIntExact(pageRequest.getOffset()));
         typedQuery.setMaxResults(pageRequest.getPageSize());
 
         return typedQuery.getResultList().stream()
@@ -145,22 +144,6 @@ class CompositeKeyQueryExecutor<T> {
         Object[] compositeKey = new Object[idFields.size()];
         System.arraycopy(row, 0, compositeKey, 0, idFields.size());
         return compositeKey;
-    }
-
-    /**
-     * Builds a portable distinct-count key expression by concatenating the string-cast id fields.
-     * SQL Server does not support multi-column {@code COUNT(DISTINCT ...)} and JPA Criteria cannot
-     * express a derived table, so a single concatenated expression is used with {@code countDistinct}.
-     */
-    Expression<String> buildDistinctCountKeyExpression(Root<T> root, CriteriaBuilder cb) {
-        Expression<String> concatenated = null;
-        for (String idField : idFields) {
-            Expression<String> part = idFieldPath(root, idField).as(String.class);
-            concatenated = (concatenated == null)
-                    ? part
-                    : cb.concat(cb.concat(concatenated, "|"), part);
-        }
-        return concatenated;
     }
 
     /**

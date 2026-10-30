@@ -2,6 +2,7 @@ package dev.simplecore.searchable.core.service;
 
 import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.SearchConditionBuilder;
+import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.test.config.BaseTestConfig;
 import dev.simplecore.searchable.test.dto.TestOrderItemSearchDTO;
@@ -11,6 +12,9 @@ import dev.simplecore.searchable.test.entity.TestOrderNote;
 import dev.simplecore.searchable.test.entity.TestPost;
 import dev.simplecore.searchable.test.service.TestIdClassEntityService;
 import dev.simplecore.searchable.test.service.TestOrderItemService;
+import jakarta.persistence.EntityManager;
+import java.util.HashSet;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,10 +25,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.transaction.annotation.Transactional;
-
-import jakarta.persistence.EntityManager;
-import java.util.HashSet;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -128,7 +128,7 @@ class TwoPhaseCompositeKeyIssuesTest {
         // @IdClass entity: 25 records, size 10 -> 3 pages. Request page index 5 (offset 50, empty).
         SearchCondition<TestIdClassEntity> condition = new SearchCondition<>();
         condition.getNodes().add(new SearchCondition.Condition(
-                null, "tenantId", dev.simplecore.searchable.core.condition.operator.SearchOperator.EQUALS,
+                null, "tenantId", SearchOperator.EQUALS,
                 "tenant1", null, "tenantId"));
         condition.setPage(5);
         condition.setSize(10);
@@ -192,7 +192,7 @@ class TwoPhaseCompositeKeyIssuesTest {
     void compositeKeyMarkerNotExposed() {
         SearchCondition<TestIdClassEntity> condition = new SearchCondition<>();
         condition.getNodes().add(new SearchCondition.Condition(
-                null, "tenantId", dev.simplecore.searchable.core.condition.operator.SearchOperator.EQUALS,
+                null, "tenantId", SearchOperator.EQUALS,
                 "tenant1", null, "tenantId"));
         condition.setPage(0);
         condition.setSize(10);

@@ -3,8 +3,20 @@ package dev.simplecore.searchable.core.service.specification;
 import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.SearchCondition.Node;
 import dev.simplecore.searchable.core.condition.operator.LogicalOperator;
+import dev.simplecore.searchable.core.condition.validator.SearchRequestLimits;
 import dev.simplecore.searchable.core.service.join.JoinManager;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -12,16 +24,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Builds JPA Specification from SearchCondition.
@@ -49,6 +51,7 @@ public class SearchableSpecificationBuilder<T> {
                                           @NonNull EntityManager entityManager,
                                           @NonNull Class<T> entityClass,
                                           @NonNull JpaSpecificationExecutor<T> specificationExecutor) {
+        SearchRequestLimits.validateStructure(condition);
         this.condition = condition;
         this.entityManager = entityManager;
         this.entityClass = entityClass;
@@ -77,7 +80,7 @@ public class SearchableSpecificationBuilder<T> {
         
         if (sortCondition == null || sortCondition.getOrders().isEmpty()) {
             // No sort conditions specified - automatically add PK sorting
-            sortOrders = new java.util.ArrayList<>();
+            sortOrders = new ArrayList<>();
         } else {
             // Convert SearchCondition orders to Spring Data Sort orders
             sortOrders = sortCondition.getOrders().stream()
@@ -110,7 +113,7 @@ public class SearchableSpecificationBuilder<T> {
 
                 if (!hasPrimaryKey) {
                     // Add primary key field as the last sort criterion in ascending order
-                    sortOrders = new java.util.ArrayList<>(sortOrders);
+                    sortOrders = new ArrayList<>(sortOrders);
                     sortOrders.add(Sort.Order.by(primaryKeyField));
 
                     log.trace("Automatically added primary key field '{}' to sort criteria for deterministic pagination ordering",
@@ -148,7 +151,7 @@ public class SearchableSpecificationBuilder<T> {
      * Returns null if no predicates created.
      */
     private Predicate createPredicates(Root<T> root,
-                                       jakarta.persistence.criteria.CriteriaQuery<?> query,
+                                       CriteriaQuery<?> query,
                                        CriteriaBuilder cb,
                                        SpecificationBuilder<T> specBuilder) {
         List<Node> nodes = condition.getNodes();
@@ -261,7 +264,8 @@ public class SearchableSpecificationBuilder<T> {
      * Phase 1: Get IDs only (regular joins to avoid memory paging)
      * Phase 2: Load complete entities with smart fetch joins
      *
-     * This method now applies two-phase optimization to ALL queries for consistent performance.
+     * Single-key queries without a to-many path use a direct pageable entity query.
+     * To-many and composite-key queries use ID paging followed by entity loading.
      */
     public Page<T> buildAndExecuteWithTwoPhaseOptimization() {
         PageRequest pageRequest = buildPageRequest();
@@ -282,10 +286,30 @@ public class SearchableSpecificationBuilder<T> {
 
         log.trace("All fetch fields for two-phase query: {}", allFetchFields);
 
-        // Always use two-phase optimization for all queries
+        Root<T> analysisRoot = createDummyRoot();
+        Set<String> paths = new HashSet<>(extractJoinPaths(condition.getNodes()));
+        paths.addAll(allFetchFields);
+        pageRequest.getSort().forEach(order -> paths.add(order.getProperty()));
+        boolean hasToMany = paths.stream().anyMatch(path -> relationshipAnalyzer.isToManyPath(analysisRoot, path));
+        boolean composite = SearchableFieldUtils.COMPOSITE_KEY_MARKER.equals(
+                SearchableFieldUtils.getPrimaryKeyFieldName(entityManager, entityClass));
+        if (!hasToMany && !composite) {
+            Specification<T> direct = (root, query, cb) -> {
+                SpecificationQuerySupport.applyFetchJoins(root, query, allFetchFields);
+                return SpecificationQuerySupport.createPredicates(condition, entityManager, root, query, cb);
+            };
+            return specificationExecutor.findAll(direct, pageRequest);
+        }
         return twoPhaseQueryExecutor.executeWithTwoPhaseOptimization(pageRequest, allFetchFields);
     }
 
+
+    /** Fetches at most one root entity and does not issue a total-count query. */
+    public Optional<T> buildAndExecuteFirst() {
+        Set<String> fetches = new HashSet<>(getCachedCommonToOneFields());
+        if (condition.getFetchFields() != null) fetches.addAll(condition.getFetchFields());
+        return twoPhaseQueryExecutor.executeFirst(buildPageRequest(), fetches);
+    }
 
     /**
      * Create a dummy root for path analysis without executing queries.
@@ -319,8 +343,9 @@ public class SearchableSpecificationBuilder<T> {
         Integer pageNum = condition.getPage();
         Integer sizeNum = condition.getSize();
 
-        int page = pageNum != null ? Math.max(0, pageNum) : 0;
-        int size = sizeNum != null ? (sizeNum > 0 ? sizeNum : DEFAULT_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
+        int page = pageNum != null ? pageNum : 0;
+        int size = sizeNum != null ? sizeNum : SearchRequestLimits.defaultPageSize(entityManager);
+        SearchRequestLimits.validatePage(entityManager, page, size);
 
         return PageRequest.of(page, size, createSort());
     }

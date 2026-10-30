@@ -6,15 +6,20 @@ import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.core.exception.SearchableConfigurationException;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.test.config.BaseTestConfig;
+import dev.simplecore.searchable.test.dto.TestPostDTOs;
 import dev.simplecore.searchable.test.dto.TestUpdatableSearchDTO;
 import dev.simplecore.searchable.test.entity.TestIdClassEntity;
 import dev.simplecore.searchable.test.entity.TestPost;
 import dev.simplecore.searchable.test.entity.TestUpdatableEntity;
+import dev.simplecore.searchable.test.enums.TestPostStatus;
 import dev.simplecore.searchable.test.repository.TestPostRepository;
 import dev.simplecore.searchable.test.service.TestIdClassEntityService;
 import dev.simplecore.searchable.test.service.TestUpdatableEntityService;
 import dev.simplecore.searchable.test.support.TestSqlCapture;
+import jakarta.persistence.EntityManager;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,9 +30,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.transaction.annotation.Transactional;
-
-import jakarta.persistence.EntityManager;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -190,9 +192,9 @@ class ServiceLayerIssuesTest {
     void intermediateAbstractClassResolvesEntityType() {
         ConcretePostService service = new ConcretePostService(testPostRepository, entityManager);
 
-        SearchCondition<dev.simplecore.searchable.test.dto.TestPostDTOs.TestPostSearchDTO> condition =
-                SearchConditionBuilder.create(dev.simplecore.searchable.test.dto.TestPostDTOs.TestPostSearchDTO.class)
-                        .where(w -> w.equals("status", dev.simplecore.searchable.test.enums.TestPostStatus.PUBLISHED))
+        SearchCondition<TestPostDTOs.TestPostSearchDTO> condition =
+                SearchConditionBuilder.create(TestPostDTOs.TestPostSearchDTO.class)
+                        .where(w -> w.equals("status", TestPostStatus.PUBLISHED))
                         .page(0).size(5)
                         .build();
 
@@ -243,6 +245,24 @@ class ServiceLayerIssuesTest {
     static class ConcretePostService extends AbstractPostService {
         ConcretePostService(JpaRepository<TestPost, Long> repository, EntityManager entityManager) {
             super(repository, entityManager);
+        }
+    }
+    @Test
+    @Transactional
+    void independentBagsAreFetchedWithoutCartesianProduct() {
+        SearchCondition<Object> condition = new SearchCondition<>();
+        condition.setPage(0);
+        condition.setSize(10);
+        condition.getFetchFields().add("comments");
+        condition.getFetchFields().add("tags");
+        var service = new SearchableServiceDelegate<>(testPostRepository, entityManager, TestPost.class);
+        var page = service.findAllWithSearch(condition);
+        assertThat(page.getContent()).isNotEmpty();
+        for (TestPost post : page) {
+            assertThat(Hibernate.isInitialized(post.getComments())).isTrue();
+            assertThat(Hibernate.isInitialized(post.getTags())).isTrue();
+            assertThat(post.getComments()).doesNotHaveDuplicates();
+            assertThat(post.getTags()).doesNotHaveDuplicates();
         }
     }
 }
