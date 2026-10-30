@@ -1,6 +1,6 @@
 # OpenAPI 통합
 
-starter에는 OpenAPI 모듈과 Boot 4용 SpringDoc 2.10.0이 포함됩니다. Boot 3 유지보수 계열은 SpringDoc 2.x를 사용합니다. 애플리케이션의 Boot 버전과 호환되는 SpringDoc 계열을 유지하세요.
+starter에는 OpenAPI 모듈이 포함됩니다. Boot 4·라이브러리 2.x 계열은 SpringDoc 3.2.0, Boot 3·라이브러리 1.x 계열은 SpringDoc 2.10.0을 사용합니다. 애플리케이션의 Boot 버전과 호환되는 SpringDoc 계열을 유지하세요.
 
 ## GET 문서
 

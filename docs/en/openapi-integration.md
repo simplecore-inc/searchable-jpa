@@ -1,6 +1,6 @@
 # OpenAPI Integration
 
-The starter includes the OpenAPI module and SpringDoc 2.10.0 for the Boot 3 line. The Boot 4 line uses SpringDoc 3.x. Keep SpringDoc on the line compatible with the host application's Boot version.
+The starter includes the OpenAPI module. The Boot 4 / library 2.x line uses SpringDoc 3.2.0; the Boot 3 / library 1.x line uses SpringDoc 2.10.0. Keep SpringDoc on the line compatible with the host application.
 
 ## GET documentation
 
