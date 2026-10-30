@@ -50,6 +50,7 @@ public enum LogicalOperator {
     /**
      * The string representation of the operator used in JSON.
      */
+    @com.fasterxml.jackson.annotation.JsonValue
     private final String name;
 
     /**

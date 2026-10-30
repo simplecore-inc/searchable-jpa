@@ -54,4 +54,15 @@ public class ValidationRegressionTest {
         var outer=(SearchCondition.Group)c.getNodes().get(0);
         assertThat(outer.getNodes().get(1).getOperator()).isEqualTo(LogicalOperator.OR);
     }
+    @Test void jackson3ShouldDeserializeNonemptySearch() {
+        var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+        var type=mapper.getTypeFactory().constructParametricType(SearchCondition.class,Dto.class);
+        var c=(SearchCondition<?>)mapper.readValue("{\"conditions\":[{\"field\":\"label\",\"searchOperator\":\"equals\",\"value\":\"A\"}]}",type);
+        assertThat(c.getNodes()).hasSize(1);
+    }
+    @Test void jackson3ShouldRejectUnapprovedSortField() {
+        var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+        var type=mapper.getTypeFactory().constructParametricType(SearchCondition.class,Dto.class);
+        assertThatThrownBy(()->mapper.readValue("{\"sort\":{\"orders\":[{\"field\":\"secret\",\"direction\":\"ASC\"}]}}",type));
+    }
 }
