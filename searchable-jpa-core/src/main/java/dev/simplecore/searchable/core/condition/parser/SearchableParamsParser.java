@@ -8,16 +8,17 @@ import dev.simplecore.searchable.core.exception.SearchableException;
 import dev.simplecore.searchable.core.exception.SearchableParseException;
 import dev.simplecore.searchable.core.exception.SearchableValidationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
+import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.core.utils.SearchableValueParser;
-import lombok.NonNull;
-import org.springframework.util.StringUtils;
-
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import lombok.NonNull;
+import org.springframework.util.StringUtils;
 
 /**
  * Parser for converting URL parameters into SearchCondition objects.
@@ -259,7 +260,7 @@ public class SearchableParamsParser<D> {
     }
 
     private Class<?> getFieldType(String field) {
-        java.lang.reflect.Field resolved = dev.simplecore.searchable.core.utils.SearchableFieldUtils.findFieldInHierarchy(dtoClass, field);
+        Field resolved = SearchableFieldUtils.findFieldInHierarchy(dtoClass, field);
         return resolved == null ? String.class : resolved.getType();
     }
 }

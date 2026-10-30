@@ -94,4 +94,21 @@ class SearchableJpaConfigurationTest {
         runner.withBean("customTimeBucketCounter", TimeBucketCounter.class, () -> custom)
                 .run(context -> assertThat(context).getBean(TimeBucketCounter.class).isSameAs(custom));
     }
+    @Test
+    void limitsApplyEvenWhenOptimizationIsDisabled() {
+        runner.withPropertyValues("searchable.hibernate.auto-optimization=false",
+                "searchable.default-page-size=50", "searchable.max-page-size=2000",
+                "searchable.hibernate.auto-fetch-collections=false").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getEnvironment().getProperty("spring.jpa.properties.searchable.default_page_size")).isEqualTo("50");
+            assertThat(context.getEnvironment().getProperty("spring.jpa.properties.searchable.max_page_size")).isEqualTo("2000");
+            assertThat(context.getEnvironment().getProperty("spring.jpa.properties.searchable.auto_fetch_collections")).isEqualTo("false");
+        });
+    }
+
+    @Test
+    void defaultPageSizeMustNotExceedMaximum() {
+        runner.withPropertyValues("searchable.default-page-size=21", "searchable.max-page-size=20")
+                .run(context -> assertThat(context).hasFailed());
+    }
 }

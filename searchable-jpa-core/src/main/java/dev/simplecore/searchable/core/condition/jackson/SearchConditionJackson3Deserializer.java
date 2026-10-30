@@ -1,6 +1,8 @@
 package dev.simplecore.searchable.core.condition.jackson;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.simplecore.searchable.core.condition.SearchCondition;
+import dev.simplecore.searchable.core.exception.SearchableException;
 import tools.jackson.core.JsonParser;
 import tools.jackson.databind.BeanProperty;
 import tools.jackson.databind.DeserializationContext;
@@ -38,7 +40,7 @@ public final class SearchConditionJackson3Deserializer extends ValueDeserializer
         }
         try {
             return SearchCondition.fromJson(context.readTree(parser).toString(), dtoClass);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException | dev.simplecore.searchable.core.exception.SearchableException e) {
+        } catch (JsonProcessingException | SearchableException e) {
             return context.reportInputMismatch(SearchCondition.class, "Invalid search condition: %s", e.getMessage());
         }
     }

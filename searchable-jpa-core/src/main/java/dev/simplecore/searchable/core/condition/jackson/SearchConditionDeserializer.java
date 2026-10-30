@@ -1,29 +1,28 @@
 package dev.simplecore.searchable.core.condition.jackson;
 
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.BeanProperty;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.BeanProperty;
+import com.fasterxml.jackson.databind.deser.ContextualDeserializer;
+import dev.simplecore.searchable.core.annotation.SearchableField;
 import dev.simplecore.searchable.core.condition.SearchCondition;
+import dev.simplecore.searchable.core.condition.SearchCondition.Condition;
+import dev.simplecore.searchable.core.condition.SearchCondition.Group;
 import dev.simplecore.searchable.core.condition.SearchCondition.Node;
 import dev.simplecore.searchable.core.condition.SearchCondition.Sort;
 import dev.simplecore.searchable.core.condition.validator.SearchConditionValidator;
-
+import dev.simplecore.searchable.core.condition.validator.SearchRequestLimits;
 import dev.simplecore.searchable.core.condition.validator.SearchableFieldValidator;
 import dev.simplecore.searchable.core.exception.SearchableValidationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
-
+import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
+import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.fasterxml.jackson.databind.deser.ContextualDeserializer;
-
-import java.io.IOException;
-import dev.simplecore.searchable.core.condition.SearchCondition.Condition;
-import dev.simplecore.searchable.core.condition.SearchCondition.Group;
-import dev.simplecore.searchable.core.annotation.SearchableField;
 
 public class SearchConditionDeserializer extends JsonDeserializer<SearchCondition<?>> implements ContextualDeserializer {
     
@@ -60,6 +59,7 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
                 throw new SearchableValidationException(
                         MessageUtils.getMessage("search.condition.conditions.not.array"));
             }
+            if (conditionsNode.size() > 1000) throw new SearchableValidationException("Search exceeds maximum node count 1000");
             for (JsonNode conditionNode : conditionsNode) {
                 NodeDeserializer nodeDeserializer = new NodeDeserializer();
                 nodeDeserializer.setDtoClass(dtoClass);
@@ -92,10 +92,12 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
                     throw new SearchableValidationException("Sort direction must be asc or desc");
                 }
                 mapped.addOrder(new SearchCondition.Order(order.getField(), order.getDirection(),
-                        dev.simplecore.searchable.core.utils.SearchableFieldUtils.getSortFieldFromDto(dtoClass, order.getField())));
+                        SearchableFieldUtils.getSortFieldFromDto(dtoClass, order.getField())));
             }
             searchCondition.setSort(mapped);
         }
+
+        SearchRequestLimits.validateStructure(searchCondition);
 
         // Only validate if DTO class is available
         if (dtoClass != null) {
@@ -122,7 +124,7 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
             Condition condition = (Condition) node;
             String fieldName = condition.getField();
             
-            condition.setEntityField(dev.simplecore.searchable.core.utils.SearchableFieldUtils.getEntityFieldFromDto(dtoClass, fieldName));
+            condition.setEntityField(SearchableFieldUtils.getEntityFieldFromDto(dtoClass, fieldName));
         } else if (node instanceof Group) {
             Group group = (Group) node;
             for (Node childNode : group.getNodes()) {

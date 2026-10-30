@@ -11,14 +11,14 @@ import dev.simplecore.searchable.core.condition.SearchCondition.Group;
 import dev.simplecore.searchable.core.condition.SearchCondition.Node;
 import dev.simplecore.searchable.core.condition.operator.LogicalOperator;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
+import dev.simplecore.searchable.core.condition.validator.SearchRequestLimits;
 import dev.simplecore.searchable.core.exception.SearchableValidationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
-import lombok.Setter;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import lombok.Setter;
 
 /**
  * Custom deserializer for Node interface implementations.
@@ -39,6 +39,7 @@ public class NodeDeserializer extends JsonDeserializer<Node> {
         ObjectMapper mapper = (ObjectMapper) p.getCodec();
         JsonNode node = mapper.readTree(p);
 
+        checkTree(node, 0, new int[1]);
         return node.has("conditions") ? deserializeGroup(node, mapper) : deserializeCondition(node);
     }
 
@@ -83,15 +84,7 @@ public class NodeDeserializer extends JsonDeserializer<Node> {
 
         // Use the null-safe fromName() (like group parsing) and reject an explicitly-provided
         // but unknown logical operator with a proper validation exception.
-        LogicalOperator operator = null;
-        if (node.has("operator") && !node.get("operator").isNull()) {
-            String operatorText = node.get("operator").asText();
-            operator = LogicalOperator.fromName(operatorText);
-            if (operator == null) {
-                throw new SearchableValidationException(
-                        MessageUtils.getMessage("search.condition.operator.invalid", new Object[]{operatorText}));
-            }
-        }
+        LogicalOperator operator = getLogicalOperator(node);
 
         String field = node.get("field").asText();
         SearchOperator searchOperator = SearchOperator.fromName(node.get("searchOperator").asText());
@@ -128,7 +121,25 @@ public class NodeDeserializer extends JsonDeserializer<Node> {
     }
 
     private LogicalOperator getLogicalOperator(JsonNode node) {
-        return node.has("operator") ? LogicalOperator.fromName(node.get("operator").asText()) : null;
+        if (!node.hasNonNull("operator")) return null;
+        String text = node.get("operator").asText();
+        LogicalOperator operator = LogicalOperator.fromName(text);
+        if (operator == null) {
+            throw new SearchableValidationException(
+                    MessageUtils.getMessage("search.condition.operator.invalid", new Object[]{text}));
+        }
+        return operator;
     }
 
+    private void checkTree(JsonNode node, int depth, int[] count) {
+        if (depth > SearchRequestLimits.MAX_DEPTH || ++count[0] > SearchRequestLimits.MAX_NODES) {
+            throw new SearchableValidationException("Search tree exceeds the depth or node limit");
+        }
+        if (node.path("value").isArray() && node.path("value").size() > SearchRequestLimits.MAX_IN_VALUES) {
+            throw new SearchableValidationException("Search collection exceeds maximum size 1000");
+        }
+        if (node.path("conditions").isArray()) {
+            for (JsonNode child : node.path("conditions")) checkTree(child, depth + 1, count);
+        }
+    }
 } 

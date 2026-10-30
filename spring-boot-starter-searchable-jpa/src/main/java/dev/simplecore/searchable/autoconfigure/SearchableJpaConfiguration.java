@@ -3,27 +3,26 @@ package dev.simplecore.searchable.autoconfigure;
 import dev.simplecore.searchable.core.service.bucket.TimeBucketCounter;
 import dev.simplecore.searchable.core.utils.SearchableTimeZoneHolder;
 import dev.simplecore.searchable.properties.SearchableProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.BeanFactory;
-import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.core.annotation.Order;
-import org.springframework.core.env.ConfigurableEnvironment;
-import org.springframework.core.env.MapPropertySource;
-import org.springframework.core.env.MutablePropertySources;
-
 import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManager;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.MutablePropertySources;
 
 @Configuration
 @AutoConfiguration(before = HibernateJpaAutoConfiguration.class)
@@ -50,6 +49,15 @@ public class SearchableJpaConfiguration {
         this.environment = environment;
         this.beanFactory = beanFactory;
         log.trace("SearchableJpaConfiguration is being initialized");
+    }
+
+    @PostConstruct
+    public void configureSearchLimits() {
+        // Store per persistence unit rather than in global static state.
+        environment.getPropertySources().addLast(new MapPropertySource("searchableQueryLimits", Map.of(
+                "spring.jpa.properties.searchable.auto_fetch_collections", String.valueOf(searchableProperties.getHibernate().isAutoFetchCollections()),
+                "spring.jpa.properties.searchable.max_page_size", String.valueOf(searchableProperties.getMaxPageSize()),
+                "spring.jpa.properties.searchable.default_page_size", String.valueOf(searchableProperties.getDefaultPageSize()))));
     }
 
     // Note: @Conditional-style annotations have no effect on @PostConstruct, so this runs unconditionally.

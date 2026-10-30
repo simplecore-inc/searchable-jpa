@@ -6,10 +6,12 @@ import dev.simplecore.searchable.core.condition.operator.*;
 import dev.simplecore.searchable.core.condition.parser.SearchableParamsParser;
 import dev.simplecore.searchable.test.dto.InheritedSearchDTOs.ChildSearchDTO;
 import jakarta.validation.constraints.NotNull;
-import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.*;
-import static dev.simplecore.searchable.core.condition.operator.SearchOperator.*;
 import java.util.Map;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
+
+import static dev.simplecore.searchable.core.condition.operator.SearchOperator.*;
+import static org.assertj.core.api.Assertions.*;
 
 public class ValidationRegressionTest {
     public static class Dto {
@@ -55,14 +57,19 @@ public class ValidationRegressionTest {
         assertThat(outer.getNodes().get(1).getOperator()).isEqualTo(LogicalOperator.OR);
     }
     @Test void jackson3ShouldDeserializeNonemptySearch() {
-        var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+        var mapper=JsonMapper.builder().build();
         var type=mapper.getTypeFactory().constructParametricType(SearchCondition.class,Dto.class);
         var c=(SearchCondition<?>)mapper.readValue("{\"conditions\":[{\"field\":\"label\",\"searchOperator\":\"equals\",\"value\":\"A\"}]}",type);
         assertThat(c.getNodes()).hasSize(1);
     }
     @Test void jackson3ShouldRejectUnapprovedSortField() {
-        var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+        var mapper=JsonMapper.builder().build();
         var type=mapper.getTypeFactory().constructParametricType(SearchCondition.class,Dto.class);
         assertThatThrownBy(()->mapper.readValue("{\"sort\":{\"orders\":[{\"field\":\"secret\",\"direction\":\"ASC\"}]}}",type));
+    }
+    @Test void unknownGroupOperatorIsRejected() {
+        assertThatThrownBy(() -> SearchCondition.fromJson(
+                "{\"conditions\":[{\"operator\":\"xor\",\"conditions\":[]}]}", Dto.class))
+                .hasMessageContaining("xor");
     }
 }

@@ -1,5 +1,6 @@
 package dev.simplecore.searchable.core.condition.operator;
 
+import com.fasterxml.jackson.annotation.JsonValue;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
@@ -8,9 +9,8 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import lombok.Getter;
-
 import java.io.IOException;
+import lombok.Getter;
 
 /**
  * Enumeration of search operators used for building search conditions.
@@ -137,7 +137,7 @@ public enum SearchOperator {
     /**
      * The string representation of the operator used in JSON.
      */
-    @com.fasterxml.jackson.annotation.JsonValue
+    @JsonValue
     private final String name;
 
     /**
