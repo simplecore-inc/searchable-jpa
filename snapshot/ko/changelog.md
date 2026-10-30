@@ -1,5 +1,21 @@
 # 변경 사항
 
+## 2.0.0-SNAPSHOT (미출시)
+
+Boot 4와 Boot 3 계열에 같은 오류 수정을 적용하며 각 계열의 프레임워크 주 버전은 유지합니다.
+
+- 혼합 AND·OR 그룹과 자식이 하나인 그룹의 연결 연산자를 보존하고, 상속 DTO 속성·별칭·속성 단위 검증을 지원합니다.
+- Jackson 2 공개 API를 유지하고 Jackson 3 검색 본문을 지원합니다. JSON 왕복 변환을 보완하며 잘못된 HTTP 검색 본문을 클라이언트 오류로 처리합니다.
+- 영속성 단위별 페이지 제한을 적용하고 조건 깊이·노드 수·정렬 수·IN 값 수·JPA 오프셋을 제한합니다.
+- 단일 키의 단순 검색에는 직접 조회를 적용합니다. 컬렉션 조인·복합 키에는 2단계 조회를 유지하며 중복 집계와 독립 컬렉션 동시 조회 문제를 수정합니다.
+- 수정·삭제를 나누어 처리하고 트랜잭션·콜백을 유지합니다. ID·버전·감사·수정 불가 속성과 생략한 기본형 수정 값을 보호합니다.
+- 반개구간 시간 집계에서 루트 엔티티를 한 번만 집계하며 데이터소스의 트랜잭션 보장을 유지합니다.
+- 안정 버전 의존성과 Gradle을 갱신하고 릴리스 전에 일반·성능 검사를 실행합니다. 새 체크아웃에서도 동일한 테스트 데이터를 생성합니다.
+- 프로젝트 하위 경로의 문서 버전 선택을 수정합니다. 언어·페이지·제목 위치를 유지하고 없는 페이지·요청 실패를 처리하며, 릴리스 배포 시 개발 문서를 보존합니다. 두 언어 문서를 갱신합니다.
+
+기존 공개 서비스와 Jackson 2 메서드 시그니처를 유지합니다. 기존에 문서의 제한을 우회하던 과도한 요청은 거부합니다. [설정](/ko/auto-configuration.md), [조회 전략](/ko/two-phase-query-optimization.md), [API 동작](/ko/api-reference.md)을 확인하세요.
+
+
 이 문서는 searchable-jpa 라이브러리의 주요 변경 사항을 기록합니다.
 
 > GitHub 커밋 링크로 상세한 변경 내용을 확인할 수 있습니다.
@@ -15,7 +31,7 @@
   - `TimeBucketCounter`가 목록 조회에 쓰는 `SearchCondition`을 그대로 받아, 기간을 같은 폭의 구간으로 나눠 구간별 건수를 데이터베이스에서 집계
   - 스타터가 `timeBucketCounter` 빈을 자동 등록(`@ConditionalOnMissingBean`이므로 직접 정의한 빈이 우선)
   - `EpochMillisFunctionContributor`가 `epoch_millis` 함수를 데이터베이스별 표현으로 등록하고, 등록 대상이 아닌 데이터베이스에서는 구간별 조건부 합계로 집계
-  - [상세 문서](ko/advanced-features.md#시간-구간별-건수-집계)
+  - [상세 문서](/ko/advanced-features.md#시간-구간별-건수-집계)
 
 ---
 
@@ -77,7 +93,7 @@
   - Lazy 로딩된 관계를 명시적으로 Fetch Join 가능
   - 중첩 경로 지원 (예: `author.profile`)
   - 보안을 위해 `@JsonIgnore` 적용 (서버 측에서만 설정 가능)
-  - [상세 문서](ko/relationship-and-two-phase-query.md#명시적-fetch-join-fetchfields)
+  - [상세 문서](/ko/relationship-and-two-phase-query.md#명시적-fetch-join-fetchfields)
 
 ### v1.0.4
 - Docsify 기반 한국어 문서 사이트 구축 ([`4723c7a`](https://github.com/simplecore-inc/searchable-jpa/commit/4723c7a), [`2c9bb11`](https://github.com/simplecore-inc/searchable-jpa/commit/2c9bb11), [`147597b`](https://github.com/simplecore-inc/searchable-jpa/commit/147597b))

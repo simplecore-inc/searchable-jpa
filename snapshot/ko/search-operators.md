@@ -1,459 +1,74 @@
 # 검색 연산자
 
-Searchable JPA는 다양한 검색 연산자를 제공하여 복잡한 검색 조건을 구성할 수 있습니다. 이 문서는 모든 검색 연산자의 사용법과 예제를 설명합니다.
+지원하는 연산자는 18개입니다. DTO의 `@SearchableField`에서 허용할 연산자를 정합니다. 연산자 배열이 비어 있으면 모든 연산자를 허용하지만, 값과 실제 필드 타입이 해당 연산을 처리할 수 있어야 합니다.
 
-> **참고**: 기본적인 DTO 설정과 SearchableField 어노테이션 사용법은 [기본 사용법](basic-usage.md) 문서를 참조하세요.
+| Java 상수 | 요청 이름·빌더 메서드 | 의미 |
+| --- | --- | --- |
+| `EQUALS` | `equals` | 값 일치 |
+| `NOT_EQUALS` | `notEquals` | 값 불일치 |
+| `GREATER_THAN` | `greaterThan` | 초과 |
+| `GREATER_THAN_OR_EQUAL_TO` | `greaterThanOrEqualTo` | 이상 |
+| `LESS_THAN` | `lessThan` | 미만 |
+| `LESS_THAN_OR_EQUAL_TO` | `lessThanOrEqualTo` | 이하 |
+| `CONTAINS` | `contains` | 문자열 포함 |
+| `NOT_CONTAINS` | `notContains` | 문자열 미포함 |
+| `STARTS_WITH` | `startsWith` | 문자열 시작 |
+| `NOT_STARTS_WITH` | `notStartsWith` | 해당 문자열로 시작하지 않음 |
+| `ENDS_WITH` | `endsWith` | 문자열 끝 |
+| `NOT_ENDS_WITH` | `notEndsWith` | 해당 문자열로 끝나지 않음 |
+| `IS_NULL` | `isNull` | SQL NULL |
+| `IS_NOT_NULL` | `isNotNull` | SQL NULL이 아님 |
+| `IN` | `in` | 컬렉션 원소와 일치 |
+| `NOT_IN` | `notIn` | 컬렉션 원소와 불일치 |
+| `BETWEEN` | `between` | 하한·상한 포함 범위 |
+| `NOT_BETWEEN` | `notBetween` | 하한·상한 포함 범위의 바깥 |
 
-## 비교 연산자 (Comparison Operators)
+## 요청 문법
 
-### EQUALS
-값이 정확히 일치하는지 확인합니다.
-
-```java
-// URL 파라미터 방식
-GET /api/posts/search?title.equals=Spring Boot
-
-// JSON 방식
-{
-  "field": "title",
-  "searchOperator": "equals",
-  "value": "Spring Boot"
-}
+```text
+title.contains=Spring
+viewCount.greaterThanOrEqualTo=100
+status.in=PUBLISHED,DRAFT
+createdAt.between=2026-10-01T00:00:00Z,2026-10-31T23:59:59Z
+content.isNull=true
+sort=createdAt.desc,id.asc
 ```
 
-### NOT_EQUALS
-값이 일치하지 않는지 확인합니다.
+NULL 검사 파라미터의 값은 무시합니다. `isNull=false`도 IS NULL을 뜻합니다. 검사를 생략하려면 조건 자체를 보내지 마세요. GET 검색은 AND로 연결하며 키마다 Map 항목 하나를 사용합니다. `+`, `&`, 공백과 비ASCII 문자는 URL 인코딩하세요. `curl --data-urlencode`를 사용하면 직접 인코딩할 때의 오류를 줄일 수 있습니다.
 
-```java
-// 사용 예제
-GET /api/posts/search?status.notEquals=DELETED
-```
+IN·NOT_IN은 GET에서 쉼표로 나눈 값, JSON에서 배열을 받습니다. BETWEEN·NOT_BETWEEN은 GET에서 정확히 두 값, JSON에서 `value`와 `value2`를 받습니다. 단일 값 연산자의 쉼표는 일반 문자로 유지합니다. IN 원소 안에 쉼표가 있어야 한다면 GET 대신 JSON 배열을 사용하세요.
 
 ```json
-{
-  "field": "status",
-  "searchOperator": "notEquals", 
-  "value": "DELETED"
-}
+{"conditions":[
+  {"field":"viewCount","searchOperator":"between","value":100,"value2":500},
+  {"operator":"and","field":"status","searchOperator":"in","value":["PUBLISHED","DRAFT"]}
+]}
 ```
 
-### GREATER_THAN
-값이 지정된 값보다 큰지 확인합니다.
+## 타입과 변환
 
-```java
-// 사용 예제
-GET /api/posts/search?viewCount.greaterThan=100
-```
+문자열, 숫자 기본형·래퍼, BigDecimal·BigInteger, 불리언, enum, UUID와 지원하는 Java 날짜·시간 타입을 변환합니다. 비교·범위 연산에는 서로 비교할 수 있는 호환 값이 필요합니다. enum 이름을 상수로 변환하므로 임의의 표시 이름을 사용할 수 있다고 가정하지 마세요. enum과 UUID에는 데이터베이스 매핑상 의미 있는 순서가 필요하지 않다면 일치·IN·NULL 검사를 우선 사용하세요.
 
-### GREATER_THAN_OR_EQUAL_TO
-값이 지정된 값보다 크거나 같은지 확인합니다.
+불리언은 대소문자 구분 없이 true/false, 1/0, yes/no, y/n, on/off를 받습니다. 잘못된 값에는 파싱·검증 오류가 발생합니다. `@Min`, `@Size`, `@Pattern` 같은 DTO 제약은 검색값에 적용합니다. 무관한 필수 DTO 속성은 검색을 막지 않습니다. BETWEEN은 양쪽 경계를 검증합니다.
 
-```java
-// 사용 예제
-GET /api/posts/search?viewCount.greaterThanOrEqualTo=100
-```
+SQL NULL은 일반 값이 아닙니다. NOT IN·NOT LIKE 같은 부정 조건에 NULL 행이 자동으로 포함되지는 않습니다. NULL도 포함해야 한다면 OR IS NULL 그룹을 명시하세요.
 
-### LESS_THAN
-값이 지정된 값보다 작은지 확인합니다.
+## 문자열 패턴
 
-```java
-// 사용 예제
-GET /api/posts/search?viewCount.lessThan=1000
-```
+문자열 패턴은 입력과 데이터베이스 식을 소문자로 바꿔 비교합니다. 세부 대소문자 처리에는 데이터베이스의 로케일·정렬 규칙이 영향을 줍니다. `%`, `_`와 이스케이프 문자는 LIKE 적용 전에 이스케이프하고, SQL에도 ESCAPE 절을 지정합니다. 사용자가 contains 값에 `%`를 넣어 임의의 와일드카드를 만들 수는 없습니다. 비어 있거나 공백뿐인 패턴은 거부합니다.
 
-### LESS_THAN_OR_EQUAL_TO
-값이 지정된 값보다 작거나 같은지 확인합니다.
+contains·endsWith의 앞부분 와일드카드는 일반 인덱스 사용을 막을 수 있습니다. 소문자 변환에는 함수 인덱스나 적절한 데이터베이스 정렬 규칙이 필요할 수 있습니다. 용도에 따라 인덱스를 사용하는 일치·접두사 검색이나 전문 검색을 선택하세요.
 
-```java
-// 사용 예제
-GET /api/posts/search?viewCount.lessThanOrEqualTo=1000
-```
+JSON 타입 엔티티 필드에 지원하는 패턴 연산을 적용하면 텍스트 표현을 비교합니다. JSON 경로 검색이 아니며 데이터베이스의 직렬화·형 변환 방식에 영향을 받습니다. JSON 구조를 검색하려면 데이터베이스에 맞는 Repository 쿼리를 사용하세요.
 
-## 문자열 패턴 연산자 (String Pattern Operators)
+## 날짜·시간
 
-> **참고**: CONTAINS, STARTS_WITH, ENDS_WITH와 그 NOT_ 계열은 대소문자를 구분하며, 대소문자를 구분하지 않는 연산자는 별도로 제공하지 않습니다. 검색값에 `%`, `_`, `\` 문자가 있으면 자동으로 이스케이프되어 SQL 와일드카드가 아니라 문자 그대로 매칭됩니다(자세한 예제는 아래 [특수 문자 처리](#특수-문자-처리) 참고). 검색값을 빈 문자열로 주면 전체 조회로 동작하지 않고 오류가 발생합니다.
+`2026-10-30`, `12:34:56`, `2026-10-30T12:34:56`, `2026-10-30T12:34:56+09:00` 같은 ISO 형식을 권장합니다. DTO 필드 타입에 따라 변환합니다. 날짜·시간 타입의 BETWEEN에 날짜만 지정하면 하한은 하루 시작, 상한은 하루 끝으로 확장합니다. Instant·오프셋 변환에는 [애플리케이션 시간대 규칙](/ko/auto-configuration.md#시간대-결정-순서)을 적용합니다.
 
-### CONTAINS
-문자열이 지정된 부분 문자열을 포함하는지 확인합니다.
+BETWEEN은 양쪽 경계를 포함하며, 끝을 제외하는 `TimeBucketCounter` 기간과 다릅니다. 데이터베이스 시간 정밀도에 따라 하루 끝의 나노초가 반올림될 수 있습니다. 연속된 보고 기간에는 시작 포함·끝 제외 비교나 집계 API를 사용하고 실제 저장 정밀도를 검사하세요.
 
-```java
-// 사용 예제
-GET /api/posts/search?title.contains=Spring
+## 논리 그룹과 제한
 
-// SQL: WHERE title LIKE '%Spring%'
-```
+첫 노드로 초기 결과를 정하고, 다음 노드를 `and`·`or`로 왼쪽부터 결합합니다. 중첩 그룹은 괄호에 해당합니다. 알 수 없는 논리 연산자는 거부합니다. 그룹의 연결 연산자는 자식이 하나일 때도 그룹 전체에 적용합니다.
 
-### NOT_CONTAINS
-문자열이 지정된 부분 문자열을 포함하지 않는지 확인합니다.
-
-```java
-// 사용 예제
-GET /api/posts/search?title.notContains=Test
-
-// SQL: WHERE title NOT LIKE '%Test%'
-```
-
-### STARTS_WITH
-문자열이 지정된 접두사로 시작하는지 확인합니다.
-
-```java
-// 사용 예제
-GET /api/posts/search?title.startsWith=Spring
-
-// SQL: WHERE title LIKE 'Spring%'
-```
-
-### NOT_STARTS_WITH
-문자열이 지정된 접두사로 시작하지 않는지 확인합니다.
-
-```java
-// 사용 예제
-GET /api/posts/search?title.notStartsWith=Draft
-
-// SQL: WHERE title NOT LIKE 'Draft%'
-```
-
-### ENDS_WITH
-문자열이 지정된 접미사로 끝나는지 확인합니다.
-
-```java
-// 사용 예제
-GET /api/posts/search?title.endsWith=Tutorial
-
-// SQL: WHERE title LIKE '%Tutorial'
-```
-
-### NOT_ENDS_WITH
-문자열이 지정된 접미사로 끝나지 않는지 확인합니다.
-
-```java
-// 사용 예제
-GET /api/posts/search?title.notEndsWith=Draft
-
-// SQL: WHERE title NOT LIKE '%Draft'
-```
-
-## NULL 체크 연산자 (Null Check Operators)
-
-### IS_NULL
-필드 값이 NULL인지 확인합니다.
-
-```java
-@SearchableField(operators = {IS_NULL, IS_NOT_NULL})
-private String description;
-
-// 사용 예제
-GET /api/posts/search?description.isNull
-
-// SQL: WHERE description IS NULL
-```
-
-```json
-{
-  "field": "description",
-  "searchOperator": "isNull"
-}
-```
-
-### IS_NOT_NULL
-필드 값이 NULL이 아닌지 확인합니다.
-
-```java
-// 사용 예제
-GET /api/posts/search?description.isNotNull
-
-// SQL: WHERE description IS NOT NULL
-```
-
-## 컬렉션 연산자 (Collection Operators)
-
-### IN
-값이 지정된 목록에 포함되는지 확인합니다.
-
-```java
-@SearchableField(operators = {IN, NOT_IN})
-private PostStatus status;
-
-// 사용 예제 (GET)
-GET /api/posts/search?status.in=PUBLISHED,DRAFT
-
-// SQL: WHERE status IN ('PUBLISHED', 'DRAFT')
-```
-
-```json
-{
-  "field": "status",
-  "searchOperator": "in",
-  "value": ["PUBLISHED", "DRAFT"]
-}
-```
-
-### NOT_IN
-값이 지정된 목록에 포함되지 않는지 확인합니다.
-
-```java
-// 사용 예제
-GET /api/posts/search?status.notIn=DELETED,ARCHIVED
-
-// SQL: WHERE status NOT IN ('DELETED', 'ARCHIVED')
-```
-
-## 범위 연산자 (Range Operators)
-
-### BETWEEN
-값이 지정된 범위 내에 있는지 확인합니다 (경계값 포함).
-
-```java
-@SearchableField(operators = {BETWEEN, NOT_BETWEEN})
-private Long viewCount;
-
-// 숫자 범위
-GET /api/posts/search?viewCount.between=100,1000
-
-// 날짜/시간 범위
-GET /api/posts/search?createdAt.between=2024-01-01T00:00:00,2024-12-31T23:59:59
-
-// SQL: WHERE view_count BETWEEN 100 AND 1000
-```
-
-> **참고**: LocalDateTime처럼 시각까지 다루는 필드에 날짜만 입력했을 때의 처리 방식은 아래 [날짜/시간 형식](#날짜-시간-형식)을 참고하세요.
-
-```json
-{
-  "field": "viewCount",
-  "searchOperator": "between",
-  "value": 100,
-  "value2": 1000
-}
-```
-
-### NOT_BETWEEN
-값이 지정된 범위 밖에 있는지 확인합니다.
-
-```java
-// 사용 예제
-GET /api/posts/search?viewCount.notBetween=100,1000
-
-// SQL: WHERE view_count NOT BETWEEN 100 AND 1000
-```
-
-## 데이터 타입별 사용 가능한 연산자
-
-### 문자열 (String)
-- EQUALS, NOT_EQUALS
-- CONTAINS, NOT_CONTAINS
-- STARTS_WITH, NOT_STARTS_WITH
-- ENDS_WITH, NOT_ENDS_WITH
-- IS_NULL, IS_NOT_NULL
-- IN, NOT_IN
-
-### 숫자 (Integer, Long, Double, BigDecimal)
-- EQUALS, NOT_EQUALS
-- GREATER_THAN, GREATER_THAN_OR_EQUAL_TO
-- LESS_THAN, LESS_THAN_OR_EQUAL_TO
-- BETWEEN, NOT_BETWEEN
-- IS_NULL, IS_NOT_NULL
-- IN, NOT_IN
-
-### 날짜/시간 (LocalDate, LocalDateTime, Date)
-- EQUALS, NOT_EQUALS
-- GREATER_THAN, GREATER_THAN_OR_EQUAL_TO
-- LESS_THAN, LESS_THAN_OR_EQUAL_TO
-- BETWEEN, NOT_BETWEEN
-- IS_NULL, IS_NOT_NULL
-
-### 열거형 (Enum)
-- EQUALS, NOT_EQUALS
-- IN, NOT_IN
-- IS_NULL, IS_NOT_NULL
-
-### UUID
-- EQUALS, NOT_EQUALS
-- IN, NOT_IN
-- IS_NULL, IS_NOT_NULL
-
-### 불린 (Boolean)
-- EQUALS, NOT_EQUALS
-- IS_NULL, IS_NOT_NULL
-
-## 복합 검색 조건 예제
-
-> **참고**: `conditions` 배열의 각 항목은 `operator` 필드로 직전까지의 결과와 결합하는 방식을 지정합니다("and" 또는 "or", 생략하면 "and"). 배열의 첫 번째 항목은 결합할 대상이 없으므로 자신의 `operator` 값이 무시되고, 두 번째 항목부터는 각 항목 자신의 `operator` 값으로 앞의 결과와 결합합니다. 그룹(중첩된 `conditions`)을 감싸는 `operator`는 그 그룹 전체가 같은 배열의 다른 항목과 결합하는 방식만 정하며, 그룹 내부 자식끼리의 결합 방식에는 영향을 주지 않습니다. 그룹 내부를 OR로 묶으려면 그룹을 감싸는 조건뿐 아니라 그룹 안의 각 조건에도 `"operator": "or"`를 직접 지정해야 합니다.
-
-### 여러 조건 조합
-
-```bash
-# 제목에 "Spring"이 포함되고 조회수가 100 이상인 게시글
-GET /api/posts/search?title.contains=Spring&viewCount.greaterThan=100
-```
-
-```json
-{
-  "conditions": [
-    {
-      "operator": "and",
-      "field": "title",
-      "searchOperator": "contains",
-      "value": "Spring"
-    },
-    {
-      "operator": "and", 
-      "field": "viewCount",
-      "searchOperator": "greaterThan",
-      "value": 100
-    }
-  ]
-}
-```
-
-### OR 조건
-
-```json
-{
-  "conditions": [
-    {
-      "operator": "or",
-      "conditions": [
-        {
-          "field": "status",
-          "searchOperator": "equals",
-          "value": "PUBLISHED"
-        },
-        {
-          "operator": "or",
-          "field": "status",
-          "searchOperator": "equals",
-          "value": "FEATURED"
-        }
-      ]
-    }
-  ]
-}
-```
-
-### 그룹 조건
-
-```json
-{
-  "conditions": [
-    {
-      "operator": "and",
-      "conditions": [
-        {
-          "operator": "or",
-          "conditions": [
-            {
-              "field": "title",
-              "searchOperator": "contains",
-              "value": "Spring"
-            },
-            {
-              "operator": "or",
-              "field": "title",
-              "searchOperator": "contains",
-              "value": "Java"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "operator": "and",
-      "field": "status",
-      "searchOperator": "equals",
-      "value": "PUBLISHED"
-    }
-  ]
-}
-```
-
-## 날짜/시간 형식
-
-### LocalDateTime
-```bash
-# ISO 8601 형식
-createdAt.greaterThan=2024-01-01T00:00:00
-createdAt.between=2024-01-01T00:00:00,2024-12-31T23:59:59
-```
-
-### LocalDate
-```bash
-# 날짜만
-publishedDate.equals=2024-01-01
-publishedDate.between=2024-01-01,2024-12-31
-```
-
-### BETWEEN에 날짜만 입력한 경우
-LocalDateTime, ZonedDateTime, OffsetDateTime, Instant, Date처럼 시각까지 다루는 필드에 BETWEEN/NOT_BETWEEN 조건을 걸면서 날짜만 입력하면, 하한값은 해당 날짜의 00:00:00으로, 상한값은 해당 날짜의 23:59:59.999999999로 자동으로 채워집니다.
-
-```bash
-# createdAt: LocalDateTime 필드
-createdAt.between=2024-01-01,2024-12-31
-
-# 실제 조건: createdAt >= 2024-01-01T00:00:00 AND createdAt <= 2024-12-31T23:59:59.999999999
-```
-
-LocalDate와 LocalTime 필드는 애초에 날짜 또는 시간 단위만 다루므로 이런 보정 없이 입력한 값을 그대로 사용합니다.
-
-### 시간대 해석
-
-`LocalDateTime`, `Instant`, `OffsetDateTime`, `ZonedDateTime`, `Date`처럼 시각을 다루는 필드에 시간대 정보가 없는 값(예: `2024-01-01T00:00:00`)을 입력하면, 애플리케이션 시간대를 기준으로 해석합니다. 이 시간대는 배포 서버의 JVM 기본 시간대와 무관하며, 기본값은 UTC입니다.
-
-`Z` 접미사나 오프셋이 포함된 값(예: `2024-01-01T00:00:00Z`, `2024-01-01T09:00:00+09:00`)은 이미 절대 시각이 정해지므로 이 설정의 영향을 받지 않습니다.
-
-기준 시간대는 `searchable.date-time.default-timezone`으로 지정합니다. 자세한 내용은 [자동 설정 가이드](auto-configuration.md#날짜-시간-설정)를 참고하세요.
-
-## 특수 문자 처리
-
-### URL 인코딩
-특수 문자가 포함된 값은 URL 인코딩이 필요합니다.
-
-```bash
-# 공백 문자
-GET /api/posts/search?title.contains=Spring%20Boot
-
-# 특수 문자
-GET /api/posts/search?title.contains=C%2B%2B
-```
-
-### 와일드카드 문자 이스케이프
-CONTAINS, STARTS_WITH, ENDS_WITH 등 패턴 매칭 연산자에 전달한 값의 `%`, `_`, `\`는 SQL 와일드카드가 아니라 이스케이프 처리된 문자 그대로 매칭됩니다.
-
-```json
-{
-  "field": "title",
-  "searchOperator": "contains",
-  "value": "50% 할인"
-}
-```
-
-위 조건은 `title` 값에 `50% 할인`이라는 문자열이 그대로 들어 있는 행만 찾으며, `%`가 임의의 문자열을 대체하는 와일드카드로 동작하지 않습니다.
-
-### 이스케이프 처리
-JSON에서 특수 문자 사용 시 이스케이프 처리가 필요합니다.
-
-```json
-{
-  "field": "content",
-  "searchOperator": "contains",
-  "value": "\"quoted text\""
-}
-```
-
-## 성능 고려사항
-
-### 인덱스 활용
-- EQUALS, IN 연산자는 인덱스를 효율적으로 활용합니다
-- CONTAINS, STARTS_WITH는 적절한 인덱스 설정이 필요합니다
-- ENDS_WITH는 검색어 앞에 와일드카드가 붙어 인덱스를 활용하지 못하므로 성능이 불리합니다
-
-### 대용량 데이터
-- BETWEEN 연산자는 범위 검색에 효율적입니다
-- IN 연산자의 값 목록이 너무 크면 성능이 저하됩니다
-- 복합 조건 사용 시 적절한 인덱스를 설정하세요
-
-## 다음 단계
-
-- [2단계 쿼리 최적화](two-phase-query-optimization.md) - 고성능 페이징 시스템
-- [고급 기능](advanced-features.md) - 복잡한 검색 조건과 중첩 쿼리
-- [API 레퍼런스](api-reference.md) - 전체 API 문서
+조건·그룹 노드는 전체 1,000개, 중첩 그룹은 32단계, 조건별 컬렉션 값은 1,000개, 정렬 필드는 16개까지 허용합니다. 페이지 제한은 별도로 설정할 수 있습니다. [기본 사용법](/ko/basic-usage.md)과 [자동 설정](/ko/auto-configuration.md)을 참조하세요.

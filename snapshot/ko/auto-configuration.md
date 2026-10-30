@@ -1,440 +1,95 @@
-# Searchable JPA 자동 설정 가이드
+# 자동 설정
 
-## **자동 Hibernate 최적화**
+starter는 Hibernate 자동 설정 전에 JPA 기본값을 등록하고, Servlet 애플리케이션에 OpenAPI 작업 사용자 정의 구성 요소를 등록합니다. 아래 설정은 모두 선택 사항입니다. 이 문서는 `2.0.0-SNAPSHOT` 기준입니다.
 
-searchable-jpa 라이브러리는 **자동으로 Hibernate 최적화 설정을 구성**하여 N+1 문제를 방지하고 성능을 향상시킵니다.
-
-### **자동 적용되는 최적화 설정**
-
-라이브러리를 의존성으로 추가하기만 하면 다음 설정이 **자동으로 적용**됩니다:
-
-```yaml
-spring:
-  jpa:
-    properties:
-      hibernate:
-        # N+1 문제 방지
-        default_batch_fetch_size: 100
-        
-        # 배치 처리 최적화
-        jdbc:
-          batch_size: 1000
-          batch_versioned_data: true
-        
-        # 삽입/업데이트 순서 최적화
-        order_inserts: true
-        order_updates: true
-        
-        # 쿼리 최적화
-        query:
-          in_clause_parameter_padding: true
-
-        # 연결 최적화
-        connection:
-          provider_disables_autocommit: true
-```
-
-### **설정 커스터마이징**
-
-필요에 따라 기본값을 변경할 수 있습니다:
+## 설정 예제
 
 ```yaml
 searchable:
+  max-page-size: 1000
+  default-page-size: 20
+  swagger:
+    enabled: true
+  date-time:
+    default-timezone: Asia/Seoul
   hibernate:
-    # 자동 최적화 활성화/비활성화 (기본값: true)
     auto-optimization: true
-
-    # 배치 fetch 크기 (기본값: 100)
-    default-batch-fetch-size: 150
-
-    # JDBC 배치 크기 (기본값: 1000)
-    jdbc-batch-size: 500
-
-    # 버전 데이터 배치 처리 (기본값: true)
+    auto-fetch-collections: true
+    default-batch-fetch-size: 100
+    jdbc-batch-size: 1000
     batch-versioned-data: true
-
-    # 삽입 순서 최적화 (기본값: true)
     order-inserts: true
-
-    # 업데이트 순서 최적화 (기본값: true)
     order-updates: true
-
-    # IN 절 파라미터 패딩 (기본값: true)
     in-clause-parameter-padding: true
 ```
 
-### **자동 최적화 비활성화**
-
-자동 최적화를 비활성화하려면:
-
-```yaml
-searchable:
-  hibernate:
-    auto-optimization: false
-```
-
-또는 특정 설정만 직접 지정하려면:
-
-```yaml
-# 수동 설정이 자동 설정보다 우선합니다
-spring:
-  jpa:
-    properties:
-      hibernate:
-        default_batch_fetch_size: 200  # 자동 설정 대신 이 값 사용
-```
-
-### **성능 향상 효과**
-
-#### **Before (자동 설정 없음)**
-```sql
--- N+1 문제 발생
-SELECT * FROM user_account WHERE id = ?  -- 1번
-SELECT * FROM position WHERE id = ?      -- N번 (각 사용자마다)
-SELECT * FROM organization WHERE id = ?  -- N번 (각 사용자마다)
-```
-
-#### **After (자동 설정 적용)**
-```sql
--- 배치 로딩으로 최적화
-SELECT * FROM user_account WHERE id IN (?, ?, ?, ...)     -- 1번
-SELECT * FROM position WHERE id IN (?, ?, ?, ...)         -- 1번 (배치)
-SELECT * FROM organization WHERE id IN (?, ?, ?, ...)     -- 1번 (배치)
-```
-
-### **주요 이점**
-
-#### 1. **개발자 편의성**
-- 별도 설정 불필요
-- 최적화 설정 자동 적용
-- 실수로 인한 성능 문제 방지
-
-#### 2. **즉시 적용되는 성능 향상**
-- N+1 문제 자동 방지
-- 배치 처리 최적화
-- 쿼리 플랜 캐싱 개선
-
-#### 3. **유연한 커스터마이징**
-- 필요시 개별 설정 가능
-- 프로젝트별 최적화 가능
-- 단계적 비활성화 지원
-
-### **사용 예시**
-
-#### **기본 사용 (자동 최적화)**
-```java
-// 의존성만 추가하면 자동으로 최적화됨
-@Service
-public class UserService extends DefaultSearchableService<User, Long> {
-
-    public UserService(UserRepository repository, EntityManager entityManager) {
-        super(repository, entityManager);
-    }
-
-    public Page<User> searchUsers(SearchCondition<UserSearchDTO> condition) {
-        // 자동으로 배치 로딩 적용됨
-        return findAllWithSearch(condition);
-    }
-}
-```
-
-#### **커스텀 설정 사용**
-```yaml
-# application.yml
-searchable:
-  hibernate:
-    auto-optimization: true
-    default-batch-fetch-size: 200  # 더 큰 배치 크기
-    jdbc-batch-size: 2000          # 더 큰 JDBC 배치
-```
-
-### **설정 확인 방법**
-
-자동 최적화가 적용되는 과정은 TRACE 레벨로 기록됩니다. 확인하려면 `logging.level.dev.simplecore.searchable=TRACE`를 설정하세요.
-
-```
-TRACE SearchableJpaConfiguration - Configuring automatic Hibernate optimizations for searchable-jpa...
-TRACE SearchableJpaConfiguration - Applied Hibernate optimizations:
-TRACE SearchableJpaConfiguration -   - default_batch_fetch_size: 100
-TRACE SearchableJpaConfiguration -   - jdbc.batch_size: 1000
-TRACE SearchableJpaConfiguration -   - order_inserts: true
-TRACE SearchableJpaConfiguration -   - order_updates: true
-TRACE SearchableJpaConfiguration -   - in_clause_parameter_padding: true
-TRACE SearchableJpaConfiguration - These settings help prevent N+1 problems and improve performance automatically.
-```
-
-자동 최적화를 비활성화하면(`searchable.hibernate.auto-optimization=false`) 다음 로그가 INFO 레벨로 남습니다.
+`Asia/Seoul`은 예제의 시간대(timezone)입니다. 기본 시간대는 아래 우선순위에 따라 결정합니다.
 
-```
-INFO  SearchableJpaConfiguration - Searchable Hibernate auto-optimization is disabled
-```
-
-### **주의사항**
+## 속성과 제한
 
-1. **기존 설정과의 충돌**
-   - 기존에 `spring.jpa.properties.hibernate.*` 설정이 있으면 그 설정이 우선합니다
-   - 자동 설정은 설정되지 않은 항목에만 적용됩니다
+| `searchable` 하위 속성 | 기본값 | 동작 |
+| --- | --- | --- |
+| `default-page-size` | 20 | 검색 조건에 크기가 없을 때 사용합니다. 양수이며 최대값 이하여야 합니다. |
+| `max-page-size` | 1000 | 실행할 페이지의 최대 크기입니다. 양수여야 합니다. |
+| `swagger.enabled` | true | 라이브러리의 API 문서 사용자 정의 기능을 켭니다. Swagger 접근 제어는 별도입니다. |
+| `date-time.default-timezone` | 미지정 | 시간대 없는 입력값을 해석할 때 가장 먼저 확인합니다. |
+| `hibernate.auto-optimization` | true | 아래 표의 Hibernate 기본값 여섯 개를 등록합니다. |
+| `hibernate.auto-fetch-collections` | true | 직접 연결된 컬렉션 내부의 to-one 경로를 자동 탐지합니다. false이면 이 추가 탐지를 끕니다. |
+| `hibernate.default-batch-fetch-size` | 100 | Hibernate 지연 로딩의 배치 크기입니다. 양수여야 합니다. |
+| `hibernate.jdbc-batch-size` | 1000 | Hibernate JDBC 명령문의 배치 크기입니다. 양수여야 합니다. |
+| `hibernate.batch-versioned-data` | true | Hibernate의 버전 필드 포함 데이터 배치 설정을 전달합니다. |
+| `hibernate.order-inserts` | true | JDBC 배치를 위해 INSERT 순서를 조정합니다. |
+| `hibernate.order-updates` | true | JDBC 배치를 위해 UPDATE 순서를 조정합니다. |
+| `hibernate.in-clause-parameter-padding` | true | IN 파라미터를 패딩해 쿼리 플랜 캐싱을 돕습니다. |
 
-2. **메모리 사용량**
-   - `default_batch_fetch_size`가 클수록 메모리 사용량이 증가할 수 있습니다
-   - 애플리케이션 특성에 맞게 조정하세요
-
-3. **데이터베이스 호환성**
-   - 일부 설정은 특정 데이터베이스에서만 효과적일 수 있습니다
-   - 성능 테스트로 검증하세요
-
-## 기본 자동 설정
-
-### 자동으로 설정되는 항목
-
-1. **Hibernate 최적화 설정**
-   - N+1 문제 방지를 위한 배치 페치 크기 설정
-   - JDBC 배치 크기 최적화
-   - 쿼리 플랜 캐싱 최적화
+컬렉션 자동 탐지는 기존 로딩 동작을 유지하도록 기본적으로 켜져 있습니다. false로 설정해도 서버에서 명시한 `fetchFields`는 적용합니다. JPA의 `EAGER` 매핑이나 일반 지연 로딩 설정은 변경하지 않습니다.
 
-2. **OpenAPI/Swagger 통합**
-   - SearchableParams 어노테이션 자동 인식
-   - API 문서 자동 생성
+## Hibernate 기본값과 우선순위
 
-3. **시간 구간 집계**
-   - `TimeBucketCounter` 빈 등록
-   - 집계에 사용할 Hibernate 함수 등록
-
-![자동 설정 빈 구성도](_images/auto-configuration-wiring.svg)
-
-*application.yml의 `searchable.*` 설정이 SearchableProperties로 바인딩되고, SearchableJpaConfiguration과 SearchableOpenApiConfiguration이 이를 읽어 조건에 따라 빈을 등록하는 과정*
-
-## 설정 속성
-
-### application.yml 설정
+| 라이브러리 속성의 끝부분 | `spring.jpa.properties` 하위 키 |
+| --- | --- |
+| `default-batch-fetch-size` | `hibernate.default_batch_fetch_size` |
+| `jdbc-batch-size` | `hibernate.jdbc.batch_size` |
+| `batch-versioned-data` | `hibernate.jdbc.batch_versioned_data` |
+| `order-inserts` | `hibernate.order_inserts` |
+| `order-updates` | `hibernate.order_updates` |
+| `in-clause-parameter-padding` | `hibernate.query.in_clause_parameter_padding` |
 
-```yaml
-searchable:
-  # Swagger/OpenAPI 설정
-  swagger:
-    enabled: true  # 기본값: true, OpenAPI/Swagger 통합 활성화
-
-  # 날짜/시간 설정
-  date-time:
-    default-timezone: UTC  # 시간대 없는 검색값의 해석 기준 시간대(IANA ID, 예: Asia/Seoul). 미지정 시 UTC
-
-  # Hibernate 최적화 설정
-  hibernate:
-    auto-optimization: true  # 기본값: true, 자동 Hibernate 최적화 활성화
-    default-batch-fetch-size: 100  # 기본값: 100, 배치 fetch 크기
-    jdbc-batch-size: 1000  # 기본값: 1000, JDBC 배치 크기
-    batch-versioned-data: true  # 기본값: true, 버전 데이터 배치 처리
-    order-inserts: true  # 기본값: true, 삽입 순서 최적화
-    order-updates: true  # 기본값: true, 업데이트 순서 최적화
-    in-clause-parameter-padding: true  # 기본값: true, IN 절 파라미터 패딩
-```
-
-### application.properties 설정
+자동 등록 값의 우선순위는 가장 낮습니다. 애플리케이션, 시스템 속성, 환경 변수에 명시한 값을 우선합니다. `auto-optimization: false`로 설정하면 이 기본값 등록을 끕니다. 요청 검증, 페이지 제한과 시간대 설정은 계속 적용합니다.
 
-```properties
-# Swagger/OpenAPI 설정
-searchable.swagger.enabled=true
+starter는 **`hibernate.connection.provider_disables_autocommit`을 설정하지 않습니다.** 이 속성은 데이터소스가 자동 커밋을 끈 상태로 연결을 제공한다는 보장을 나타냅니다. 보장 없이 true로 강제하면 롤백해야 할 쓰기가 커밋될 수 있습니다. 데이터소스의 자동 커밋과 트랜잭션 설정은 애플리케이션에서 관리하세요.
 
-# 날짜/시간 설정
-searchable.date-time.default-timezone=UTC
+JDBC 명령문의 배치 크기와 서비스가 엔티티 200건씩 처리하는 단위는 서로 다릅니다. `jdbc-batch-size`를 바꿔도 서비스의 처리 단위나 트랜잭션 경계는 달라지지 않습니다.
 
-# Hibernate 최적화 설정
-searchable.hibernate.auto-optimization=true
-searchable.hibernate.default-batch-fetch-size=100
-searchable.hibernate.jdbc-batch-size=1000
-searchable.hibernate.batch-versioned-data=true
-searchable.hibernate.order-inserts=true
-searchable.hibernate.order-updates=true
-searchable.hibernate.in-clause-parameter-padding=true
-```
+## 요청 제한
 
-## 상세 설정 설명
+| 입력 | 제한 |
+| --- | --- |
+| 페이지 번호 | 0 이상 |
+| 페이지 크기 | 1 이상, 설정한 `max-page-size` 이하 |
+| 오프셋 | `page * size <= 2,147,483,647` |
+| 조건·그룹 노드 | 전체 1,000개 이하 |
+| 그룹 깊이 | 루트 목록 아래 중첩 32단계 이하 |
+| IN을 포함한 컬렉션 값 | 조건마다 1,000개 이하 |
+| 정렬 필드 | 16개 이하 |
 
-### Hibernate 최적화 설정
+JSON 변환, 빌더와 쿼리 구성 단계에서 구조를 검사합니다. DTO를 사용하는 진입점에서는 검색 필드 허용 여부, 연산자, 정렬 허용 여부와 값도 검증합니다. 직접 생성한 `SearchCondition`은 신뢰할 수 있는 서버 코드용입니다. 외부 입력을 받는 DTO 검증을 대신하지 않습니다. HTTP 본문 크기, 문자열 길이, 요청 빈도와 쿼리 시간 제한은 애플리케이션에서 설정하세요.
 
-#### auto-optimization
-- **기본값**: `true`
-- **설명**: 자동 Hibernate 최적화 설정 활성화
-- **효과**: N+1 문제 방지를 위한 다양한 최적화 설정이 자동으로 적용됩니다.
+페이지 기본값과 최대값은 실제 영속성 단위에서 읽습니다. starter를 사용하지 않을 때는 EntityManagerFactory에 `searchable.default_page_size`, `searchable.max_page_size`, `searchable.auto_fetch_collections` 속성을 지정할 수 있습니다. starter는 `spring.jpa.properties`를 통해 전달합니다. 별도 영속성 단위를 구성할 때는 속성을 직접 전달하세요. 페이지 설정값은 양수이며 기본값이 최대값 이하여야 합니다.
 
-#### default-batch-fetch-size
-- **기본값**: `100`
-- **설명**: 지연 로딩 시 배치 페치 크기
-- **효과**: 연관 엔티티를 배치로 가져와 N+1 문제를 방지합니다.
-- **제약**: 1 이상의 값만 허용합니다. 1보다 작은 값을 지정하면 애플리케이션 기동이 실패합니다.
+## 시간대 결정 순서
 
-#### jdbc-batch-size
-- **기본값**: `1000`
-- **설명**: 대량 작업을 위한 JDBC 배치 크기
-- **효과**: 대량 INSERT/UPDATE 작업의 성능을 향상시킵니다.
-- **제약**: 1 이상의 값만 허용합니다. 1보다 작은 값을 지정하면 애플리케이션 기동이 실패합니다.
+1. 유효한 `searchable.date-time.default-timezone` 값
+2. `applicationZoneId`라는 이름의 `ZoneId` 빈
+3. 유효한 `spring.jackson.time-zone` 값
+4. UTC
 
-#### batch-versioned-data
-- **기본값**: `true`
-- **설명**: 낙관적 락을 위한 배치 버전 데이터 활성화
-- **효과**: 버전 관리가 있는 엔티티의 배치 작업 성능을 향상시킵니다.
+시간대 ID가 잘못되면 로그를 기록하고 다음 설정을 확인합니다. 검색값에 지정한 오프셋은 해석에 반영합니다. 시간대 없는 날짜·시간과 날짜만 지정한 BETWEEN 경계에는 애플리케이션 시간대를 적용합니다. 파서의 시간대 보관 객체는 프로세스 전체에서 공유하므로 한 JVM에서 여러 애플리케이션 컨텍스트를 실행하면 같은 시간대를 사용하세요. 페이지 제한은 전역으로 공유하지 않습니다.
 
-#### order-inserts
-- **기본값**: `true`
-- **설명**: INSERT 문 순서 최적화
-- **효과**: 외래 키 제약 조건 위반을 방지하고 성능을 향상시킵니다.
+## 등록하는 빈
 
-#### order-updates
-- **기본값**: `true`
-- **설명**: UPDATE 문 순서 최적화
-- **효과**: 데드락 가능성을 줄이고 성능을 향상시킵니다.
+애플리케이션에 같은 타입의 빈이 없으면 `TimeBucketCounter`를 등록합니다. `searchConditionCustomizer`는 Swagger 사용자 정의 기능이 켜져 있고, Spring MVC의 `RequestMappingHandlerMapping`과 SpringDoc 클래스가 있는 Servlet 애플리케이션에 등록합니다. 같은 이름의 애플리케이션 빈이 있으면 그 빈을 사용합니다.
 
-#### in-clause-parameter-padding
-- **기본값**: `true`
-- **설명**: IN 절 파라미터 패딩 활성화
-- **효과**: 쿼리 플랜 캐싱을 개선하여 성능을 향상시킵니다.
+![자동 설정](./_images/auto-configuration-wiring.svg)
 
-### 날짜/시간 설정
-
-시간대 정보가 없는 날짜/시간 검색값과 날짜만 입력한 BETWEEN 경계를 해석할 애플리케이션 시간대(application timezone)를 지정합니다. 이 시간대는 배포 서버의 JVM 기본 시간대와 무관하게 동작하므로, 서버 환경이 달라도 검색 결과가 일관됩니다.
-
-#### date-time.default-timezone
-- **기본값**: 지정하지 않음
-- **설명**: 시간대 정보가 없는 검색값을 해석할 기준 시간대. IANA 시간대 ID를 사용합니다(예: `Asia/Seoul`, `UTC`).
-- **효과**: 시간대 정보가 없는 `LocalDateTime`, `Instant`, `OffsetDateTime`, `ZonedDateTime`, `Date` 검색값과, 날짜만 입력한 BETWEEN 경계를 이 시간대 기준으로 해석합니다. `Z` 접미사나 오프셋이 포함된 값은 이미 절대 시각이 정해지므로 영향을 받지 않습니다.
-- **해석 순서**: 값을 지정하지 않으면 다음 순서로 기준 시간대를 결정합니다.
-  1. `searchable.date-time.default-timezone` (이 설정)
-  2. 호스트 애플리케이션이 등록한 `applicationZoneId` 빈(`ZoneId` 타입)
-  3. `spring.jackson.time-zone`
-  4. UTC (최종 기본값)
-
-> ⚠ **동작 변경**: 이전에는 시간대 정보가 없는 검색값을 배포 서버의 JVM 기본 시간대로 해석했습니다. 이제는 위 순서로 기준 시간대를 결정하며, 아무것도 지정하지 않으면 UTC를 사용합니다. 서버 로컬 시간대 기준 해석이 필요하면 `searchable.date-time.default-timezone`에 해당 시간대를 명시하세요.
-
-### Swagger 설정
-
-#### swagger.enabled
-- **기본값**: `true`
-- **설명**: OpenAPI/Swagger 통합 기능 활성화
-- **효과**: `@SearchableParams` 어노테이션이 적용된 API의 문서가 자동으로 생성됩니다.
-- **조건**:
-  - 웹 애플리케이션 타입이 SERVLET입니다.
-  - OpenAPI와 OperationCustomizer 클래스가 클래스패스에 있습니다.
-  - `RequestMappingHandlerMapping` 빈이 등록된 뒤에만 `searchConditionCustomizer` 빈이 생성됩니다(WebMvcAutoConfiguration 이후 순서로 동작합니다).
-
-## 시간 구간 집계
-
-기간별 건수 집계(`TimeBucketCounter`)에 필요한 `timeBucketCounter` 빈과 `epoch_millis` 함수를 자동으로 등록합니다. 사용 방법은 [고급 기능 - 시간 구간별 건수 집계](advanced-features.md#시간-구간별-건수-집계)에서 다룹니다.
-
-### timeBucketCounter 빈
-
-`SearchableJpaConfiguration`이 `EntityManager`를 주입해 `TimeBucketCounter` 빈을 등록합니다. 서비스마다 직접 생성하지 않고 주입해서 사용합니다.
-
-```java
-@Bean
-@ConditionalOnMissingBean
-public TimeBucketCounter timeBucketCounter(EntityManager entityManager)
-```
-
-`@ConditionalOnMissingBean`이 적용되어 있으므로, 애플리케이션이 같은 타입의 빈을 직접 정의하면 그 빈이 사용됩니다.
-
-### epoch_millis 함수 등록
-
-기간을 구간으로 나누려면 저장된 시각을 숫자로 읽어야 하는데, 이를 표준 방식으로 요청할 방법이 없습니다. 그래서 `EpochMillisFunctionContributor`가 데이터베이스별 표현을 `epoch_millis`라는 이름으로 등록합니다. Hibernate의 `FunctionContributor` SPI(`META-INF/services`)로 동작하므로 라이브러리가 클래스패스에 있으면 별도 설정 없이 등록됩니다.
-
-| 데이터베이스 | 등록되는 표현 |
-|-------------|--------------|
-| SQLite | 저장된 컬럼 값을 그대로 사용 (드라이버가 이미 밀리초 정수로 저장) |
-| PostgreSQL, CockroachDB | `extract(epoch from ...)` 결과를 밀리초로 환산 |
-| H2 | `datediff('MILLISECOND', ...)` |
-| MySQL, MariaDB | `unix_timestamp(...)`를 밀리초로 환산 |
-| Oracle | 기준 시각과의 날짜 차이를 밀리초로 환산 |
-| SQL Server | `datediff_big(millisecond, ...)` |
-
-목록에 없는 데이터베이스에서는 함수를 등록하지 않으며, `TimeBucketCounter`가 구간마다 조건부 합계를 세는 방식으로 집계합니다. 결과는 같지만 구간 수만큼 조건식이 늘어나므로, 행이 많은 테이블에서는 위 목록의 데이터베이스가 유리합니다.
-
-> ⚠ **함수 이름 충돌**: `epoch_millis`는 애플리케이션 전체의 Hibernate 함수 레지스트리에 등록됩니다. 같은 이름의 함수를 이미 등록해 두었다면 나중에 등록된 쪽이 남으므로, 이름이 겹치지 않도록 한쪽을 다른 이름으로 바꾸세요.
-
-## 자동 설정 비활성화
-
-특정 자동 설정을 비활성화하려면 다음과 같이 설정할 수 있습니다:
-
-### Hibernate 최적화 자동 설정 비활성화
-
-`SearchableJpaConfiguration`만 제외하면 Hibernate 최적화 자동 설정이 꺼집니다. OpenAPI 연동을 담당하는 `SearchableOpenApiConfiguration`은 별도의 자동 설정 클래스라 그대로 유지됩니다.
-
-```java
-@SpringBootApplication(exclude = SearchableJpaConfiguration.class)
-public class Application {
-    public static void main(String[] args) {
-        SpringApplication.run(Application.class, args);
-    }
-}
-```
-
-`SearchableJpaConfiguration`과 `SearchableOpenApiConfiguration`을 모두 끄려면 `exclude` 목록에 두 클래스를 함께 지정합니다.
-
-```java
-@SpringBootApplication(exclude = {SearchableJpaConfiguration.class, SearchableOpenApiConfiguration.class})
-public class Application {
-    public static void main(String[] args) {
-        SpringApplication.run(Application.class, args);
-    }
-}
-```
-
-### 특정 기능만 비활성화
-
-```yaml
-searchable:
-  swagger:
-    enabled: false  # Swagger 통합 비활성화
-  hibernate:
-    auto-optimization: false  # Hibernate 최적화 비활성화
-```
-
-## 커스텀 설정
-
-자동 등록되는 OpenAPI 커스터마이저를 교체하려면 같은 이름(`searchConditionCustomizer`)의 빈을 직접 정의합니다. `SearchableOpenApiConfiguration`은 `@ConditionalOnMissingBean(name = "searchConditionCustomizer")`로 동작하므로, 사용자가 정의한 빈이 있으면 기본 `OpenApiDocCustomiser` 대신 그 빈이 등록됩니다.
-
-```java
-@Configuration
-public class SearchableCustomConfiguration {
-
-    @Bean(name = "searchConditionCustomizer")
-    public OperationCustomizer searchConditionCustomizer() {
-        return new CustomSearchConditionCustomizer();
-    }
-}
-```
-
-`CustomSearchConditionCustomizer`는 `OperationCustomizer`를 직접 구현하거나, `OpenApiDocCustomiser`를 감싸서 필요한 부분만 재정의하는 방식으로 작성합니다.
-
-`timeBucketCounter` 빈도 같은 방식으로 교체합니다. `TimeBucketCounter` 타입의 빈을 직접 정의하면 자동 등록된 빈 대신 그 빈이 사용됩니다([시간 구간 집계](#시간-구간-집계) 참조).
-
-## 설정 검증
-
-애플리케이션 시작 시 설정이 올바르게 적용되었는지 확인하려면 로그를 확인하세요. 아래 로그는 TRACE 레벨이므로 `logging.level.dev.simplecore.searchable=TRACE`를 설정해야 보입니다.
-
-```
-TRACE d.s.s.a.SearchableJpaConfiguration - SearchableJpaConfiguration is being initialized
-TRACE d.s.s.a.SearchableJpaConfiguration - Configuring automatic Hibernate optimizations for searchable-jpa...
-TRACE d.s.s.a.SearchableJpaConfiguration - Applied Hibernate optimizations:
-TRACE d.s.s.a.SearchableJpaConfiguration -   - default_batch_fetch_size: 100
-TRACE d.s.s.a.SearchableJpaConfiguration -   - jdbc.batch_size: 1000
-TRACE d.s.s.a.SearchableJpaConfiguration -   - order_inserts: true
-TRACE d.s.s.a.SearchableJpaConfiguration -   - order_updates: true
-TRACE d.s.s.a.SearchableJpaConfiguration -   - in_clause_parameter_padding: true
-TRACE d.s.s.a.SearchableJpaConfiguration - These settings help prevent N+1 problems and improve performance automatically.
-TRACE d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: searchable.hibernate.auto-optimization=false
-```
-
-## 문제 해결
-
-### 자동 설정이 적용되지 않는 경우
-
-1. **의존성 확인**: `spring-boot-starter-searchable-jpa`가 올바르게 추가되었는지 확인합니다.
-2. **자동 설정 등록 확인**: Spring Boot 3.x와 4.x는 컴포넌트 스캔이 아니라 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`에 등록된 자동 설정을 SPI 방식으로 로드합니다. `spring-boot-starter-searchable-jpa`가 클래스패스에 있으면 `@SpringBootApplication`의 패키지 위치와 무관하게 자동 등록됩니다.
-3. **설정 파일 확인**: `application.yml` 또는 `application.properties`의 설정이 올바른지 확인합니다.
-
-### 성능 문제가 있는 경우
-
-1. **배치 크기 조정**: `default-batch-fetch-size`와 `jdbc-batch-size`를 환경에 맞게 조정합니다.
-2. **최적화 설정 확인**: `auto-optimization`이 활성화되어 있는지 확인합니다.
-3. **데이터베이스별 최적화**: 사용하는 데이터베이스에 특화된 설정을 적용합니다.
-
-관련 내용은 [2단계 쿼리 최적화](ko/two-phase-query-optimization.md)와 [OpenAPI 통합](ko/openapi-integration.md) 문서에서 다룹니다.
+그룹별 API 설정은 [OpenAPI 통합](/ko/openapi-integration.md), 연관 데이터 로딩은 [관계형 데이터](/ko/relationship-and-two-phase-query.md)를 참조하세요.

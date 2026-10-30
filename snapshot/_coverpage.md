@@ -8,9 +8,9 @@
 
 - Java 17+ / Spring Boot 4.1+ (3.2+ on 1.x)
 - 18 Search Operators
-- High-Performance Two-Phase Query Pagination
+- Adaptive Query Strategy and Pagination
 - OpenAPI/Swagger Integration
 
-[Get Started](en/installation.md)
-[한국어 문서](ko/)
+[Get Started](/en/installation.md)
+[한국어 문서](/ko/)
 [GitHub](https://github.com/simplecore-inc/searchable-jpa)

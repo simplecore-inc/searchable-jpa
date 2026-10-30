@@ -1,725 +1,127 @@
 # Advanced Features
 
-This document covers advanced features of Searchable JPA.
+This page describes service composition, projections, scoped conditions, writes and time counts in `2.0.0-SNAPSHOT`. Examples use the entity and repository from [Basic Usage](/en/basic-usage.md).
 
-## When You Need to Extend a Different Base Class
+## Service composition
 
-The service examples in this document and in the Basic Usage guide all extend `DefaultSearchableService`. Sometimes, however, a service class already extends a different base class and cannot also extend `DefaultSearchableService`. In that case, combine the `SearchableServiceSupport` interface with `SearchableServiceDelegate` to implement the same search functionality through composition instead of inheritance.
-
-`SearchableServiceDelegate` is a standalone class that encapsulates every method implementation of `SearchableService`, and `SearchableServiceSupport` is a mixin interface that provides default methods delegating to it. `DefaultSearchableService` itself is a `SearchableServiceSupport` implementation that internally delegates to a `SearchableServiceDelegate`.
+If an existing service must retain its superclass, implement the mixin and return one delegate:
 
 ```java
-@Service
-public class PostService extends SomeOtherBaseClass
-        implements SearchableServiceSupport<Post, Long> {
+import dev.simplecore.searchable.core.service.SearchableServiceDelegate;
+import dev.simplecore.searchable.core.service.SearchableServiceSupport;
+import jakarta.persistence.EntityManager;
 
-    private final SearchableServiceDelegate<Post, Long> searchableDelegate;
+public class PostService implements SearchableServiceSupport<Post, Long> {
+    private final SearchableServiceDelegate<Post, Long> delegate;
 
     public PostService(PostRepository repository, EntityManager entityManager) {
-        this.searchableDelegate = new SearchableServiceDelegate<>(repository, entityManager, Post.class);
+        delegate = new SearchableServiceDelegate<>(repository, entityManager, Post.class);
     }
 
     @Override
     public SearchableServiceDelegate<Post, Long> getSearchableDelegate() {
-        return searchableDelegate;
+        return delegate;
     }
 }
 ```
 
-`repository` must implement both `JpaRepository` and `JpaSpecificationExecutor`. If it does not satisfy this requirement, constructing `SearchableServiceDelegate` throws an exception.
+Register the service as an application bean when using Spring dependency injection. Use the Spring-managed shared `EntityManager` belonging to the same persistence unit as the repository. Existing `DefaultSearchableService` subclasses continue to use this delegate internally.
 
-You call `PostService` the same way you call a service that extends `DefaultSearchableService`.
-
-```java
-Page<Post> result = postService.findAllWithSearch(condition);
-long updatedCount = postService.updateWithSearch(condition, updateData);
-```
-
-You can also create a `SearchableServiceDelegate` instance directly and call its methods without implementing the interface.
-
-## Projection Support
-
-Use interface-based projections to fetch only a subset of an entity's fields.
-
-### Interface-Based Projections
+## Projections
 
 ```java
 public interface PostSummary {
+    Long getId();
     String getTitle();
-    String getAuthorName();
-    LocalDateTime getCreatedAt();
-
-    // Computed field (SpEL expressions supported)
-    @Value("#{target.title + ' by ' + target.authorName}")
-    String getDisplayName();
-}
-```
-
-### Using a Projection
-
-```java
-@GetMapping("/summaries")
-public Page<PostSummary> getPostSummaries(
-    @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params
-) {
-    SearchCondition<PostSearchDTO> condition =
-        new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
-    return postService.findAllWithSearch(condition, PostSummary.class);
-}
-```
-
-### Dynamic Projections
-
-```java
-@GetMapping("/dynamic-summaries")
-public Page<?> getDynamicSummaries(
-    @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params,
-    @RequestParam(defaultValue = "summary") String projection
-) {
-    SearchCondition<PostSearchDTO> condition =
-        new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
-
-    switch (projection) {
-        case "summary":
-            return postService.findAllWithSearch(condition, PostSummary.class);
-        case "detail":
-            return postService.findAllWithSearch(condition, PostDetailProjection.class);
-        default:
-            return postService.findAllWithSearch(condition);
-    }
-}
-```
-
-### Limitations
-
-- **Interfaces only**: The current implementation supports interface-based projections only.
-- **Class-based projections**: Projections based on DTO classes are not yet supported.
-- **Computed fields**: SpEL expressions via the `@Value` annotation are supported.
-
-## Batch Update
-
-Update multiple entities that match a search condition in a single call.
-
-### Update DTO
-
-```java
-public class PostUpdateDTO {
-    private PostStatus status;
-    private String title;
-    private Integer viewCount;
-    private LocalDateTime lastModified;
-    
-    // getters and setters
-}
-```
-
-### Executing a Batch Update
-
-Spring MVC reads the request body only once, so a search condition and the update values cannot each be bound from a separate `@RequestBody` parameter. Wrap both values in a single request DTO instead.
-
-```java
-public class BatchUpdateRequest {
-    private SearchCondition<PostSearchDTO> searchCondition;
-    private PostUpdateDTO updateData;
-    // getters and setters
 }
 ```
 
 ```java
-@PutMapping("/batch-update")
-public ResponseEntity<Long> batchUpdate(@RequestBody BatchUpdateRequest request) {
-    long updatedCount = postService.updateWithSearch(request.getSearchCondition(), request.getUpdateData());
-    return ResponseEntity.ok(updatedCount);
+var page = service.findAllWithSearch(condition, PostSummary.class);
+```
+
+The projection type must be an interface. A concrete DTO class raises `SearchableConfigurationException`. Projection proxies wrap loaded entities; they do not reduce the SQL SELECT list. Nested or computed getters can access relationships, so arrange fetching and the application's transaction boundary accordingly.
+
+## Extending conditions and mandatory scope
+
+```java
+import dev.simplecore.searchable.core.condition.SearchConditionBuilder;
+
+var scoped = SearchConditionBuilder.from(clientCondition, PostSearchDTO.class)
+        .and(g -> g.equals("status", "PUBLISHED"))
+        .build();
+```
+
+The example scopes a client search to published posts. A real tenant/security filter must use a server-derived value and a DTO field allowed for that internal operation. Do not trust a tenant value supplied by the client. Append the mandatory constraint after the client's entire expression; do not append a later OR that can broaden it.
+
+`from` copies node, sort and fetch structures before extension; it does not mutate the original node operators. Mutable arbitrary value objects should still be treated as immutable by callers. Group connectors are evaluated in call order. `A AND (B OR C)` must remain grouped and is not equivalent to `(A AND B) OR C`.
+
+![Group evaluation](./_images/condition-group-evaluation.svg)
+
+## Batch update and delete
+
+```java
+public class StatusPatch {
+    private String status;
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 }
 ```
 
-### Conditional Batch Update
-
 ```java
-@Service
-public class PostService extends DefaultSearchableService<Post, Long> {
-    
-    @Transactional
-    public long updatePostStatus(PostStatus fromStatus, PostStatus toStatus) {
-        SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
-            .create(PostSearchDTO.class)
-            .where(group -> group.equals("status", fromStatus))
-            .build();
-            
-        PostUpdateDTO updateData = new PostUpdateDTO();
-        updateData.setStatus(toStatus);
-        updateData.setLastModified(LocalDateTime.now());
-        
-        return updateWithSearch(condition, updateData);
-    }
-}
+StatusPatch patch = new StatusPatch();
+patch.setStatus("ARCHIVED");
+long changed = service.updateWithSearch(condition, patch);
+long deleted = service.deleteWithSearch(condition);
 ```
 
-### Usage Example
+These are two independent examples: the update can change which rows still match the condition used by a later delete. Both operations process all matching entities, not just the requested page. Empty conditions match the entire entity table; application authorization and mandatory scope must be applied before calling a write method.
 
-```bash
-# Bulk-update the status of posts matching a condition
-PUT /api/posts/batch-update
-Content-Type: application/json
+Update rules:
 
-{
-  "searchCondition": {
-    "conditions": [
-      {
-        "operator": "and",
-        "field": "status",
-        "searchOperator": "equals",
-        "value": "DRAFT"
-      },
-      {
-        "operator": "and",
-        "field": "createdAt",
-        "searchOperator": "lessThan",
-        "value": "2024-01-01T00:00:00"
-      }
-    ]
-  },
-  "updateData": {
-    "status": "ARCHIVED",
-    "lastModified": "2024-01-15T10:30:00"
-  }
-}
-```
+- Copy only supplied, non-null persistent properties. A narrow patch DTO does not reset unrelated primitive fields on the entity.
+- Ignore identifiers, embedded identifiers, version fields, audit-managed fields, static/final/transient properties and columns marked `updatable=false`.
+- Ignore collection properties. Noncollection relationship changes retain their existing behavior and require application authorization.
+- Null means “leave unchanged”; this API does not offer an explicit set-to-null marker. Use a dedicated application operation when clearing a value.
+- An entity payload's primitive zero/false values are real values. Use nullable fields in a narrow update DTO when omission must be distinguishable from a supplied default.
 
-## Batch Delete
+The executor walks primary keys in chunks of 200, captures the next cursor before mutations and flushes each chunk. Changing a field used in the filter does not shift offsets or skip subsequent keys. Deletes still use repository entity deletion, preserving JPA callbacks and cascades. These methods are not single bulk SQL statements.
 
-Delete multiple entities that match a search condition in a single call.
+An existing transaction is reused. Otherwise the delegate starts a transaction for the whole operation. A chunk is not a separate commit. Roots are detached between chunks only when the delegate owns the transaction; caller-owned persistence contexts retain their attachment behavior. Large cascades or collections can still consume memory. Concurrent writes follow the database's isolation and entity version rules; consider application-level coordination for maintenance jobs.
 
-### Basic Batch Delete
+## Nested paths and composite keys
 
-```java
-@DeleteMapping("/batch-delete")
-public ResponseEntity<Long> batchDelete(
-    @RequestBody SearchCondition<PostSearchDTO> searchCondition
-) {
-    long deletedCount = postService.deleteWithSearch(searchCondition);
-    return ResponseEntity.ok(deletedCount);
-}
-```
+Expose relationship paths through a DTO alias such as `@SearchableField(entityField="author.name")`. Sort mapping uses `sortField`, then `entityField`, then the DTO name. `@IdClass` and `@EmbeddedId` are resolved through the JPA metamodel; embedded ID attribute names are not assumed to be `id`. Provide valid, comparable ID components for keyset writes and correct entity identity mappings.
 
-### Safe Batch Delete
-
-```java
-@Service
-public class PostService extends DefaultSearchableService<Post, Long> {
-    
-    @Transactional
-    public long safeDeleteOldDrafts(int daysOld) {
-        LocalDateTime cutoffDate = LocalDateTime.now().minusDays(daysOld);
-        
-        SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
-            .create(PostSearchDTO.class)
-            .where(group -> group
-                .equals("status", PostStatus.DRAFT)
-                .and(a -> a.lessThan("createdAt", cutoffDate))
-            )
-            .build();
-            
-        // Check the count before deleting
-        Page<Post> toDelete = findAllWithSearch(condition);
-        log.info("Deleting {} old draft posts", toDelete.getTotalElements());
-        
-        return deleteWithSearch(condition);
-    }
-}
-```
-
-## Dynamic Sorting
-
-Specify sort conditions dynamically alongside search conditions.
-
-### Multi-Field Sorting
-
-```bash
-# Status ascending, created date descending, ID ascending
-GET /api/posts/search?sort=status.asc,createdAt.desc,id.asc
-```
-
-### Dynamic Sorting via JSON
-
-```json
-{
-  "conditions": [
-    {
-      "operator": "and",
-      "field": "status",
-      "searchOperator": "equals",
-      "value": "PUBLISHED"
-    }
-  ],
-  "sort": {
-    "orders": [
-      {
-        "field": "priority",
-        "direction": "desc"
-      },
-      {
-        "field": "createdAt",
-        "direction": "asc"
-      },
-      {
-        "field": "id",
-        "direction": "asc"
-      }
-    ]
-  }
-}
-```
-
-### Programmatic Sorting
-
-```java
-@Service
-public class PostService extends DefaultSearchableService<Post, Long> {
-    
-    public Page<Post> findPostsWithDynamicSort(String status, String sortField, String sortDirection) {
-        SearchConditionBuilder<PostSearchDTO> builder = SearchConditionBuilder
-            .create(PostSearchDTO.class);
-            
-        if (status != null) {
-            builder = builder.where(group -> group.equals("status", PostStatus.valueOf(status)));
-        }
-        
-        // Add dynamic sorting
-        if (sortField != null && sortDirection != null) {
-            builder = builder.sort(sort -> {
-                if ("ASC".equalsIgnoreCase(sortDirection)) {
-                    sort.asc(sortField);
-                } else {
-                    sort.desc(sortField);
-                }
-            });
-        }
-        
-        SearchCondition<PostSearchDTO> condition = builder.build();
-        return findAllWithSearch(condition);
-    }
-}
-```
-
-## Nested Field Search
-
-Search on fields of related entities.
-
-### Deeply Nested Field Search
-
-```java
-public class PostSearchDTO {
-    // Two levels of nesting
-    @SearchableField(entityField = "author.profile.department", operators = {EQUALS, CONTAINS})
-    private String authorDepartment;
-    
-    // Three levels of nesting
-    @SearchableField(entityField = "author.profile.company.name", operators = {CONTAINS})
-    private String companyName;
-    
-    // Nesting through a collection
-    @SearchableField(entityField = "comments.author.name", operators = {CONTAINS})
-    private String commentAuthorName;
-}
-```
-
-### Conditional Search on Nested Fields
-
-```java
-@GetMapping("/advanced-search")
-public Page<Post> advancedSearch(
-    @RequestParam(required = false) String authorDepartment,
-    @RequestParam(required = false) String companyName,
-    @RequestParam(required = false) String commentAuthorName
-) {
-    SearchConditionBuilder<PostSearchDTO> builder = SearchConditionBuilder
-        .create(PostSearchDTO.class);
-        
-    if (authorDepartment != null) {
-        builder = builder.where(group -> group.contains("authorDepartment", authorDepartment));
-    }
-    
-    if (companyName != null) {
-        builder = builder.and(group -> group.contains("companyName", companyName));
-    }
-    
-    if (commentAuthorName != null) {
-        builder = builder.and(group -> group.contains("commentAuthorName", commentAuthorName));
-    }
-    
-    SearchCondition<PostSearchDTO> condition = builder.build();
-    return postService.findAllWithSearch(condition);
-}
-```
-
-## Extending Existing Search Conditions
-
-Add new conditions on top of an existing `SearchCondition` object. This leaves the original object untouched, so you can reuse or extend a search condition without mutating it.
-
-### The from() Factory Method
-
-`SearchConditionBuilder.from()` copies an existing search condition and adds new conditions to the copy.
-
-```java
-// Create a base search condition
-SearchCondition<PostSearchDTO> baseCondition = SearchConditionBuilder
-    .create(PostSearchDTO.class)
-    .where(w -> w.equals("status", PostStatus.PUBLISHED))
-    .sort(s -> s.desc("createdAt"))
-    .page(0)
-    .size(10)
-    .build();
-
-// Add a new condition on top of the existing one
-SearchCondition<PostSearchDTO> extendedCondition = SearchConditionBuilder
-    .from(baseCondition, PostSearchDTO.class)
-    .and(a -> a.greaterThan("viewCount", 100))
-    .build();
-
-// baseCondition is left unchanged (immutability preserved)
-```
-
-### AND/OR Condition Combination Order
-
-`where()`, `and()`, and `or()` on `SearchConditionBuilder` stack condition nodes in call order. The final `Predicate` is built by folding this list of nodes from left to right: each node combines with the result accumulated so far using its own operator (AND/OR). The first node in the list carries no operator.
-
-```java
-SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
-    .create(PostSearchDTO.class)
-    .where(w -> w.equals("status", "PUBLISHED"))     // a
-    .and(a -> a.equals("authorId", currentUserId))    // b (AND)
-    .or(o -> o.equals("visibility", "PUBLIC"))         // c (OR)
-    .build();
-```
-
-This call produces the node list `[a, b(AND), c(OR)]` and folds it in the following order.
-
-```
-result = a
-result = result AND b
-result = result OR c
-```
-
-The final condition is `(a AND b) OR c`, not `a AND (b OR c)`. To group `b` and `c` together and express `a AND (b OR c)`, do not place `or()` at the top level as a separate call — nest it inside a single `and()` call instead.
-
-```java
-SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
-    .create(PostSearchDTO.class)
-    .where(w -> w.equals("status", "PUBLISHED"))              // a
-    .and(a -> a
-        .equals("authorId", currentUserId)                     // b
-        .or(o -> o.equals("visibility", "PUBLIC"))              // c, nested inside and()
-    )
-    .build();
-```
-
-Nesting it this way groups `b` and `c` into a single unit, producing `a AND (b OR c)`.
-
-![AND/OR condition group evaluation order](_images/condition-group-evaluation.svg)
-
-*Figure. How the calls `.where(a).and(b).or(c)` stack into the node list `[a, b(AND), c(OR)]` and fold left to right into `(a AND b) OR c`.*
-
-### Practical Use Cases
-
-#### 1. Adding a Tenant Filter
-
-In a multi-tenant environment, add a tenant filter on top of a base search condition.
-
-```java
-@Service
-public class PostService extends DefaultSearchableService<Post, Long> {
-
-    public Page<Post> searchWithTenantFilter(
-            SearchCondition<PostSearchDTO> baseCondition,
-            Long tenantId
-    ) {
-        SearchCondition<PostSearchDTO> tenantCondition = SearchConditionBuilder
-            .from(baseCondition, PostSearchDTO.class)
-            .and(a -> a.equals("tenantId", tenantId))
-            .build();
-
-        return findAllWithSearch(tenantCondition);
-    }
-}
-```
-
-#### 2. Adding a Permission-Based Filter
-
-Extend a search condition dynamically based on the user's permissions.
-
-```java
-@Service
-public class PostService extends DefaultSearchableService<Post, Long> {
-
-    public Page<Post> searchWithSecurityFilter(
-            SearchCondition<PostSearchDTO> baseCondition,
-            User currentUser
-    ) {
-        SearchConditionBuilder<PostSearchDTO> builder = SearchConditionBuilder
-            .from(baseCondition, PostSearchDTO.class);
-
-        // Non-admins are excluded from other users' private posts (their own posts remain visible regardless of visibility)
-        if (!currentUser.isAdmin()) {
-            builder = builder.and(a -> a
-                .notEquals("visibility", "PRIVATE")
-                .or(o -> o.equals("authorId", currentUser.getId()))
-            );
-        }
-
-        return findAllWithSearch(builder.build());
-    }
-}
-```
-
-#### 3. Extending Conditions in the Controller
-
-Add server-side conditions to a client request.
-
-```java
-@RestController
-@RequestMapping("/api/posts")
-public class PostController {
-
-    private final PostService postService;
-
-    @PostMapping("/search")
-    public Page<Post> search(
-            @RequestBody SearchCondition<PostSearchDTO> clientCondition,
-            @AuthenticationPrincipal User currentUser
-    ) {
-        // Add server-side filters on top of the client's condition
-        SearchCondition<PostSearchDTO> serverCondition = SearchConditionBuilder
-            .from(clientCondition, PostSearchDTO.class)
-            .and(a -> a.notEquals("status", PostStatus.DELETED))
-            .and(a -> a.in("departmentId", currentUser.getAccessibleDepartments()))
-            .build();
-
-        return postService.findAllWithSearch(serverCondition);
-    }
-}
-```
-
-### Overriding Sort and Paging
-
-Change the sort order or paging of an existing condition.
-
-```java
-// Existing condition
-SearchCondition<PostSearchDTO> original = SearchConditionBuilder
-    .create(PostSearchDTO.class)
-    .where(w -> w.equals("status", PostStatus.PUBLISHED))
-    .sort(s -> s.asc("title"))
-    .page(0)
-    .size(10)
-    .build();
-
-// Change the sort order
-SearchCondition<PostSearchDTO> withNewSort = SearchConditionBuilder
-    .from(original, PostSearchDTO.class)
-    .sort(s -> s.desc("createdAt"))  // Override the sort
-    .build();
-
-// Change the paging
-SearchCondition<PostSearchDTO> withNewPage = SearchConditionBuilder
-    .from(original, PostSearchDTO.class)
-    .page(5)   // Override the page
-    .size(20)  // Override the size
-    .build();
-```
-
-### Notes
-
-- **Immutability**: `from()` always creates a new `SearchCondition` object. The original object is never modified.
-- **DTO class required**: You must pass the DTO class explicitly to `from()`, since it is used to run validation at `build()` time.
-- **Validation timing**: All conditions — both the original ones and any newly added ones — are validated together when `build()` is called.
-
-## Internationalization
-
-`MessageUtils` looks up the library's internal validation error messages. Its bundled resource bundles (`messages/message.properties`, `messages/message_ko.properties`) hold the locale-specific text, and the request locale comes from `LocaleContextHolder`.
-
-### Looking Up Built-in Library Messages
-
-```java
-import dev.simplecore.searchable.core.i18n.MessageUtils;
-
-String message = MessageUtils.getMessage("validator.field.not.found", new Object[]{"title", "PostSearchDTO"});
-// locale=ko: "필드 title를 PostSearchDTO에서 찾을 수 없습니다"
-// locale=en (default): "Field title not found in PostSearchDTO"
-```
-
-### Registering Custom Messages
-
-Spring Boot auto-configuration does not initialize `MessageUtils`. If `getMessage()` runs before `init()` is called, it locks onto a default `MessageSource` that only sees the library's built-in bundle. To add application messages, call `MessageUtils.init(...)` yourself at startup to register a `MessageSource`.
-
-```java
-@Configuration
-public class MessageConfig {
-
-    @PostConstruct
-    public void initMessageUtils() {
-        ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
-        messageSource.setBasenames("messages/message", "messages/custom-message");
-        messageSource.setDefaultEncoding("UTF-8");
-        messageSource.setFallbackToSystemLocale(false);
-        MessageUtils.init(messageSource);
-    }
-}
-```
-
-`messages/message` is the default bundle the library provides, and `messages/custom-message` is the bundle your application adds. Registering both bundles together lets you look up both the library's built-in keys and your custom keys through `MessageUtils.getMessage(...)`.
-
-```properties
-# messages/custom-message_ko.properties
-post.validation.title.required=제목은 필수입니다
-
-# messages/custom-message_en.properties
-post.validation.title.required=Title is required
-```
-
-```java
-@Service
-public class PostService extends DefaultSearchableService<Post, Long> {
-
-    public void validateAndSave(Post post) {
-        if (post.getTitle() == null || post.getTitle().trim().isEmpty()) {
-            throw new IllegalArgumentException(
-                MessageUtils.getMessage("post.validation.title.required")
-            );
-        }
-
-        save(post);
-    }
-}
-```
-
-## Composite Key Support
-
-For details on composite key entities, see:
-
-- [Two-Phase Query Optimization - Composite Key Support](two-phase-query-optimization.md#composite-key-support)
-- [Installation Guide - Composite Key Entity Configuration](installation.md#composite-key-entity-configuration)
-
-### Simple Usage Example
-
-```java
-// @IdClass approach
-@Service
-public class IdClassService extends DefaultSearchableService<TestIdClassEntity, TestIdClassEntity.CompositeKey> {
-    // Composite key optimization applies automatically
-}
-
-// @EmbeddedId approach
-@Service
-public class EmbeddedIdService extends DefaultSearchableService<TestCompositeKeyEntity, TestCompositeKeyEntity.CompositeKey> {
-    // Composite key optimization applies automatically
-}
-```
+Explicit fetch paths are server-controlled: `builder.fetchFields("author", "comments.author")` or `condition.setFetchFields(...)`. They do not grant filter permission. See [Relationships](/en/relationship-and-two-phase-query.md).
 
 ## Counting Rows per Time Bucket
 
-When a chart of activity over time sits beside a list, the two disagree as soon as they are counted under different conditions. `TimeBucketCounter` takes the same `SearchCondition` the list is read with, so narrowing the search narrows the chart with it.
-
-Counting happens in the database. Rows in the period are never carried into the application to be divided by time, so the amount of data transferred does not grow with the number of matching rows.
-
-### Time Axis Field Requirements
-
-The field the period is measured on must be of type `Instant`.
+A time bucket is one slice of a fixed period. `TimeBucketCounter` performs aggregation in the database under the supplied search condition. The starter supplies an injectable counter bean; core-only consumers can construct it:
 
 ```java
-@Entity
-@Table(name = "access_logs")
-public class AccessLog {
+import dev.simplecore.searchable.core.condition.SearchCondition;
+import dev.simplecore.searchable.core.service.bucket.TimeBucketCounter;
+import java.time.Instant;
+import java.util.List;
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    // The field the period is measured on
-    @Column(name = "occurred_at")
-    private Instant occurredAt;
-
-    @Enumerated(EnumType.STRING)
-    private AccessResult result;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "account_id")
-    private Account account;
-
-    // getters, setters...
-}
+TimeBucketCounter counter = new TimeBucketCounter(entityManager);
+List<Long> counts = counter.count(
+        Post.class, repository, new SearchCondition<>(), "createdAt",
+        Instant.parse("2026-10-01T00:00:00Z"),
+        Instant.parse("2026-11-01T00:00:00Z"), 31);
 ```
 
-As with every other search feature, the repository must extend `JpaSpecificationExecutor`.
+`timeAxisField` names a root entity attribute mapped as `Instant`. It is an entity field name, not a DTO alias or an arbitrary nested path. Validate any application input used to select it. Use `from < to` and 1–512 buckets. The return value always has exactly that many counts in chronological order, including zeros.
 
-```java
-@Repository
-public interface AccessLogRepository extends JpaRepository<AccessLog, Long>, JpaSpecificationExecutor<AccessLog> {
-}
-```
+The period and every bucket are half-open: `from` is included, `to` excluded, and an internal boundary belongs to the later bucket. Each matching root entity is counted once even if several joined child rows satisfy a filter. Null timestamps are excluded by the time predicate. Pagination, sorting and fetch selection do not select which matching rows are aggregated.
 
-### Usage Example
+For millisecond-aligned periods evenly divisible by the bucket count, supported dialects can group by a numeric epoch expression. Fractional-millisecond boundaries, uneven divisions, overflow-sensitive arithmetic, Oracle and unknown/unregistered dialects use conditional sums. Boundary calculations use integer nanoseconds; the database column and JDBC mapping still determine stored precision. A sub-millisecond query cannot recover precision that the database discarded.
 
-With the starter on the classpath, the `timeBucketCounter` bean is registered automatically — inject it and use it directly. See the [Auto-Configuration Guide](auto-configuration.md#time-bucket-counting) for the registration conditions.
+Numeric expressions are registered for PostgreSQL/CockroachDB, H2, MySQL/MariaDB, SQL Server and SQLite's integer-millisecond storage convention. This list describes code paths, not an integration-test guarantee for every database. Oracle deliberately uses conditional sums because a DATE cast loses fractional seconds. Custom SQLite mappings need their own verification.
 
-```java
-@Service
-public class AccessLogStatsService {
+Index the time axis and frequent scope predicates. Bucket count affects SQL expression size in the fallback path. Test representative windows and boundary timestamps on the actual database.
 
-    private final AccessLogRepository repository;
-    private final TimeBucketCounter timeBucketCounter;
+## Messages
 
-    public AccessLogStatsService(AccessLogRepository repository, TimeBucketCounter timeBucketCounter) {
-        this.repository = repository;
-        this.timeBucketCounter = timeBucketCounter;
-    }
-
-    // Divides the last 24 hours into 24 one-hour buckets
-    public List<Long> hourlyCounts(SearchCondition<AccessLogSearchDTO> condition, Instant now) {
-        Instant to = now.truncatedTo(ChronoUnit.HOURS).plus(1, ChronoUnit.HOURS);
-        Instant from = to.minus(24, ChronoUnit.HOURS);
-
-        return timeBucketCounter.count(
-                AccessLog.class,
-                repository,
-                condition,
-                "occurredAt",
-                from,
-                to,
-                24);
-    }
-}
-```
-
-When a controller returns the list and the chart together, pass the one parsed search condition to both.
-
-```java
-@GetMapping("/api/access-logs")
-public AccessLogPageResponse search(@SearchableParams(AccessLogSearchDTO.class) SearchCondition<AccessLogSearchDTO> condition,
-                                    @RequestParam Instant from,
-                                    @RequestParam Instant to) {
-    Page<AccessLog> page = accessLogService.findAllWithSearch(condition);
-    List<Long> counts = timeBucketCounter.count(
-            AccessLog.class, repository, condition, "occurredAt", from, to, 48);
-
-    return new AccessLogPageResponse(page, counts);
-}
-```
-
-### Counting Rules
-
-- **The period includes its start and excludes its end.** A row landing exactly on `to` belongs to the next period, so reading consecutive periods never counts a row twice.
-- **Every bucket is divided the same way.** A row on a bucket boundary is counted once, by the later bucket.
-- **Bucket width is computed from the whole period.** When the period does not divide evenly, the remainder spreads across the buckets instead of piling into the last one.
-- **The result always has exactly as many entries as buckets requested**, oldest first. A bucket with no matching rows holds `0`.
-- **The bucket count must be between 1 and 512.** A value outside that range, or a `from` that is not before `to`, raises `IllegalArgumentException`.
-
-### Indexing
-
-The query slices the period by the time axis field, so without an index on that column every chart reads the whole table. A composite index covering the search condition alongside it helps further.
-
-```sql
-CREATE INDEX idx_access_logs_occurred_at ON access_logs (occurred_at);
-```
-
-The shape of the counting query depends on the database. See [Auto-Configuration Guide - Time Bucket Counting](auto-configuration.md#time-bucket-counting) for details.
+`MessageUtils` uses the library's `messages/message` bundles and Spring's locale context. Applications can translate errors at the HTTP boundary or configure their own exception response model. A message string is not a stable error code; base programmatic handling on the exception type and application contract.

@@ -12,10 +12,10 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>S</text></svg>">
 
   <!-- Theme -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@5.1.0/dist/themes/core.min.css">
 
   <!-- Prism syntax highlighting -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1/themes/prism-tomorrow.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/themes/prism-tomorrow.min.css">
 
   <style>
     :root {
@@ -114,45 +114,8 @@
       }
     }
 
-    /* Version selector styling */
-    .version-selector {
-      padding: 10px 20px;
-      border-bottom: 1px solid #eee;
-    }
-
-    .version-selector select {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      background-color: #fff;
-      font-size: 14px;
-      cursor: pointer;
-      color: #333;
-    }
-
-    .version-selector select:hover {
-      border-color: var(--theme-color);
-    }
-
-    .version-selector select:focus {
-      outline: none;
-      border-color: var(--theme-color);
-      box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.2);
-    }
-
-    .version-selector label {
-      display: block;
-      font-size: 12px;
-      color: #999;
-      margin-bottom: 4px;
-    }
-
-    .version-snapshot {
-      color: #e67e22;
-      font-weight: 500;
-    }
   </style>
+<link rel="stylesheet" href="assets/version-selector.css">
 </head>
 <body>
   <div id="app">Loading...</div>
@@ -196,8 +159,8 @@
           '/': 'No results'
         },
         depth: 3,
-        hideOtherSidebarContent: false,
-        namespace: 'searchable-jpa-docs'
+        namespace: 'searchable-jpa-docs-' + window.location.pathname.replace(/index\.html$/, ''),
+        pathNamespaces: ['/en', '/ko']
       },
 
       // Pagination - will be set dynamically based on language
@@ -221,9 +184,6 @@
         sync: true,
         theme: 'classic'
       },
-
-      // Theme color
-      themeColor: '#ea580c',
 
       // Markdown configuration
       markdown: {
@@ -274,6 +234,7 @@
             var lang = getLang(vm.route.path);
             var texts = i18n[lang] || i18n.en;
 
+            document.documentElement.lang = lang;
             // Update pagination buttons after each page load
             var prevBtn = document.querySelector('.pagination-item--previous .pagination-item-title');
             var nextBtn = document.querySelector('.pagination-item--next .pagination-item-title');
@@ -283,7 +244,7 @@
         },
         // Footer with edit link
         function(hook, vm) {
-          var editTexts = { ko: 'GitHub에서 편집', en: 'Edit on GitHub' };
+          var editTexts = { ko: 'GitHub에서 원본 보기', en: 'View source on GitHub' };
 
           hook.beforeEach(function(html) {
             if (/githubusercontent\.com/.test(vm.route.file)) {
@@ -291,10 +252,14 @@
             }
             var lang = (vm.route.path && vm.route.path.startsWith('/ko/')) ? 'ko' : 'en';
             var editText = editTexts[lang] || editTexts.en;
-            var url = 'https://github.com/simplecore-inc/searchable-jpa/blob/master/docs/' + vm.route.file;
+            var file = vm.route.file.replace(/^\/+/, '');
+            if (!/^(en|ko)\/[A-Za-z0-9_-]+\.md$/.test(file)) return html;
+            var release = /\/(\d+\.\d+\.\d+)\/(?:index\.html)?$/.exec(window.location.pathname);
+            var ref = release ? 'v' + release[1] : 'master';
+            var url = 'https://github.com/simplecore-inc/searchable-jpa/blob/' + ref + '/docs/' + file;
             var editHtml = '\n\n---\n\n' +
               '<div style="text-align: right; font-size: 0.9em; color: #999;">' +
-              '<a href="' + url + '" target="_blank" style="color: #999;">' + editText + '</a>' +
+              '<a href="' + url + '" target="_blank" rel="noopener noreferrer" style="color: #999;">' + editText + '</a>' +
               '</div>';
             return html + editHtml;
           });
@@ -303,27 +268,29 @@
     }
   </script>
 
-  <!-- Docsify core -->
-  <script src="https://cdn.jsdelivr.net/npm/docsify@4"></script>
+  <!-- Version selector -->
+<script src="assets/version-selector.js"></script>
+<!-- Docsify core -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify@5.1.0"></script>
 
   <!-- Plugins -->
-  <script src="https://cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/docsify-pagination/dist/docsify-pagination.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/docsify-tabs@1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@5.1.0/dist/plugins/search.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-pagination@2.10.1/dist/docsify-pagination.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-copy-code@3.0.2/dist/docsify-copy-code.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-tabs@1.6.3"></script>
 
   <!-- Syntax highlighting -->
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-java.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-yaml.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-groovy.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-properties.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-sql.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-java.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-yaml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-groovy.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-properties.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-sql.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.30.0/components/prism-kotlin.min.js"></script>
 
   <!-- Mermaid diagrams -->
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.2.0/dist/mermaid.min.js"></script>
   <script>
     mermaid.initialize({ startOnLoad: false });
     window.$docsify.markdown = {
@@ -337,101 +304,7 @@
       }
     };
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/docsify-mermaid@2/dist/docsify-mermaid.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-mermaid@2.0.1/dist/docsify-mermaid.js"></script>
 
-  <!-- Version selector -->
-  <script>
-    (function() {
-      // Get current version from URL path
-      function getCurrentVersion() {
-        var path = window.location.pathname;
-        var match = path.match(/^\/([^\/]+)\//);
-        return match ? match[1] : null;
-      }
-
-      // Load versions and create selector
-      function initVersionSelector() {
-        var currentVersion = getCurrentVersion();
-        if (!currentVersion) return;
-
-        fetch('../versions.json')
-          .then(function(response) {
-            if (!response.ok) throw new Error('versions.json not found');
-            return response.json();
-          })
-          .then(function(versions) {
-            createVersionSelector(versions, currentVersion);
-          })
-          .catch(function(err) {
-            console.log('Version selector not available:', err.message);
-          });
-      }
-
-      function createVersionSelector(versions, currentVersion) {
-        var sidebar = document.querySelector('.sidebar');
-        if (!sidebar) {
-          setTimeout(function() { createVersionSelector(versions, currentVersion); }, 100);
-          return;
-        }
-
-        // Check if already exists
-        if (document.querySelector('.version-selector')) return;
-
-        var container = document.createElement('div');
-        container.className = 'version-selector';
-
-        var label = document.createElement('label');
-        label.textContent = 'Version';
-
-        var select = document.createElement('select');
-        select.id = 'version-select';
-
-        // Add SNAPSHOT first if exists
-        if (versions.snapshot) {
-          var opt = document.createElement('option');
-          opt.value = versions.snapshot;
-          opt.textContent = versions.snapshot + ' (SNAPSHOT)';
-          opt.className = 'version-snapshot';
-          if (versions.snapshot === currentVersion) opt.selected = true;
-          select.appendChild(opt);
-        }
-
-        // Add releases (already sorted newest first)
-        if (versions.releases && versions.releases.length > 0) {
-          versions.releases.forEach(function(version) {
-            var opt = document.createElement('option');
-            opt.value = version;
-            opt.textContent = version;
-            if (version === currentVersion) opt.selected = true;
-            select.appendChild(opt);
-          });
-        }
-
-        select.addEventListener('change', function() {
-          var newVersion = this.value;
-          var currentPath = window.location.hash || '#/';
-          window.location.href = '../' + newVersion + '/' + currentPath;
-        });
-
-        container.appendChild(label);
-        container.appendChild(select);
-
-        // Insert after app-name
-        var appName = sidebar.querySelector('.app-name');
-        if (appName) {
-          appName.parentNode.insertBefore(container, appName.nextSibling);
-        } else {
-          sidebar.insertBefore(container, sidebar.firstChild);
-        }
-      }
-
-      // Initialize when DOM is ready
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initVersionSelector);
-      } else {
-        setTimeout(initVersionSelector, 500);
-      }
-    })();
-  </script>
 </body>
 </html>
