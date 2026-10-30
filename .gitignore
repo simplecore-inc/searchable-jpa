@@ -1,11 +1,7 @@
 .gradle
 build/
-gradle/
-gradlew
-gradlew.bat
 gradle.properties
 gradle-local.properties
-gradle-wrapper.properties
 
 ### IntelliJ IDEA ###
 .idea/
@@ -51,3 +47,7 @@ CLAUDE.md
 test-data
 build-docs/
 .coregraph/
+
+### Documentation checks ###
+node_modules/
+.e2e/

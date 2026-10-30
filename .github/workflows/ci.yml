@@ -3,30 +3,31 @@ name: CI
 on:
   push:
     branches: [master, spring-boot-3x]
+  pull_request:
+    branches: [master, spring-boot-3x]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Read the Gradle version this branch builds with
         id: gradle
         run: echo "version=$(grep -oP "gradleVersion = '\K[^']+" build.gradle)" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6.1.0
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6.4.1
         with:
           gradle-version: ${{ steps.gradle.outputs.version }}
 
       - name: Build and test
         run: |
-          gradle wrapper
-          ./gradlew clean build
+          ./gradlew clean build performanceTest

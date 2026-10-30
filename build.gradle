@@ -12,12 +12,51 @@ ext {
     // Dependency versions - only for dependencies not managed by Spring Boot
     versions = [
         // SpringDoc OpenAPI versions (not managed by Spring Boot)
-        springdocOpenapiStarter: '2.5.0',
-        springdocOpenapiLegacy: '1.7.0',
+        springdocOpenapiStarter: '2.10.0',
         
         // Other dependencies not managed by Spring Boot
-        modelmapper: '3.2.0',
-        mssqlJdbc: '12.4.2.jre11'
+        modelmapper: '3.2.8',
+        mssqlJdbc: '13.6.1.jre11'
+    ]
+
+    // Stable releases verified against Maven Central on 2026-10-30.
+    // Explicit declarations also override the BOM automatically imported by the Boot plugin.
+    stableDependencyVersions = [
+        'ch.qos.logback:logback-classic': '1.6.6',
+        'ch.qos.logback:logback-core': '1.6.6',
+        'com.fasterxml:classmate': '1.8.0',
+        'com.sun.istack:istack-commons-runtime': '4.2.0',
+        'com.zaxxer:HikariCP': '7.1.0',
+        'commons-logging:commons-logging': '1.4.0',
+        'net.bytebuddy:byte-buddy': '1.18.16',
+        'net.bytebuddy:byte-buddy-agent': '1.18.16',
+        'org.apache.commons:commons-lang3': '3.21.0',
+        'org.aspectj:aspectjweaver': '1.9.26',
+        'org.hibernate.orm:hibernate-core': '6.6.59.Final',
+        'org.yaml:snakeyaml': '2.7',
+        'com.fasterxml.jackson.core:jackson-annotations': '2.22',
+        'com.fasterxml.jackson.core:jackson-core': '2.22.4',
+        'com.fasterxml.jackson.core:jackson-databind': '2.22.4',
+        'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml': '2.22.4',
+        'com.fasterxml.jackson.datatype:jackson-datatype-jsr310': '2.22.4',
+        'tools.jackson.core:jackson-core': '3.2.4',
+        'tools.jackson.core:jackson-databind': '3.2.4',
+        'org.apache.logging.log4j:log4j-api': '2.26.1',
+        'org.apache.logging.log4j:log4j-to-slf4j': '2.26.1',
+        'com.jayway.jsonpath:json-path': '3.0.0',
+        'org.mockito:mockito-core': '5.24.0',
+        'org.mockito:mockito-junit-jupiter': '5.24.0',
+        'org.xmlunit:xmlunit-core': '2.14.0',
+        'org.objenesis:objenesis': '3.6',
+        'org.ow2.asm:asm': '9.11.1',
+        'com.h2database:h2': '2.5.252',
+        'org.junit.jupiter:junit-jupiter': '6.1.3',
+        'org.junit.jupiter:junit-jupiter-api': '6.1.3',
+        'org.junit.jupiter:junit-jupiter-engine': '6.1.3',
+        'org.junit.jupiter:junit-jupiter-params': '6.1.3',
+        'org.junit.platform:junit-platform-launcher': '6.1.3',
+        'org.junit.platform:junit-platform-commons': '6.1.3',
+        'org.junit.platform:junit-platform-engine': '6.1.3'
     ]
 }
 
@@ -31,16 +70,13 @@ allprojects {
     afterEvaluate {
         def versionStr = version.toString()
 
-        if (versionStr.startsWith('1.')) {
-            // 1.x versions: Spring Boot 3.2.x+ required
-            if (!springBootVersion.startsWith('3.')) {
-                throw new GradleException("Version ${version} requires Spring Boot 3.2.x+, but current version is ${springBootVersion}")
-            }
-        } else if (versionStr.startsWith('0.1.')) {
-            // 0.1.x versions: Spring Boot 2.7.x required
-            if (!springBootVersion.startsWith('2.7')) {
-                throw new GradleException("Version ${version} requires Spring Boot 2.7.x, but current version is ${springBootVersion}")
-            }
+        // Each release line is bound to one Spring Boot generation:
+        // 2.x -> Boot 4 (master), 1.x -> Boot 3 (spring-boot-3x), 0.1.x -> Boot 2.7 (spring-boot-2x)
+        if (!versionStr.startsWith('1.')) {
+            throw new GradleException("This branch builds the 1.x line only, but the version is ${version}")
+        }
+        if (!rootProject.springBootVersion.startsWith('3.')) {
+            throw new GradleException("Version ${version} requires Spring Boot 3.x, but current version is ${rootProject.springBootVersion}")
         }
     }
 }
@@ -52,19 +88,23 @@ subprojects {
     
     dependencyManagement {
         imports {
-            mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+            mavenBom "org.springframework.boot:spring-boot-dependencies:${rootProject.springBootVersion}"
+            mavenBom 'com.fasterxml.jackson:jackson-bom:2.22.4'
+            mavenBom 'tools.jackson:jackson-bom:3.2.4'
+            mavenBom 'org.apache.logging.log4j:log4j-bom:2.26.1' 
         }
         
         dependencies {
+            rootProject.stableDependencyVersions.each { coordinate, stableVersion ->
+                dependency "${coordinate}:${stableVersion}"
+            }
             // SpringDoc OpenAPI versions (not managed by Spring Boot)
-            dependency "org.springdoc:springdoc-openapi-starter-webmvc-ui:${versions.springdocOpenapiStarter}"
-            dependency "org.springdoc:springdoc-openapi-starter-webmvc-api:${versions.springdocOpenapiStarter}"
-            dependency "org.springdoc:springdoc-openapi-ui:${versions.springdocOpenapiLegacy}"
-            dependency "org.springdoc:springdoc-openapi-webmvc-core:${versions.springdocOpenapiLegacy}"
+            dependency "org.springdoc:springdoc-openapi-starter-webmvc-ui:${rootProject.versions.springdocOpenapiStarter}"
+            dependency "org.springdoc:springdoc-openapi-starter-webmvc-api:${rootProject.versions.springdocOpenapiStarter}"
             
             // Other dependencies not managed by Spring Boot
-            dependency "org.modelmapper:modelmapper:${versions.modelmapper}"
-            dependency "com.microsoft.sqlserver:mssql-jdbc:${versions.mssqlJdbc}"
+            dependency "org.modelmapper:modelmapper:${rootProject.versions.modelmapper}"
+            dependency "com.microsoft.sqlserver:mssql-jdbc:${rootProject.versions.mssqlJdbc}"
         }
     }
 
@@ -111,8 +151,8 @@ subprojects {
 
                     licenses {
                         license {
-                            name = 'The Apache License, Version 2.0'
-                            url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                            name = 'SimpleCORE License 1.0 (SCL-1.0)'
+                            url = 'https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE'
                         }
                     }
                     developers {
@@ -135,15 +175,9 @@ subprojects {
                         }
 
                         // Spring Boot version compatibility information
-                        if (project.version.toString().startsWith('1.')) {
-                            properties.appendNode('spring-boot.version.required', '[3.2.0,4.0.0)')
-                            properties.appendNode('jakarta.version.required', '9+')
-                            properties.appendNode('javax.version.supported', 'false')
-                        } else if (project.version.toString().startsWith('0.1.')) {
-                            properties.appendNode('spring-boot.version.required', '[2.7.0,3.0.0)')
-                            properties.appendNode('jakarta.version.supported', 'false')
-                            properties.appendNode('javax.version.required', 'true')
-                        }
+                        properties.appendNode('spring-boot.version.required', '[3.2.0,4.0.0)')
+                        properties.appendNode('jakarta.version.required', '9+')
+                        properties.appendNode('javax.version.supported', 'false')
                     }
                 }
             }
@@ -185,6 +219,7 @@ subprojects {
 }
 
 wrapper {
-    gradleVersion = '8.5'
+    gradleVersion = '9.8.2'
     distributionType = Wrapper.DistributionType.BIN
+    distributionSha256Sum = '21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607'
 }

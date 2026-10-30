@@ -1,21 +1,21 @@
 package dev.simplecore.searchable.test.fixture;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-
-import javax.sql.DataSource;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Test Data Manager
@@ -38,7 +38,7 @@ public class TestDataManager {
     @Autowired
     private DataSource dataSource;
     
-    private static boolean h2DataInitialized = false;
+
     
     /**
      * Initialize test data based on database type
@@ -65,7 +65,7 @@ public class TestDataManager {
      * H2 database initialization - once per test session
      */
     private void initializeH2Data() {
-        if (h2DataInitialized) {
+        if (!isDataEmpty()) {
             log.info("H2 test data already initialized, skipping...");
             return;
         }
@@ -74,7 +74,7 @@ public class TestDataManager {
         
         // H2 auto-creates tables via JPA, just load data
         loadSmallDataset();
-        h2DataInitialized = true;
+
         
         log.info("H2 test data initialization complete");
     }
@@ -101,9 +101,11 @@ public class TestDataManager {
      * Detect database type
      */
     private DatabaseType detectDatabaseType() throws SQLException {
-        DatabaseMetaData metaData = dataSource.getConnection().getMetaData();
-        String databaseProductName = metaData.getDatabaseProductName().toLowerCase();
-        
+        String databaseProductName;
+        try (Connection connection = dataSource.getConnection()) {
+            databaseProductName = connection.getMetaData().getDatabaseProductName().toLowerCase();
+        }
+
         if (databaseProductName.contains("h2")) {
             return DatabaseType.H2;
         } else if (databaseProductName.contains("microsoft") || databaseProductName.contains("sql server")) {
