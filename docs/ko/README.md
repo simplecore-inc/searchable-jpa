@@ -12,7 +12,7 @@ Searchable JPA는 Spring Data JPA에 DTO 기반 검색, 정렬, 페이지 조회
 | 1.x | 3.2.x–3.5.x | `spring-boot-3x` | 유지보수 |
 | 0.1.x | 2.7.x | `spring-boot-2x` | 유지보수 종료 |
 
-현재 소스는 Java 17, Spring Boot 3.5.16, Hibernate 6.6.59.Final로 `1.1.3`을 빌드합니다. 사용하는 의존성과 일치하는 문서 버전을 선택하세요. 개발 문서에는 이전 릴리스에 없는 수정 사항이 포함될 수 있습니다.
+현재 소스는 Java 17, Spring Boot 3.5.16, Hibernate 6.6.59.Final로 `1.1.4-SNAPSHOT`을 빌드합니다. 사용하는 의존성과 일치하는 문서 버전을 선택하세요. 개발 문서에는 이전 릴리스에 없는 수정 사항이 포함될 수 있습니다.
 
 ## 주요 기능과 적용 범위
 

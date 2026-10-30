@@ -1,6 +1,6 @@
 # Installation
 
-This guide describes the `1.1.3` source line. Dependency versions below were checked on 2026-10-30. A version ending in `-SNAPSHOT` is a development build, not a stable release.
+This guide describes the `1.1.4-SNAPSHOT` source line. Dependency versions below were checked on 2026-10-30. A version ending in `-SNAPSHOT` is a development build, not a stable release.
 
 ## Compatibility
 
@@ -32,7 +32,7 @@ Build with the committed Gradle wrapper and Java 17 or later:
 ./gradlew check performanceTest publishToMavenLocal
 ```
 
-This installs all three modules under `~/.m2/repository/dev/simplecore/searchable/<artifact>/1.1.3/`. The command performs no Git tagging or remote publication. Repeating it replaces the local snapshot.
+This installs all three modules under `~/.m2/repository/dev/simplecore/searchable/<artifact>/1.1.4-SNAPSHOT/`. The command performs no Git tagging or remote publication. Repeating it replaces the local snapshot.
 
 A Gradle consumer can resolve the local snapshot first:
 
@@ -43,7 +43,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.1.3'
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.1.4-SNAPSHOT'
 }
 ```
 
@@ -55,7 +55,7 @@ A Maven consumer uses its local repository automatically:
 <dependency>
   <groupId>dev.simplecore.searchable</groupId>
   <artifactId>spring-boot-starter-searchable-jpa</artifactId>
-  <version>1.1.3</version>
+  <version>1.1.4-SNAPSHOT</version>
 </dependency>
 ```
 

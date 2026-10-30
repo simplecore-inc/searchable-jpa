@@ -1,6 +1,6 @@
 # Auto Configuration
 
-The starter registers JPA defaults before Hibernate's auto-configuration and an OpenAPI operation customizer in a servlet application. All settings below are optional. This page describes `1.1.3`.
+The starter registers JPA defaults before Hibernate's auto-configuration and an OpenAPI operation customizer in a servlet application. All settings below are optional. This page describes `1.1.4-SNAPSHOT`.
 
 ## Configuration example
 

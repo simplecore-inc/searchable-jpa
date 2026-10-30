@@ -1,6 +1,6 @@
 # Basic Usage
 
-This complete search example targets the `1.1.3` starter. Put each public class in its own file under the application's component/entity scan. Configure a datasource and an ordinary `@SpringBootApplication` as usual. Field names are validated at runtime; string-based field paths are not checked by the Java compiler.
+This complete search example targets the `1.1.4-SNAPSHOT` starter. Put each public class in its own file under the application's component/entity scan. Configure a datasource and an ordinary `@SpringBootApplication` as usual. Field names are validated at runtime; string-based field paths are not checked by the Java compiler.
 
 ## Entity
 
