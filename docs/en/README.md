@@ -12,7 +12,7 @@ Searchable JPA adds DTO-controlled filtering, sorting and pagination to Spring D
 | 1.x | 3.2.x–3.5.x | `spring-boot-3x` | Maintained |
 | 0.1.x | 2.7.x | `spring-boot-2x` | Unmaintained |
 
-This source tree builds `2.0.0-SNAPSHOT` with Java 17, Spring Boot 4.1.2 and Hibernate 7.4.14.Final. Select the documentation version that matches your dependency. The development documentation can describe fixes that are absent from earlier releases.
+This source tree builds `2.0.0` with Java 17, Spring Boot 4.1.2 and Hibernate 7.4.14.Final. Select the documentation version that matches your dependency. The development documentation can describe fixes that are absent from earlier releases.
 
 ## Features and boundaries
 

@@ -1,6 +1,6 @@
 # 설치
 
-이 문서는 `2.0.0-SNAPSHOT` 소스 기준입니다. 의존성 버전은 2026년 10월 30일에 확인했습니다. `-SNAPSHOT`으로 끝나는 버전은 정식 릴리스가 아닌 개발 빌드입니다.
+이 문서는 `2.0.0` 소스 기준입니다. 의존성 버전은 2026년 10월 30일에 확인했습니다. `-SNAPSHOT`으로 끝나는 버전은 정식 릴리스가 아닌 개발 빌드입니다.
 
 ## 호환성
 
@@ -32,7 +32,7 @@ Spring MVC 애플리케이션에서는 starter를 사용하세요. 데이터소�
 ./gradlew check performanceTest publishToMavenLocal
 ```
 
-세 모듈을 `~/.m2/repository/dev/simplecore/searchable/<artifact>/2.0.0-SNAPSHOT/`에 설치합니다. Git 태그나 원격 게시 작업은 수행하지 않습니다. 명령을 다시 실행하면 로컬 스냅샷을 갱신합니다.
+세 모듈을 `~/.m2/repository/dev/simplecore/searchable/<artifact>/2.0.0/`에 설치합니다. Git 태그나 원격 게시 작업은 수행하지 않습니다. 명령을 다시 실행하면 로컬 스냅샷을 갱신합니다.
 
 Gradle 소비자 프로젝트에서는 로컬 저장소를 먼저 조회하도록 설정하세요.
 
@@ -43,7 +43,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:2.0.0-SNAPSHOT'
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:2.0.0'
 }
 ```
 
@@ -55,7 +55,7 @@ Maven은 로컬 저장소를 자동으로 조회합니다.
 <dependency>
   <groupId>dev.simplecore.searchable</groupId>
   <artifactId>spring-boot-starter-searchable-jpa</artifactId>
-  <version>2.0.0-SNAPSHOT</version>
+  <version>2.0.0</version>
 </dependency>
 ```
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0-SNAPSHOT (Unreleased)
+## 2.0.0
 
 The same corrections are maintained on the Boot 4 and Boot 3 lines; each line retains its framework major version.
 

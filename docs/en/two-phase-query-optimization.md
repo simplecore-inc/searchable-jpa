@@ -1,6 +1,6 @@
 # Two-Phase Query Optimization
 
-The `2.0.0-SNAPSHOT` service chooses a query strategy from entity keys and the paths used by filters, sorts and fetches. Two-phase execution is not mandatory for every search.
+The `2.0.0` service chooses a query strategy from entity keys and the paths used by filters, sorts and fetches. Two-phase execution is not mandatory for every search.
 
 ## Strategy selection
 
