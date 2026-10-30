@@ -664,23 +664,22 @@ class SearchConditionTest {
                     .build();
 
             // when
-            List<SearchCondition.Node> nodes = condition.getNodes();
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
 
-            // then - orEquals does not create a nested group, so conditions are flattened
-            assertThat(nodes).hasSize(3);
+            assertThat(nodes).hasSize(2);
 
-            // First: id condition
-            SearchCondition.Condition idCondition = (SearchCondition.Condition) nodes.get(0);
+            SearchCondition.Condition idCondition = (SearchCondition.Condition) condition.getNodes().get(0);
             assertThat(idCondition.getField()).isEqualTo("id");
 
-            // Second: lessThan condition with AND operator
-            SearchCondition.Condition lessThanCondition = (SearchCondition.Condition) nodes.get(1);
+            SearchCondition.Condition lessThanCondition = (SearchCondition.Condition) nodes.get(0);
             assertThat(lessThanCondition.getField()).isEqualTo("age");
             assertThat(lessThanCondition.getSearchOperator()).isEqualTo(SearchOperator.LESS_THAN);
-            assertThat(lessThanCondition.getOperator()).isEqualTo(LogicalOperator.AND);
+            assertThat(lessThanCondition.getOperator()).isNull();
 
-            // Third: orEquals condition with OR operator
-            SearchCondition.Condition orEqualsCondition = (SearchCondition.Condition) nodes.get(2);
+            SearchCondition.Condition orEqualsCondition = (SearchCondition.Condition) nodes.get(1);
             assertThat(orEqualsCondition.getField()).isEqualTo("age");
             assertThat(orEqualsCondition.getSearchOperator()).isEqualTo(SearchOperator.EQUALS);
             assertThat(orEqualsCondition.getOperator()).isEqualTo(LogicalOperator.OR);
@@ -698,12 +697,15 @@ class SearchConditionTest {
                     .build();
 
             // when
-            List<SearchCondition.Node> nodes = condition.getNodes();
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
 
             // then
-            assertThat(nodes).hasSize(3);
+            assertThat(nodes).hasSize(2);
 
-            SearchCondition.Condition orGreaterThanCondition = (SearchCondition.Condition) nodes.get(2);
+            SearchCondition.Condition orGreaterThanCondition = (SearchCondition.Condition) nodes.get(1);
             assertThat(orGreaterThanCondition.getField()).isEqualTo("age");
             assertThat(orGreaterThanCondition.getSearchOperator()).isEqualTo(SearchOperator.GREATER_THAN);
             assertThat(orGreaterThanCondition.getOperator()).isEqualTo(LogicalOperator.OR);
@@ -722,19 +724,22 @@ class SearchConditionTest {
                     .build();
 
             // when
-            List<SearchCondition.Node> nodes = condition.getNodes();
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
 
             // then - all conditions should be present
-            assertThat(nodes).hasSize(4);
+            assertThat(nodes).hasSize(3);
 
             // Validate all conditions
-            assertThat(((SearchCondition.Condition) nodes.get(0)).getField()).isEqualTo("id");
-            assertThat(((SearchCondition.Condition) nodes.get(1)).getField()).isEqualTo("age");
-            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.LESS_THAN);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.EQUALS);
+            assertThat(((SearchCondition.Condition) condition.getNodes().get(0)).getField()).isEqualTo("id");
+            assertThat(((SearchCondition.Condition) nodes.get(0)).getField()).isEqualTo("age");
+            assertThat(((SearchCondition.Condition) nodes.get(0)).getSearchOperator()).isEqualTo(SearchOperator.LESS_THAN);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.EQUALS);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.GREATER_THAN);
             assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
-            assertThat(((SearchCondition.Condition) nodes.get(3)).getSearchOperator()).isEqualTo(SearchOperator.GREATER_THAN);
-            assertThat(((SearchCondition.Condition) nodes.get(3)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -793,17 +798,13 @@ class SearchConditionTest {
                     .build();
 
             // when
-            List<SearchCondition.Node> nodes = condition.getNodes();
-
-            // then - should have 5 nodes: id, lessThanOrEqualTo, orIsNull, greaterThan, orIsNull
-            assertThat(nodes).hasSize(5);
-
-            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.LESS_THAN_OR_EQUAL_TO);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.IS_NULL);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
-            assertThat(((SearchCondition.Condition) nodes.get(3)).getSearchOperator()).isEqualTo(SearchOperator.GREATER_THAN);
-            assertThat(((SearchCondition.Condition) nodes.get(4)).getSearchOperator()).isEqualTo(SearchOperator.IS_NULL);
-            assertThat(((SearchCondition.Condition) nodes.get(4)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(3);
+            for (int i = 1; i <= 2; i++) {
+                SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(i);
+                assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+                assertThat(group.getNodes()).hasSize(2);
+                assertThat(group.getNodes().get(1).getOperator()).isEqualTo(LogicalOperator.OR);
+            }
         }
 
         // ========== Additional orXXX() Method Tests ==========
@@ -816,10 +817,13 @@ class SearchConditionTest {
                     .and(a -> a.equals("status", "ACTIVE").orNotEquals("status", "DELETED"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.NOT_EQUALS);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.NOT_EQUALS);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -830,10 +834,13 @@ class SearchConditionTest {
                     .and(a -> a.lessThan("age", 20).orGreaterThanOrEqualTo("age", 50))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.GREATER_THAN_OR_EQUAL_TO);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.GREATER_THAN_OR_EQUAL_TO);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -844,10 +851,13 @@ class SearchConditionTest {
                     .and(a -> a.greaterThan("age", 50).orLessThan("age", 20))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.LESS_THAN);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.LESS_THAN);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -858,10 +868,13 @@ class SearchConditionTest {
                     .and(a -> a.greaterThan("age", 50).orLessThanOrEqualTo("age", 20))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.LESS_THAN_OR_EQUAL_TO);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.LESS_THAN_OR_EQUAL_TO);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -872,10 +885,13 @@ class SearchConditionTest {
                     .and(a -> a.startsWith("name", "John").orContains("name", "Smith"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.CONTAINS);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.CONTAINS);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -886,10 +902,13 @@ class SearchConditionTest {
                     .and(a -> a.contains("name", "John").orNotContains("name", "Doe"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.NOT_CONTAINS);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.NOT_CONTAINS);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -900,10 +919,13 @@ class SearchConditionTest {
                     .and(a -> a.endsWith("name", "son").orStartsWith("name", "John"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.STARTS_WITH);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.STARTS_WITH);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -914,10 +936,13 @@ class SearchConditionTest {
                     .and(a -> a.startsWith("name", "John").orNotStartsWith("name", "Jane"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.NOT_STARTS_WITH);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.NOT_STARTS_WITH);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -928,10 +953,13 @@ class SearchConditionTest {
                     .and(a -> a.startsWith("name", "John").orEndsWith("name", "son"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.ENDS_WITH);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.ENDS_WITH);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -942,10 +970,13 @@ class SearchConditionTest {
                     .and(a -> a.endsWith("name", "son").orNotEndsWith("name", "ley"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.NOT_ENDS_WITH);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.NOT_ENDS_WITH);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -956,10 +987,13 @@ class SearchConditionTest {
                     .and(a -> a.greaterThan("age", 20).orIsNull("age"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.IS_NULL);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.IS_NULL);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -970,10 +1004,13 @@ class SearchConditionTest {
                     .and(a -> a.isNull("age").orIsNotNull("score"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.IS_NOT_NULL);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.IS_NOT_NULL);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -984,10 +1021,13 @@ class SearchConditionTest {
                     .and(a -> a.equals("status", "ACTIVE").orIn("status", Arrays.asList("PENDING", "PROCESSING")))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.IN);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.IN);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -998,10 +1038,13 @@ class SearchConditionTest {
                     .and(a -> a.equals("status", "ACTIVE").orNotIn("status", Arrays.asList("DELETED", "ARCHIVED")))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.NOT_IN);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.NOT_IN);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -1012,10 +1055,13 @@ class SearchConditionTest {
                     .and(a -> a.lessThan("age", 20).orBetween("age", 50, 60))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.BETWEEN);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.BETWEEN);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -1026,10 +1072,13 @@ class SearchConditionTest {
                     .and(a -> a.between("age", 30, 40).orNotBetween("age", 50, 60))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(3);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getSearchOperator()).isEqualTo(SearchOperator.NOT_BETWEEN);
-            assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(2);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getSearchOperator()).isEqualTo(SearchOperator.NOT_BETWEEN);
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         // ========== Edge Case Tests ==========
@@ -1046,13 +1095,16 @@ class SearchConditionTest {
                             .orIsNull("age"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(5);
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(4);
 
             // All orXXX() conditions should have OR operator
+            assertThat(((SearchCondition.Condition) nodes.get(1)).getOperator()).isEqualTo(LogicalOperator.OR);
             assertThat(((SearchCondition.Condition) nodes.get(2)).getOperator()).isEqualTo(LogicalOperator.OR);
             assertThat(((SearchCondition.Condition) nodes.get(3)).getOperator()).isEqualTo(LogicalOperator.OR);
-            assertThat(((SearchCondition.Condition) nodes.get(4)).getOperator()).isEqualTo(LogicalOperator.OR);
         }
 
         @Test
@@ -1126,8 +1178,11 @@ class SearchConditionTest {
                     .and(a -> a.equals("age", 25).orEquals("age", 30).orEquals("age", 35))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(4); // id, age=25, age=30, age=35
+            assertThat(condition.getNodes()).hasSize(2);
+            SearchCondition.Group group = (SearchCondition.Group) condition.getNodes().get(1);
+            assertThat(group.getOperator()).isEqualTo(LogicalOperator.AND);
+            List<SearchCondition.Node> nodes = group.getNodes();
+            assertThat(nodes).hasSize(3); // id, age=25, age=30, age=35
         }
 
         @Test
@@ -1179,8 +1234,11 @@ class SearchConditionTest {
                     .and(a -> a.lessThan("score", 100.0).orIsNull("score"))
                     .build();
 
-            List<SearchCondition.Node> nodes = condition.getNodes();
-            assertThat(nodes).hasSize(6);
+            assertThat(condition.getNodes()).hasSize(4);
+            assertThat(condition.getNodes().get(1)).isInstanceOf(SearchCondition.Group.class);
+            assertThat(condition.getNodes().get(2).getOperator()).isEqualTo(LogicalOperator.OR);
+            assertThat(condition.getNodes().get(3)).isInstanceOf(SearchCondition.Group.class);
+            assertThat(condition.getNodes().get(3).getOperator()).isEqualTo(LogicalOperator.AND);
         }
     }
 

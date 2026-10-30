@@ -58,9 +58,10 @@ public class NodeDeserializer extends JsonDeserializer<Node> {
 
             if (deserializedNode instanceof Group) {
                 Group group = (Group) deserializedNode;
-                if (group.getNodes().size() == 1 ||
-                        group.getNodes().stream().allMatch(n -> Objects.equals(n.getOperator(), group.getOperator()))) {
-                    nodes.addAll(group.getNodes());
+                if (group.getNodes().size() == 1) {
+                    Node child = group.getNodes().get(0);
+                    child.setOperator(group.getOperator());
+                    nodes.add(child);
                 } else {
                     nodes.add(group);
                 }

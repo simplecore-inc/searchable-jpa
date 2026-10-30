@@ -195,7 +195,9 @@ public class SearchConditionBuilder<D> {
         }
 
         boolean hasNestedGroup = subNodes.stream().anyMatch(node -> node instanceof SearchCondition.Group);
-        if (!hasNestedGroup) {
+        boolean compatibleOperators = subNodes.stream().skip(1)
+                .allMatch(node -> (node.getOperator() == LogicalOperator.OR ? LogicalOperator.OR : LogicalOperator.AND) == operator);
+        if (!hasNestedGroup && compatibleOperators) {
             for (SearchCondition.Node node : subNodes) {
                 SearchCondition.Condition condition = (SearchCondition.Condition) node;
                 // Only set the operator when it is null (preserve orXXX()/other operators).

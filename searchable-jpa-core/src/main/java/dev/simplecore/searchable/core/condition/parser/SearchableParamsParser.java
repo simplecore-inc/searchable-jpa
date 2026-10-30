@@ -259,11 +259,7 @@ public class SearchableParamsParser<D> {
     }
 
     private Class<?> getFieldType(String field) {
-        try {
-            return dtoClass.getDeclaredField(field).getType();
-        } catch (NoSuchFieldException e) {
-            // Field might be a nested property or not exist
-            return String.class; // Default to String if field type cannot be determined
-        }
+        java.lang.reflect.Field resolved = dev.simplecore.searchable.core.utils.SearchableFieldUtils.findFieldInHierarchy(dtoClass, field);
+        return resolved == null ? String.class : resolved.getType();
     }
 }
