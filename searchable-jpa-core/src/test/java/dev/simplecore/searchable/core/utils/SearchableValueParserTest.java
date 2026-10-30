@@ -29,6 +29,8 @@ import static org.assertj.core.api.Assertions.*;
 @Transactional
 class SearchableValueParserTest {
 
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     @BeforeEach
     void setUp() {
         // Set English locale for tests to ensure consistent error messages
@@ -197,8 +199,8 @@ class SearchableValueParserTest {
     @Test
     @DisplayName("LocalDateTime should parse ISO 8601 UTC format correctly")
     void testLocalDateTimeParsingWithUtcFormat() {
-        // Note: These tests use Asia/Seoul timezone (UTC+9)
-        // UTC times are converted to local system timezone
+        // The expectations below are Asia/Seoul (UTC+9) wall-clock times
+        SearchableTimeZoneHolder.setZoneId(SEOUL);
         
         // ISO 8601 UTC format with milliseconds - 00:00:00Z becomes 09:00:00 in Asia/Seoul
         LocalDateTime expected = LocalDateTime.of(2024, 12, 31, 9, 0, 0);
@@ -228,7 +230,8 @@ class SearchableValueParserTest {
     @Test
     @DisplayName("LocalDateTime should parse various timezone formats correctly")
     void testLocalDateTimeParsingWithVariousTimezoneFormats() {
-        // Note: These tests use Asia/Seoul timezone (UTC+9)
+        // The expectations below are Asia/Seoul (UTC+9) wall-clock times
+        SearchableTimeZoneHolder.setZoneId(SEOUL);
         
         // ISO 8601 with negative timezone offset (UTC-5) - 10:30:45-05:00 becomes 00:30:45+1day in Asia/Seoul
         LocalDateTime expectedWithNegativeOffset = LocalDateTime.of(2025, 1, 1, 0, 30, 45);
@@ -254,7 +257,8 @@ class SearchableValueParserTest {
     @Test
     @DisplayName("LocalDateTime should parse additional common API formats correctly")
     void testLocalDateTimeParsingWithAdditionalFormats() {
-        // Note: These tests use Asia/Seoul timezone (UTC+9)
+        // The expectations below are Asia/Seoul (UTC+9) wall-clock times
+        SearchableTimeZoneHolder.setZoneId(SEOUL);
         
         // Common API formats with literal 'Z' - 00:30:45Z becomes 09:30:45 in Asia/Seoul
         LocalDateTime expectedLiteralZ = LocalDateTime.of(2024, 12, 31, 9, 30, 45);
@@ -579,8 +583,9 @@ class SearchableValueParserTest {
         // Test OffsetDateTime with no timezone info uses system default
         OffsetDateTime offsetResult = (OffsetDateTime) SearchableValueParser.parseValue(noTimezone, OffsetDateTime.class);
         
-        // Should use system default timezone offset
-        assertThat(offsetResult.getOffset()).isEqualTo(ZoneId.systemDefault().getRules().getOffset(Instant.now()));
+        // Should use the system default offset in force at that date, not today's
+        assertThat(offsetResult.getOffset())
+                .isEqualTo(ZoneId.systemDefault().getRules().getOffset(LocalDateTime.of(2024, 12, 31, 15, 0, 0)));
         assertThat(offsetResult.toLocalDateTime()).isEqualTo(LocalDateTime.of(2024, 12, 31, 15, 0, 0));
         
         // Test Instant with no timezone info uses system default
@@ -597,6 +602,7 @@ class SearchableValueParserTest {
     @DisplayName("LocalDateTime should convert timezone-aware inputs to server timezone")
     void testLocalDateTimeTimezoneConversion() {
         // Test UTC time conversion to Asia/Seoul (+09:00)
+        SearchableTimeZoneHolder.setZoneId(SEOUL);
         String utcTime = "2024-12-31T15:00:00.000Z";
         LocalDateTime result = (LocalDateTime) SearchableValueParser.parseValue(utcTime, LocalDateTime.class);
         
