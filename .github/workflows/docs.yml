@@ -6,11 +6,13 @@ on:
     paths:
       - 'docs/**'
       - 'scripts/build-docs.sh'
+      - 'scripts/prepare-docs.mjs'
+      - 'scripts/tests/**'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version to build (e.g., 1.0.3). Leave empty for SNAPSHOT.'
+        description: 'Released x.y.z version to build. Leave empty for snapshot.'
         required: false
         type: string
 
@@ -32,6 +34,10 @@ jobs:
       - name: Determine checkout ref
         id: checkout-ref
         run: |
+          if [ -n "$INPUT_VERSION" ] && [[ ! "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must use the stable x.y.z format."
+            exit 1
+          fi
           if [ -n "$INPUT_VERSION" ]; then
             echo "ref=v${INPUT_VERSION}" >> $GITHUB_OUTPUT
           else
@@ -39,7 +45,7 @@ jobs:
           fi
 
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ steps.checkout-ref.outputs.ref }}
           fetch-depth: 0
@@ -69,74 +75,29 @@ jobs:
           ./scripts/build-docs.sh
 
       - name: Checkout gh-pages
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           ref: gh-pages
           path: gh-pages
         continue-on-error: true
 
+      - name: Checkout current navigation tooling
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: master
+          path: .docs-tooling
+          sparse-checkout: |
+            docs/assets
+            scripts/prepare-docs.mjs
+          sparse-checkout-cone-mode: false
+
       - name: Prepare deployment
         env:
           FOLDER_NAME: ${{ steps.version.outputs.folder_name }}
-        run: |
-          # Create deployment directory
-          mkdir -p deploy
-
-          # Copy existing versions if gh-pages exists (skip snapshot folders)
-          if [ -d "gh-pages" ]; then
-            for dir in gh-pages/*/; do
-              if [ -d "$dir" ]; then
-                dirname=$(basename "$dir")
-                # Skip snapshot folder and legacy SNAPSHOT versions (e.g., 1.0.3-SNAPSHOT)
-                if [[ "$dirname" != "snapshot" && ! "$dirname" =~ SNAPSHOT ]]; then
-                  cp -r "$dir" "deploy/"
-                fi
-              fi
-            done
-          fi
-
-          # Copy new version to folder
-          cp -r build-docs "deploy/$FOLDER_NAME"
-
-          # Generate versions.json from folders
-          node -e "
-            const fs = require('fs');
-            const dirs = fs.readdirSync('deploy', { withFileTypes: true })
-              .filter(d => d.isDirectory())
-              .map(d => d.name);
-
-            const versions = { releases: [], snapshot: null };
-
-            dirs.forEach(dir => {
-              if (dir === 'snapshot') {
-                versions.snapshot = dir;
-              } else if (/^\d+\.\d+/.test(dir)) {
-                versions.releases.push(dir);
-              }
-            });
-
-            // Sort releases descending
-            versions.releases.sort((a, b) => {
-              const partsA = a.split('.').map(Number);
-              const partsB = b.split('.').map(Number);
-              for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-                if ((partsA[i] || 0) !== (partsB[i] || 0)) return (partsB[i] || 0) - (partsA[i] || 0);
-              }
-              return 0;
-            });
-
-            fs.writeFileSync('deploy/versions.json', JSON.stringify(versions, null, 2));
-            console.log('Generated versions.json:', versions);
-
-            // Create root redirect
-            const defaultVersion = versions.releases[0] || versions.snapshot;
-            const html = '<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta http-equiv=\"refresh\" content=\"0; url=./' + defaultVersion + '/\"><script>window.location.href=\"./' + defaultVersion + '/\";</script></head><body><p>Redirecting...</p></body></html>';
-            fs.writeFileSync('deploy/index.html', html);
-            console.log('Root redirect to:', defaultVersion);
-          "
+        run: node .docs-tooling/scripts/prepare-docs.mjs gh-pages build-docs deploy "$FOLDER_NAME"
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./deploy
