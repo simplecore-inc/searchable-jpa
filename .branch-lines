@@ -1,0 +1,7 @@
+# Release lines that must carry each other's patches.
+# mainline receives new work; maintenance receives the patches marked for it.
+mainline=master
+maintenance=spring-boot-3x
+remote=origin
+# Commit types that must declare where the patch goes (conventional commit type, regex alternation).
+patch_types=fix|perf|security|revert

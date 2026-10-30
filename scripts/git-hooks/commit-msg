@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Refuses a patch commit that does not declare whether it goes to the other release line.
+# Install with scripts/git-hooks/install.sh. CI runs the same rules (scripts/branch-sync/check.sh),
+# so bypassing this hook with --no-verify only moves the failure to the pipeline.
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+# shellcheck source=../branch-sync/lib.sh
+source "$root/scripts/branch-sync/lib.sh"
+branch_lines_load
+
+branch=$(git symbolic-ref --quiet --short HEAD || true)
+[[ -z "$branch" ]] && exit 0
+
+message=$(git stripspace --strip-comments < "$1")
+if ! problem=$(branch_lines_validate_message "$branch" "$message"); then
+  echo "✖ commit-msg: $problem" >&2
+  echo "  Add a trailer as the last paragraph of the message, for example:" >&2
+  echo "    $(branch_lines_key_for "$branch"): $(branch_lines_target_for "$branch")" >&2
+  echo "    $(branch_lines_key_for "$branch"): none - <why the patch does not apply there>" >&2
+  exit 1
+fi

@@ -1,0 +1,22 @@
+name: Branch Sync
+
+on:
+  push:
+    branches: [master, spring-boot-3x]
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch both release lines
+        run: git fetch --no-tags origin master spring-boot-3x
+
+      - name: Check that each patch reached the other release line
+        run: bash scripts/branch-sync/check.sh
