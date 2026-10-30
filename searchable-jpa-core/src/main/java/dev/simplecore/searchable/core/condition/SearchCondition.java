@@ -80,6 +80,7 @@ import java.util.Set;
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @Schema(description = "Search condition for filtering and pagination")
 @JsonDeserialize(using = SearchConditionDeserializer.class)
+@tools.jackson.databind.annotation.JsonDeserialize(using = dev.simplecore.searchable.core.condition.jackson.SearchConditionJackson3Deserializer.class)
 public class SearchCondition<D> {
 
     /**
@@ -196,6 +197,7 @@ public class SearchCondition<D> {
          */
         DESC("desc");
 
+        @com.fasterxml.jackson.annotation.JsonValue
         private final String name;
 
         Direction(String name) {
@@ -469,7 +471,13 @@ public class SearchCondition<D> {
     /**
      * Creates an ObjectMapper configured for SearchCondition serialization/deserialization.
      */
+    private static final ObjectMapper JSON_MAPPER = newObjectMapper();
+
     private static ObjectMapper createObjectMapper() {
+        return JSON_MAPPER;
+    }
+
+    private static ObjectMapper newObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);

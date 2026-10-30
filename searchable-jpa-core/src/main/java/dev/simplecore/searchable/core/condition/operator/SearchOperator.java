@@ -137,6 +137,7 @@ public enum SearchOperator {
     /**
      * The string representation of the operator used in JSON.
      */
+    @com.fasterxml.jackson.annotation.JsonValue
     private final String name;
 
     /**
