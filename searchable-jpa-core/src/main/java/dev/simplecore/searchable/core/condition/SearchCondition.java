@@ -16,6 +16,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.simplecore.searchable.core.condition.jackson.NodeDeserializer;
 import dev.simplecore.searchable.core.condition.jackson.SearchConditionDeserializer;
 import dev.simplecore.searchable.core.condition.jackson.SearchConditionJson;
+import dev.simplecore.searchable.core.exception.SearchableException;
 import dev.simplecore.searchable.core.condition.operator.LogicalOperator;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -168,7 +169,12 @@ public class SearchCondition<D> {
     public static <T> SearchCondition<T> fromJson(String json, Class<T> dtoClass) throws JsonProcessingException {
         ObjectMapper mapper = createObjectMapper();
         JavaType type = mapper.getTypeFactory().constructParametricType(SearchCondition.class, dtoClass);
-        return mapper.readValue(json, type);
+        try {
+            return mapper.readValue(json, type);
+        } catch (JsonMappingException exception) {
+            if (exception.getCause() instanceof SearchableException validation) throw validation;
+            throw exception;
+        }
     }
 
     /**

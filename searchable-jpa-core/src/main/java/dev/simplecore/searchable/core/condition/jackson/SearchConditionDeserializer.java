@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.deser.ContextualDeserializer;
 import dev.simplecore.searchable.core.annotation.SearchableField;
@@ -18,6 +19,7 @@ import dev.simplecore.searchable.core.condition.validator.SearchConditionValidat
 import dev.simplecore.searchable.core.condition.validator.SearchRequestLimits;
 import dev.simplecore.searchable.core.condition.validator.SearchableFieldValidator;
 import dev.simplecore.searchable.core.exception.SearchableValidationException;
+import dev.simplecore.searchable.core.exception.SearchableException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import java.io.IOException;
@@ -45,6 +47,16 @@ public class SearchConditionDeserializer extends JsonDeserializer<SearchConditio
     @SuppressWarnings({"unchecked"})
     public SearchCondition<?> deserialize(JsonParser p, DeserializationContext ctxt) 
             throws IOException {
+        try {
+            return readCondition(p, ctxt);
+        } catch (SearchableException exception) {
+            // Let HTTP converters classify invalid request bodies as client errors.
+            throw JsonMappingException.from(p, exception.getMessage(), exception);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private SearchCondition<?> readCondition(JsonParser p, DeserializationContext ctxt) throws IOException {
         log.trace("SearchConditionDeserializer.deserialize called");
         
         ObjectMapper mapper = (ObjectMapper) p.getCodec();
