@@ -72,6 +72,14 @@ ext {
         'org.junit.platform:junit-platform-commons': '6.1.3',
         'org.junit.platform:junit-platform-engine': '6.1.3'
     ]
+    if (springBootVersion.startsWith('3.')) {
+        stableDependencyVersions.putAll([
+            'org.hibernate.validator:hibernate-validator': '8.0.6.Final',
+            'org.apache.tomcat.embed:tomcat-embed-core': '10.1.61',
+            'org.apache.tomcat.embed:tomcat-embed-el': '10.1.61',
+            'org.apache.tomcat.embed:tomcat-embed-websocket': '10.1.61'
+        ])
+    }
 }
 
 allprojects {
