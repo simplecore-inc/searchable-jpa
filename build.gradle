@@ -129,7 +129,7 @@ subprojects {
                         }
 
                         // Spring Boot version compatibility information
-                        properties.appendNode('spring-boot.version.required', '[4.0.0,5.0.0)')
+                        properties.appendNode('spring-boot.version.required', '[4.1.0,5.0.0)')
                         properties.appendNode('jakarta.version.required', '11+')
                         properties.appendNode('javax.version.supported', 'false')
                     }
