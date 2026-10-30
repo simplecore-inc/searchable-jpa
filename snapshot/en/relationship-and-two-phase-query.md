@@ -1,6 +1,6 @@
 # Relationships and Two-Phase Queries
 
-A filter join decides which roots match; a fetch join initializes associations on the returned roots. Those jobs are different. This page describes `2.0.0-SNAPSHOT`.
+A filter join decides which roots match; a fetch join initializes associations on the returned roots. Those jobs are different. This page describes `2.0.1-SNAPSHOT`.
 
 ## Exposing a related field
 

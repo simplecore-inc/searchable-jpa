@@ -1,6 +1,6 @@
 # 자동 설정
 
-starter는 Hibernate 자동 설정 전에 JPA 기본값을 등록하고, Servlet 애플리케이션에 OpenAPI 작업 사용자 정의 구성 요소를 등록합니다. 아래 설정은 모두 선택 사항입니다. 이 문서는 `2.0.0-SNAPSHOT` 기준입니다.
+starter는 Hibernate 자동 설정 전에 JPA 기본값을 등록하고, Servlet 애플리케이션에 OpenAPI 작업 사용자 정의 구성 요소를 등록합니다. 아래 설정은 모두 선택 사항입니다. 이 문서는 `2.0.1-SNAPSHOT` 기준입니다.
 
 ## 설정 예제
 

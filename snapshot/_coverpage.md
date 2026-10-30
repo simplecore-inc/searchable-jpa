@@ -2,7 +2,7 @@
 
 # Searchable JPA
 
-![version](https://img.shields.io/badge/version-2.0.0--SNAPSHOT-blue)
+![version](https://img.shields.io/badge/version-2.0.1--SNAPSHOT-blue)
 
 > Dynamic Search, Sorting, and Pagination for Spring Data JPA
 

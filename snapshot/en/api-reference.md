@@ -1,6 +1,6 @@
 # API Reference
 
-Public application APIs for `2.0.0-SNAPSHOT`. Import types from the packages shown below; Java examples use simple type names after imports. Internal query executors are implementation details rather than an application extension contract.
+Public application APIs for `2.0.1-SNAPSHOT`. Import types from the packages shown below; Java examples use simple type names after imports. Internal query executors are implementation details rather than an application extension contract.
 
 ## Annotations
 
