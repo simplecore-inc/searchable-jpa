@@ -56,7 +56,7 @@ public class EpochMillisFunctionContributor implements FunctionContributor {
             return "?1";
         }
         if (name.contains("postgres") || name.contains("cockroach")) {
-            return "cast(extract(epoch from ?1) * 1000 as bigint)";
+            return "cast(floor(extract(epoch from ?1) * 1000) as bigint)";
         }
         if (name.contains("h2")) {
             return "datediff('MILLISECOND', timestamp '1970-01-01 00:00:00', ?1)";
@@ -65,7 +65,7 @@ public class EpochMillisFunctionContributor implements FunctionContributor {
             return "(unix_timestamp(?1) * 1000)";
         }
         if (name.contains("oracle")) {
-            return "(cast((cast(?1 as date) - date '1970-01-01') * 86400000 as number(19)))";
+            return null; // Casting to DATE loses fractional seconds; use precise conditional sums.
         }
         if (name.contains("sqlserver")) {
             return "datediff_big(millisecond, cast('1970-01-01' as datetime2), ?1)";
