@@ -1,13 +1,12 @@
 package dev.simplecore.searchable.openapi.generator;
 
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
+import dev.simplecore.searchable.openapi.utils.OpenApiDocUtils;
 import io.swagger.v3.core.converter.AnnotatedType;
 import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.core.converter.ResolvedSchema;
 import io.swagger.v3.oas.models.media.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import jakarta.validation.constraints.Pattern;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -20,10 +19,14 @@ import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Generator for parameter schemas that creates reusable schema definitions
@@ -203,7 +206,7 @@ public class ParameterSchemaGenerator {
         }
 
         // Handle Map types
-        if (java.util.Map.class.isAssignableFrom(fieldType)) {
+        if (Map.class.isAssignableFrom(fieldType)) {
             schema.type("object");
 
             // Try to extract value type from generic type
@@ -224,9 +227,9 @@ public class ParameterSchemaGenerator {
         }
 
         // Handle List/Set/Collection types
-        if (java.util.List.class.isAssignableFrom(fieldType) ||
-            java.util.Set.class.isAssignableFrom(fieldType) ||
-            java.util.Collection.class.isAssignableFrom(fieldType)) {
+        if (List.class.isAssignableFrom(fieldType) ||
+            Set.class.isAssignableFrom(fieldType) ||
+            Collection.class.isAssignableFrom(fieldType)) {
             schema.type("array");
 
             // Try to extract element type from generic type
@@ -339,10 +342,10 @@ public class ParameterSchemaGenerator {
         }
 
         // Don't register Java collections and maps as components
-        if (java.util.Map.class.isAssignableFrom(type) ||
-            java.util.Collection.class.isAssignableFrom(type) ||
-            java.util.List.class.isAssignableFrom(type) ||
-            java.util.Set.class.isAssignableFrom(type)) {
+        if (Map.class.isAssignableFrom(type) ||
+            Collection.class.isAssignableFrom(type) ||
+            List.class.isAssignableFrom(type) ||
+            Set.class.isAssignableFrom(type)) {
             return false;
         }
 
@@ -389,8 +392,7 @@ public class ParameterSchemaGenerator {
      */
     private Schema<?> createStringSchemaWithEnumConstraints(Field field) {
         // Check for @Schema annotation
-        io.swagger.v3.oas.annotations.media.Schema schemaAnnotation =
-            field.getAnnotation(io.swagger.v3.oas.annotations.media.Schema.class);
+        var schemaAnnotation = OpenApiDocUtils.getSchemaAnnotation(field);
 
         if (schemaAnnotation != null) {
             // Check for allowableValues
@@ -423,8 +425,8 @@ public class ParameterSchemaGenerator {
         }
 
         // Check for @Pattern annotation that might indicate enum-like constraints
-        jakarta.validation.constraints.Pattern pattern =
-            field.getAnnotation(jakarta.validation.constraints.Pattern.class);
+        Pattern pattern =
+            field.getAnnotation(Pattern.class);
         if (pattern != null) {
             String regexp = pattern.regexp();
             // Check for common enum-like patterns (e.g., "ACTIVE|INACTIVE|PENDING")

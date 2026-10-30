@@ -5,11 +5,10 @@ import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.openapi.utils.OpenApiDocUtils;
 import io.swagger.v3.oas.models.Operation;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.lang.reflect.Field;
 import java.util.StringJoiner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DescriptionGenerator {
     private static final Logger log = LoggerFactory.getLogger(DescriptionGenerator.class);
@@ -33,7 +32,7 @@ public class DescriptionGenerator {
         for (Field field : SearchableFieldUtils.getSearchableFields(dtoClass)) {
             SearchableField searchOp = field.getAnnotation(SearchableField.class);
             StringJoiner opJoiner = new StringJoiner("|");
-            for (SearchOperator op : searchOp.operators()) {
+            for (SearchOperator op : SearchableFieldUtils.getAllowedOperators(searchOp)) {
                 opJoiner.add(OpenApiDocUtils.toCamelCase(op.name().toLowerCase()));
             }
             String sortIndicator = searchOp.sortable() ? " [sortable]" : "";
