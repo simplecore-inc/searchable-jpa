@@ -6,10 +6,12 @@
 
 **A:** Searchable JPA는 버전별로 다른 Spring Boot 버전을 지원합니다. 주요 호환성 정보:
 
-- **1.0.0+ 버전**: Spring Boot 3.2.x+만 지원 (Jakarta EE 9+)
-- **0.1.x 버전**: Spring Boot 2.7.x만 지원 (javax.* 패키지 사용)
+- **2.x 버전**: Spring Boot 4.1.x+만 지원 (Jakarta EE 11)
+- **1.x 버전**: Spring Boot 3.2.x ~ 3.5.x만 지원 (Jakarta EE 9+)
+- **0.1.x 버전**: Spring Boot 2.7.x만 지원 (javax.* 패키지 사용, 유지보수 종료)
 - Java 17+: 지원
-- JPA 3.0+: 지원 (1.0.0+ 버전)
+- JPA 3.2: 지원 (2.x 버전)
+- JPA 3.0+: 지원 (1.x 버전)
 - JPA 2.2+: 지원 (0.1.x 버전)
 
 ### Q: 자동 설정이 작동하지 않아요.
@@ -241,7 +243,7 @@ CREATE INDEX idx_composite_tenant_entity ON test_id_class_entity(tenant_id, enti
 - 장점: 타입 안전성이 보장됨
 - 단점: 엔티티 접근 시 `entity.getId().getTenantId()` 형태
 
-두 방식 모두 2단계 조회에서 동일하게 각 키 필드를 `AND`로 묶고 여러 키를 `OR`로 연결하는 조건을 사용합니다. 실질적인 차이는 쿼리 전략이 아니라 타입 안전성과 코드 접근 방식에 있습니다.
+두 방식 모두 2단계 조회에서 동일하게 각 키 필드를 `AND`로 묶고 여러 키를 `OR`로 연결하는 조건을 사용합니다. 생성되는 쿼리는 같고, 타입 안전성과 키 필드에 접근하는 코드 방식만 다릅니다.
 
 ```java
 // 복합 키 엔티티 설정 예제는 고급 기능 문서 참조
@@ -283,7 +285,7 @@ public interface PostRepository extends JpaRepository<Post, Long>, JpaSpecificat
 
 ### Q: "No composite key fields found for entity" 에러가 발생해요.
 
-**A:** `@IdClass`나 `@EmbeddedId`로 지정한 복합 키 클래스에서 키 필드를 찾지 못한 경우 발생합니다. 복합 키 설정을 다시 확인합니다:
+**A:** `@IdClass`나 `@EmbeddedId`로 지정한 복합 키 클래스에 키 필드가 없으면 이 에러가 발생합니다. 다음과 같이 복합 키 설정을 확인하세요:
 
 ```java
 // 엔티티 ID 설정 예제는 기본 사용법 문서 참조
@@ -420,4 +422,4 @@ public class SearchPerformanceAspect {
 // 서비스 마이그레이션 예제는 기본 사용법 문서 참조
 ```
 
-더 궁금한 점이 있으시면 [GitHub Issues](https://github.com/simplecore-inc/searchable-jpa/issues)에 문의해주세요. 
+이 문서에 없는 질문은 [GitHub Issues](https://github.com/simplecore-inc/searchable-jpa/issues)에 등록하세요. 

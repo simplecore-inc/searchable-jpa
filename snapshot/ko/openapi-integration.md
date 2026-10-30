@@ -11,8 +11,8 @@ dependencies {
     // Searchable JPA 스타터 (OpenAPI 기능 포함)
     implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:${version}'
 
-    // SpringDoc OpenAPI (Spring Boot 3.x 버전)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+    // SpringDoc OpenAPI (Spring Boot 4.x 버전, Spring Boot 3.x는 SpringDoc 2.x 사용)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0'
 }
 ```
 
@@ -206,7 +206,7 @@ public class PostSearchDTO {
 ```
 
 > [!NOTE]
-> 필드마다 GET 검색 파라미터 스키마를 새로 만들고, `@Schema`의 `description`만 그대로 반영합니다. `minimum`, `maxLength`, `example`은 GET 파라미터 스키마에 나타나지 않습니다 — `title`의 `@Size(max = 100)`도 런타임 검증에는 적용되지만 생성된 파라미터 스키마에는 나타나지 않습니다.
+> 필드마다 GET 검색 파라미터 스키마를 새로 만들고, `@Schema`의 `description`만 그대로 반영합니다. `minimum`, `maxLength`, `example`은 GET 파라미터 스키마에 나타나지 않습니다. `title`의 `@Size(max = 100)`도 런타임 검증에는 적용되지만 생성된 파라미터 스키마에는 나타나지 않습니다.
 >
 > `@Schema(allowableValues = ...)`와 `implementation`은 필드 타입이 `String`일 때만 읽습니다. `status`처럼 실제 Enum 타입 필드는 이 속성 없이도 Enum 상수를 그대로 읽어 값 목록을 만들므로, `PostStatus`의 허용 값은 `PUBLISHED`, `DRAFT`, `DELETED`로 표시됩니다.
 
@@ -242,7 +242,7 @@ public class CustomOpenApiConfig {
 
 ### 3. GroupedOpenApi 사용 시 주의사항
 
-`GroupedOpenApi`는 격리된 API 그룹을 만들기 때문에 전역으로 등록된 `OperationCustomizer` 빈을 자동으로 적용받지 않습니다. `SearchableOpenApiConfiguration`이 등록하는 `searchConditionCustomizer` 빈도 마찬가지이므로, `GroupedOpenApi`에 명시적으로 연결하지 않으면 검색 파라미터 문서가 조용히 사라집니다.
+`GroupedOpenApi`는 격리된 API 그룹을 만들기 때문에 전역으로 등록된 `OperationCustomizer` 빈을 자동으로 적용받지 않습니다. `SearchableOpenApiConfiguration`이 등록하는 `searchConditionCustomizer` 빈도 마찬가지이므로, `GroupedOpenApi`에 명시적으로 연결하지 않으면 경고 없이 검색 파라미터가 API 문서에서 빠집니다.
 
 1. **`@Qualifier`로 지정**
 

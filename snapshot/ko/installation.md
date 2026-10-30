@@ -6,16 +6,18 @@
 
 | 라이브러리 버전 | Spring Boot 버전 | Java 버전 | Jakarta EE | 상태 |
 |---------------|----------------|-----------|------------|------|
-| `1.0.0+` | `3.2.x+` | `17+` | Jakarta EE 9+ | 최신 버전 |
-| `0.1.x` | `2.7.x` | `8+` | javax.* | 지원 중단 예정 |
+| `2.x` | `4.1.x+` | `17+` | Jakarta EE 11 | 최신 버전 |
+| `1.x` | `3.2.x` ~ `3.5.x` | `17+` | Jakarta EE 9+ | 유지보수 |
+| `0.1.x` | `2.7.x` | `8+` | javax.* | 유지보수 종료 |
 
 **중요**: 버전을 혼합해서 사용하지 마세요. 버전에 따라 Jakarta EE와 javax.* 패키지가 다르게 적용됩니다.
 
 ## 시스템 요구사항
 
-- **Java 17 이상** (1.0.0+ 버전)
+- **Java 17 이상** (2.x · 1.x 버전)
 - **Java 8 이상** (0.1.x 버전)
-- **Spring Boot 3.2.x+** (1.0.0+ 버전, Jakarta EE 9+)
+- **Spring Boot 4.1.x+** (2.x 버전, Jakarta EE 11)
+- **Spring Boot 3.2.x ~ 3.5.x** (1.x 버전, Jakarta EE 9+)
 - **Spring Boot 2.7.x** (0.1.x 버전, javax.* 패키지)
 - Spring Data JPA
 
@@ -86,8 +88,9 @@ dependencies {
     // Database driver (e.g., H2)
     runtimeOnly 'com.h2database:h2'
 
-    // OpenAPI integration (optional) - Spring Boot 3.x
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+    // OpenAPI integration (optional) - SpringDoc 3.x for Spring Boot 4 (searchable-jpa 2.x),
+    // SpringDoc 2.x for Spring Boot 3 (searchable-jpa 1.x)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0'
 }
 ```
 
@@ -115,7 +118,7 @@ dependencies {
         <scope>runtime</scope>
     </dependency>
 
-    <!-- OpenAPI integration (optional) - Spring Boot 3.x -->
+    <!-- OpenAPI integration (optional) - SpringDoc 3.x for Spring Boot 4, 2.x for Spring Boot 3 -->
     <dependency>
         <groupId>org.springdoc</groupId>
         <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
@@ -580,7 +583,7 @@ TRACE d.s.s.a.SearchableJpaConfiguration - These settings help prevent N+1 probl
 TRACE d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: searchable.hibernate.auto-optimization=false
 ```
 
-이 로그가 보이지 않아도 자동 최적화는 기본값으로 이미 적용된 상태입니다. 로그는 진행 상태를 확인하는 용도일 뿐입니다.
+이 로그가 보이지 않아도 자동 최적화는 기본값으로 적용됩니다. 이 로그는 최적화 진행 상태를 확인할 때 사용합니다.
 
 ## 문제 해결
 
@@ -591,7 +594,7 @@ TRACE d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: se
 
 2. **"Could not determine primary key field for entity ..." 경고**
    - 엔티티에 `@Id` 어노테이션이 있는지 확인
-   - 복합 키의 경우 `@IdClass` 또는 `@EmbeddedId` 설정 확인
+   - 복합 키는 `@IdClass` 또는 `@EmbeddedId` 설정 확인
    - WARN 레벨 로그이며, 정렬 결과에 동일한 값이 있으면 페이지네이션 순서가 정확하지 않을 수 있음을 알려줌
 
 3. **자동 설정이 작동하지 않는 경우**
@@ -602,4 +605,4 @@ TRACE d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: se
    - 복합 키 클래스에 `equals()`, `hashCode()` 구현 확인
    - `Serializable` 인터페이스 구현 확인
 
-이제 Searchable JPA가 성공적으로 설치되었습니다. [기본 사용법](basic-usage.md)으로 넘어가서 첫 번째 검색 기능을 구현해보세요.
+Searchable JPA 설치를 마쳤으면 [기본 사용법](basic-usage.md)에서 첫 번째 검색 기능을 구현해 보세요.

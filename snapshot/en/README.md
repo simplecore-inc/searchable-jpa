@@ -3,8 +3,8 @@ English | [한국어](ko/README.md)
 # Searchable JPA
 
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2%2B-green.svg)](https://spring.io/projects/spring-boot)
-[![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-9%2B-blue.svg)](https://jakarta.ee/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1%2B-green.svg)](https://spring.io/projects/spring-boot)
+[![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-11-blue.svg)](https://jakarta.ee/)
 [![License](https://img.shields.io/badge/License-SCL--1.0-blue.svg)](https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE)
 
 Searchable JPA is a library that extends Spring Data JPA to provide dynamic search, sorting, and pagination.
@@ -143,8 +143,9 @@ For the full list of operators and usage details, see [Search Operators](en/sear
 
 | Library Version | Spring Boot Version | Jakarta EE | Status |
 |----------------|------------------|------------|------|
-| `1.0.0+` | `3.2.x+` | jakarta.* | Latest |
-| `0.1.x` | `2.7.x` | javax.* | Deprecated |
+| `2.x` | `4.1.x+` | jakarta.* (Jakarta EE 11) | Latest |
+| `1.x` | `3.2.x` ~ `3.5.x` | jakarta.* (Jakarta EE 9+) | Maintained |
+| `0.1.x` | `2.7.x` | javax.* | Unmaintained |
 
 ## Tutorials
 
@@ -164,8 +165,8 @@ For the full list of operators and usage details, see [Search Operators](en/sear
 ## Requirements
 
 - Java 17+
-- Spring Boot 3.2.x+
-- Gradle 8.5+
+- Spring Boot 4.1.x+ (3.2.x+ for version 1.x)
+- Gradle 8.14+ (8.5+ for version 1.x)
 
 ## License
 
