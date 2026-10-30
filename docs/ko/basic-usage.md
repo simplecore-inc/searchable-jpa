@@ -1,371 +1,172 @@
 # 기본 사용법
 
-이 문서는 Searchable JPA의 기본적인 사용 방법을 단계별로 설명합니다.
+이 예제는 `1.1.3-SNAPSHOT` starter 기준입니다. public 클래스마다 파일을 나누고, 애플리케이션의 컴포넌트·엔티티 탐색 경로에 배치하세요. 데이터소스와 일반 `@SpringBootApplication` 설정도 필요합니다. 문자열로 지정하는 필드 경로는 Java 컴파일 시점이 아닌 실행 시점에 검증합니다.
 
-## 1. 엔티티 정의
-
-먼저 검색할 JPA 엔티티를 정의합니다.
+## 엔티티
 
 ```java
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import java.time.Instant;
+
 @Entity
-@Table(name = "posts")
 public class Post {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id @GeneratedValue
     private Long id;
-    
     private String title;
-    
-    @Column(length = 10000)
-    private String content;
-    
-    @Enumerated(EnumType.STRING)
-    private PostStatus status;
-    
-    @Column(name = "view_count")
+    private String status;
     private Long viewCount;
-    
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "author_id")
-    private Author author;
-    
-    // getters, setters...
+    private Instant createdAt;
+
+    public Long getId() { return id; }
+    public String getTitle() { return title; }
+    public String getStatus() { return status; }
+    public Long getViewCount() { return viewCount; }
+    public Instant getCreatedAt() { return createdAt; }
 }
 ```
 
-```java
-@Entity
-@Table(name = "authors")
-public class Author {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    
-    private String name;
-    private String email;
-    
-    // getters, setters...
-}
-```
+조회용 예제입니다. 애플리케이션에 필요한 생성자, 변경 메서드와 감사 필드는 별도로 정의하세요. 기본 인자 없는 생성자는 JPA 요건을 충족합니다.
 
-## 2. 검색 DTO 정의
+## 검색 DTO
 
-검색 조건을 정의할 DTO 클래스를 작성하고 `@SearchableField` 어노테이션을 사용합니다.
+검색 DTO에는 클라이언트가 검색·정렬할 수 있는 필드를 선언합니다. 상속한 검색 필드를 포함해 JavaBean getter를 제공하세요. DTO는 검증용 정의이며, 클라이언트가 필드를 채운 DTO 인스턴스를 제출하는 방식이 아닙니다.
 
 ```java
+import dev.simplecore.searchable.core.annotation.SearchableField;
+import java.time.Instant;
+import static dev.simplecore.searchable.core.condition.operator.SearchOperator.*;
+
 public class PostSearchDTO {
-    
-    @SearchableField(operators = {EQUALS}, sortable = true)
+    @SearchableField(operators = {EQUALS, GREATER_THAN}, sortable = true)
     private Long id;
-    
-    @SearchableField(operators = {EQUALS, CONTAINS, STARTS_WITH, ENDS_WITH}, sortable = true)
+    @SearchableField(operators = {EQUALS, CONTAINS, STARTS_WITH}, sortable = true)
     private String title;
-    
-    // 게시글 본문 - 임시 저장 상태에서는 비어 있을 수 있어 NULL 체크가 필요
-    @SearchableField(operators = {CONTAINS, IS_NULL, IS_NOT_NULL})
-    private String content;
-    
-    @SearchableField(operators = {EQUALS, NOT_EQUALS, IN, NOT_IN})
-    private PostStatus status;
-    
-    @SearchableField(operators = {GREATER_THAN, LESS_THAN, BETWEEN}, sortable = true)
+    @SearchableField(operators = {EQUALS, IN})
+    private String status;
+    @SearchableField(operators = {GREATER_THAN_OR_EQUAL_TO, BETWEEN}, sortable = true)
     private Long viewCount;
-    
-    @SearchableField(operators = {GREATER_THAN, LESS_THAN, BETWEEN}, sortable = true)
-    private LocalDateTime createdAt;
-    
-    // 중첩 필드 검색 - 연관 엔티티의 필드에 접근
-    @SearchableField(entityField = "author.name", operators = {EQUALS, CONTAINS})
-    private String authorName;
-    
-    @SearchableField(entityField = "author.email", operators = {EQUALS, CONTAINS, ENDS_WITH})
-    private String authorEmail;
-    
-    // getters, setters...
+    @SearchableField(operators = {BETWEEN, GREATER_THAN, LESS_THAN}, sortable = true)
+    private Instant createdAt;
+
+    public Long getId() { return id; }
+    public String getTitle() { return title; }
+    public String getStatus() { return status; }
+    public Long getViewCount() { return viewCount; }
+    public Instant getCreatedAt() { return createdAt; }
 }
 ```
 
-### @SearchableField 어노테이션 속성
+`operators`를 생략하면 값과 타입 검증을 통과하는 모든 연산자를 허용합니다. 공개 API에는 허용할 연산자를 명시하는 것이 좋습니다. `sortable`의 기본값은 false입니다. `entityField`는 DTO 필드를 엔티티 속성 경로에 연결하고, `sortField`는 정렬 경로만 별도로 지정합니다. [검색 연산자](./search-operators.md)에서 상세 규칙을 확인하세요.
 
-- **entityField**: 엔티티의 실제 필드명 (DTO 필드명과 다를 때 사용)
-- **operators**: 허용할 검색 연산자 배열
-- **sortable**: 정렬 가능 여부 (기본값: false)
-
-## 3. Repository 정의
-
-표준 JPA Repository를 정의합니다. **JpaSpecificationExecutor 상속이 필수입니다.**
+## Repository와 서비스
 
 ```java
-@Repository
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+
 public interface PostRepository extends JpaRepository<Post, Long>, JpaSpecificationExecutor<Post> {
-    // JpaSpecificationExecutor 상속 필수
-    // 추가 메서드가 필요한 경우 정의
 }
 ```
 
-## 4. 서비스 정의
-
-`DefaultSearchableService`를 상속받아 검색 서비스를 구현합니다.
-
 ```java
+import dev.simplecore.searchable.core.service.DefaultSearchableService;
+import jakarta.persistence.EntityManager;
+import org.springframework.stereotype.Service;
+
 @Service
 public class PostService extends DefaultSearchableService<Post, Long> {
-    
     public PostService(PostRepository repository, EntityManager entityManager) {
         super(repository, entityManager);
     }
-    
-    // 기본 검색 메서드가 자동으로 제공됨
-    // findAllWithSearch, findOneWithSearch, countWithSearch 등
 }
 ```
 
-### 다른 클래스를 상속해야 하는 경우
+Repository는 두 인터페이스를 모두 상속해야 합니다. 서비스가 이미 다른 기본 클래스를 상속한다면 `SearchableServiceSupport`와 `SearchableServiceDelegate`를 사용하세요. [고급 기능](./advanced-features.md)에 예제가 있습니다.
 
-이미 다른 클래스를 상속하고 있어 `DefaultSearchableService`를 직접 상속할 수 없다면, `SearchableServiceSupport` 인터페이스와 `SearchableServiceDelegate`를 조합해 동일한 기능을 구현합니다.
-
-```java
-public class PostService extends SomeOtherBaseClass
-        implements SearchableServiceSupport<Post, Long> {
-    
-    private final SearchableServiceDelegate<Post, Long> searchableDelegate;
-    
-    public PostService(PostRepository repository, EntityManager entityManager) {
-        this.searchableDelegate = new SearchableServiceDelegate<>(repository, entityManager, Post.class);
-    }
-    
-    @Override
-    public SearchableServiceDelegate<Post, Long> getSearchableDelegate() {
-        return searchableDelegate;
-    }
-}
-```
-
-`getSearchableDelegate()`가 반환하는 델리게이트가 `findAllWithSearch`, `findOneWithSearch`, `countWithSearch` 등 `SearchableService`의 모든 메서드를 실제로 처리합니다. 상속 구조에 제약이 없다면 `DefaultSearchableService`를 상속하는 방식이 더 간단합니다.
-
-## 5. 컨트롤러 구현
-
-### GET 방식 검색 (쿼리 파라미터)
+## GET·POST 컨트롤러
 
 ```java
+import dev.simplecore.searchable.core.condition.SearchCondition;
+import dev.simplecore.searchable.core.condition.parser.SearchableParamsParser;
+import dev.simplecore.searchable.openapi.annotation.SearchableParams;
+import java.util.Map;
+import org.springframework.data.domain.Page;
+import org.springframework.web.bind.annotation.*;
+
 @RestController
 @RequestMapping("/api/posts")
 public class PostController {
-    
-    private final PostService postService;
-    
-    public PostController(PostService postService) {
-        this.postService = postService;
-    }
-    
+    private final PostService service;
+    public PostController(PostService service) { this.service = service; }
+
     @GetMapping("/search")
-    public Page<Post> searchPosts(
-        @RequestParam Map<String, String> params
-    ) {
-        SearchCondition<PostSearchDTO> condition =
-            new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
-        return postService.findAllWithSearch(condition);
+    public Page<Post> search(@RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params) {
+        return service.findAllWithSearch(new SearchableParamsParser<>(PostSearchDTO.class).convert(params));
+    }
+
+    @PostMapping("/search")
+    public Page<Post> search(@RequestBody SearchCondition<PostSearchDTO> condition) {
+        return service.findAllWithSearch(condition);
     }
 }
 ```
 
-#### GET 방식 요청 예제
+`@SearchableParams`는 Map의 API 문서를 생성합니다. 실제 변환은 예제의 파서 호출에서 수행합니다. JSON 요청 본문에는 DTO 타입 인자를 유지하세요. Jackson 2와 Jackson 3에 같은 DTO 검증·매핑 규칙을 적용합니다. 외부 입력을 DTO 타입 없는 검색 조건으로 받지 마세요.
 
 ```bash
-# 제목에 "Spring"이 포함된 게시글 검색
-GET /api/posts/search?title.contains=Spring
-
-# 상태가 PUBLISHED이고 조회수가 100 이상인 게시글
-GET /api/posts/search?status.equals=PUBLISHED&viewCount.greaterThan=100
-
-# 작성자 이름으로 검색하고 제목으로 정렬
-GET /api/posts/search?authorName.contains=John&sort=title.asc
-
-# 페이징 포함
-GET /api/posts/search?title.contains=Java&page=0&size=10
+curl --get 'http://localhost:8080/api/posts/search' \
+  --data-urlencode 'title.contains=Spring' \
+  --data-urlencode 'sort=createdAt.desc,id.asc' \
+  --data-urlencode 'page=0' \
+  --data-urlencode 'size=20'
 ```
 
-### POST 방식 검색 (JSON 바디)
-
-```java
-@PostMapping("/search")
-public Page<Post> searchPosts(
-    @RequestBody SearchCondition<PostSearchDTO> searchCondition
-) {
-    return postService.findAllWithSearch(searchCondition);
-}
-```
-
-#### POST 방식 요청 예제
+GET 검색 조건은 AND로 연결합니다. 정렬 문법은 `field.asc,otherField.desc`입니다. `field,desc`는 올바른 문법이 아닙니다. OR나 중첩 그룹에는 JSON 본문을 사용하세요.
 
 ```json
 {
   "conditions": [
-    {
-      "operator": "and",
-      "field": "title",
-      "searchOperator": "contains",
-      "value": "Spring"
-    },
-    {
-      "operator": "and",
-      "field": "status",
-      "searchOperator": "equals",
-      "value": "PUBLISHED"
-    },
-    {
-      "operator": "and",
-      "field": "viewCount",
-      "searchOperator": "greaterThan",
-      "value": 100
-    }
+    {"field": "title", "searchOperator": "contains", "value": "Spring"},
+    {"operator": "and", "field": "status", "searchOperator": "in", "value": ["PUBLISHED", "DRAFT"]}
   ],
-  "sort": {
-    "orders": [
-      {
-        "field": "createdAt",
-        "direction": "desc"
-      }
-    ]
-  },
+  "sort": {"orders": [{"field": "createdAt", "direction": "desc"}]},
   "page": 0,
-  "size": 10
+  "size": 20
 }
 ```
 
-### 검색 요청 처리 흐름
+각 노드의 `operator`는 그 노드를 앞에서 계산한 결과에 연결합니다. 각 목록의 첫 노드에는 연결할 이전 결과가 없습니다. BETWEEN은 `value`와 `value2`, IN은 배열을 사용합니다. 클라이언트가 `entityField`나 `fetchFields`로 매핑·로딩 경로를 지정할 수는 없습니다.
 
-GET 요청의 쿼리 파라미터는 `SearchableParamsParser`가, POST 요청의 JSON 바디는 Jackson `SearchConditionDeserializer`가 각각 `SearchCondition`으로 변환합니다. 이후 `SearchableFieldValidator`와 `SearchConditionValidator`가 필드·연산자·정렬 조건을 검증하고, `SearchableSpecificationBuilder`가 JPA `Specification`으로 조립합니다. 마지막으로 `TwoPhaseQueryExecutor`가 ID 조회(Phase 1), 카운트 조회(Phase 3), 배치 조회(Phase 2) 순서로 실행해 `Page<T>` 결과를 컨트롤러에 반환합니다.
+## 서버의 그룹 구성
 
-![검색 요청 처리 흐름](_images/search-request-flow.svg)
+아래 조건은 `status = PUBLISHED AND (title에 Spring 포함 OR title에 JPA 포함)`을 뜻합니다. 외부 조건에 결합해도 내부 그룹의 범위를 유지합니다.
 
-*GET·POST 검색 요청이 검증과 두 단계 조회를 거쳐 `Page<T>` 결과로 반환되는 흐름*
+```java
+import dev.simplecore.searchable.core.condition.SearchCondition;
+import dev.simplecore.searchable.core.condition.SearchConditionBuilder;
 
-## 6. 기본 검색 연산자 사용법
-
-### 문자열 검색
-
-```bash
-# 정확히 일치
-title.equals=Spring Boot
-
-# 포함
-title.contains=Spring
-
-# 시작
-title.startsWith=Spring
-
-# 끝
-title.endsWith=Boot
+SearchCondition<PostSearchDTO> condition = SearchConditionBuilder.create(PostSearchDTO.class)
+        .where(w -> w.equals("status", "PUBLISHED"))
+        .and(g -> g.contains("title", "Spring").orContains("title", "JPA"))
+        .sort(s -> s.desc("createdAt").asc("id"))
+        .page(0).size(20)
+        .build();
 ```
 
-### 숫자/날짜 비교
+같은 목록의 연결 연산자는 왼쪽부터 평가합니다. SQL의 암묵적인 AND 우선순위를 적용하지 않습니다. 의도한 괄호마다 중첩 그룹을 명시하세요. `SearchConditionBuilder.from(existing, DTO.class)`는 구조를 복사한 뒤 확장합니다.
 
-```bash
-# 크다
-viewCount.greaterThan=100
+## 페이지와 응답
 
-# 작다
-viewCount.lessThan=1000
+페이지를 생략하면 페이지 0과 설정한 기본 크기 20을 사용합니다. 페이지 크기는 양수이며, 설정한 최대 크기 이하여야 합니다. 기본 최대 크기는 1,000입니다. 정렬값이 같은 경우의 순서를 결정하도록 필요한 기본키 정렬을 추가합니다. 페이지 내용과 전체 건수는 조인된 자식 행이 아닌 검색 대상 루트 엔티티 기준입니다.
 
-# 범위 (BETWEEN)
-viewCount.between=100,1000
+서비스는 Spring Data의 `Page<T>`를 반환합니다. HTTP 응답 형식은 애플리케이션의 Spring Data·Jackson 설정에 따라 달라집니다. 공개 응답 형식을 일정하게 유지하려면 별도의 응답 DTO로 변환하세요. JPA 엔티티를 그대로 반환하면 필드가 노출되거나 지연 로딩이 실행될 수 있으므로 응답 모델을 용도에 맞게 정의하세요.
 
-# 날짜 범위
-createdAt.between=2024-01-01T00:00:00,2024-12-31T23:59:59
-```
+![검색 요청 처리 흐름](./_images/search-request-flow.svg)
 
-### NULL 체크
+## 오류 처리와 권한
 
-```bash
-# NULL 값
-content.isNull
+DTO 검증에서는 허용하지 않은 필드·연산자·정렬과 잘못된 값을 거부합니다. `SearchableParseException`과 `SearchableValidationException`은 `SearchableException`을 상속한 런타임 예외입니다. 컨트롤러 예외 처리에서 적절한 클라이언트 오류로 변환하세요. 잘못된 JSON 본문은 일반적으로 Spring MVC의 메시지 변환 오류 처리로 전달합니다.
 
-# NOT NULL 값
-content.isNotNull
-```
-
-### IN 연산자
-
-```bash
-# 여러 값 중 하나
-status.in=PUBLISHED,DRAFT
-
-# 여러 값에 포함되지 않음
-status.notIn=DELETED,ARCHIVED
-```
-
-## 7. 정렬
-
-### 단일 필드 정렬
-
-```bash
-GET /api/posts/search?sort=title.asc
-GET /api/posts/search?sort=createdAt.desc
-```
-
-### 다중 필드 정렬
-
-```bash
-GET /api/posts/search?sort=viewCount.desc,createdAt.desc
-```
-
-### JSON 방식 정렬
-
-```json
-{
-  "sort": {
-    "orders": [
-      {
-        "field": "viewCount",
-        "direction": "desc"
-      },
-      {
-        "field": "createdAt",
-        "direction": "desc"
-      }
-    ]
-  }
-}
-```
-
-## 8. 페이징
-
-```bash
-# 첫 번째 페이지, 10개씩
-GET /api/posts/search?page=0&size=10
-
-# 두 번째 페이지, 20개씩
-GET /api/posts/search?page=1&size=20
-```
-
-## 9. 실제 사용 예제
-
-### 복합 검색 조건
-
-```bash
-# 제목에 "Spring"이 포함되고, 상태가 PUBLISHED이며, 
-# 조회수가 100 이상인 게시글을 최신순으로 정렬
-GET /api/posts/search?title.contains=Spring&status.equals=PUBLISHED&viewCount.greaterThan=100&sort=createdAt.desc&page=0&size=10
-```
-
-### 중첩 필드 검색
-
-```bash
-# 작성자 이름에 "John"이 포함된 게시글
-GET /api/posts/search?authorName.contains=John
-
-# 작성자 이메일이 특정 도메인인 게시글
-GET /api/posts/search?authorEmail.endsWith=@company.com
-```
-
-## 다음 단계
-
-기본 사용법을 익혔다면 다음 문서를 참조하세요:
-
-- [고급 기능](advanced-features.md) - 복잡한 검색 조건과 중첩 쿼리
-- [검색 연산자](search-operators.md) - 모든 검색 연산자 상세 설명
-- [OpenAPI 통합](openapi-integration.md) - Swagger 문서 자동 생성
+라이브러리가 테넌트나 행별 권한 조건을 자동 추가하지는 않습니다. 파싱 후 서버에서 필수 범위를 추가하고, 클라이언트가 제어하는 OR 그룹 밖에 유지하세요. 그룹 결합과 쓰기 동작은 [고급 기능](./advanced-features.md)을 참조하세요.

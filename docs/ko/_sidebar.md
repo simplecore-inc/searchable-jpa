@@ -19,3 +19,5 @@
   * [변경 사항](/ko/changelog.md)
   * [라이선스](/ko/license.md)
   * [문서 기여 가이드](/ko/documentation-guide.md)
+
+  * [보안](/ko/security.md)

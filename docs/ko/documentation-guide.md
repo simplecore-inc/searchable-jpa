@@ -1,241 +1,48 @@
-# 문서 기여 가이드
+# 문서 작성·검증 가이드
 
-이 문서는 Searchable JPA 문서 시스템의 빌드, 로컬 미리보기, 기여 방법을 설명합니다.
+## 원본과 로컬 미리보기
 
-## 문서 구조
-
-Searchable JPA 문서는 `docs/en/`(기본 언어인 영어)과 `docs/ko/`(한국어 번역) 폴더로 나뉘어 있습니다.
-
-```
-searchable-jpa/
-├── docs/
-│   ├── index.html          # Docsify 설정
-│   ├── .nojekyll           # GitHub Pages Jekyll 비활성화
-│   ├── _coverpage.md       # 커버 페이지
-│   ├── _navbar.md          # 상단 네비게이션
-│   ├── en/
-│   │   ├── _sidebar.md     # 사이드바 네비게이션
-│   │   ├── README.md       # 메인 페이지
-│   │   └── ...             # 기타 문서 (번역 진행 중)
-│   └── ko/
-│       ├── _sidebar.md     # 사이드바 네비게이션
-│       ├── README.md       # 메인 페이지
-│       ├── installation.md # 설치 가이드
-│       ├── basic-usage.md  # 기본 사용법
-│       └── ...             # 기타 문서
-├── scripts/
-│   └── build-docs.sh       # 문서 빌드 스크립트
-└── build-docs/             # 빌드 출력 (gitignore)
-```
-
-## 로컬 빌드 및 미리보기
-
-### 1. 빌드 스크립트 실행
+영어와 한국어 문서는 `docs/en/`, `docs/ko/`에 같은 파일명으로 관리합니다. 각 언어에는 사이드바와 `_images/` 디렉터리가 있습니다. `docs/index.html`에서 Docsify를 설정하며 `docs/assets/`에는 공통 버전 선택 코드가 있습니다. 저장소 루트에서 실행하세요.
 
 ```bash
-# 프로젝트 루트에서 실행
 ./scripts/build-docs.sh
+python3 -m http.server 3000 --directory build-docs
 ```
 
-빌드 스크립트는 다음 작업을 수행합니다:
-- Docsify 설정 파일(`index.html`, `.nojekyll`, `_coverpage.md`, `_navbar.md`)을 `build-docs/`로 복사
-- 기본 언어인 영어 사이드바(`en/_sidebar.md`)는 `build-docs/en/`과 `build-docs/` 루트에, 한국어 사이드바(`ko/_sidebar.md`)는 `build-docs/ko/`에 복사
-- 커버 페이지의 버전 플레이스홀더(`{{VERSION}}`) 치환
-- `docs/en/`, `docs/ko/`의 문서를 각각 `build-docs/en/`, `build-docs/ko/`로 복사하고, 로케일별 `_images/` 폴더가 있으면 그 안의 SVG 이미지도 함께 복사
-- 상대 경로 링크(`./`)를 Docsify 절대 경로로 변환
+`http://localhost:3000/#/en/` 또는 `http://localhost:3000/#/ko/`를 여세요. `file://`로 직접 열지 말고 HTTP 서버를 사용하세요. 빌드 시 두 언어와 공통 파일을 복사하고, `build.gradle` 또는 `DOCS_VERSION`의 버전을 표지에 반영하며 Docsify용 링크로 변환합니다. `build-docs/`는 다시 생성할 수 있는 출력 디렉터리입니다.
 
-### 2. 로컬 서버 실행
-
-**방법 1: Python 간이 서버**
+라이브러리 검사에는 Java 17과 저장소의 Gradle Wrapper가 필요합니다. 문서 검사에는 Node.js 22 이상, npm, e2e에서 사용하는 브라우저 실행 환경이 필요합니다. 도구를 설치하고 검사를 실행하세요.
 
 ```bash
-cd build-docs
-python -m http.server 3000
+npm ci
+npm run test:docs
+npm run test:docs:e2e
 ```
 
-**방법 2: docsify-cli (Node.js 필요)**
+e2e 설정은 8764번 포트에서 테스트 서버를 실행합니다. 도메인 루트와 `/searchable-jpa/` 배포 경로, 개발 버전, 릴리스 두 개, 버전 없는 미리보기를 제공합니다. 언어·페이지·제목 위치 유지, 숫자 기준 버전 정렬, 없는 페이지, 요청 실패와 재시도를 검사합니다. 테스트가 끝나면 서버를 종료합니다. 실행 전 해당 포트를 비워 두세요.
 
-```bash
-npm install -g docsify-cli
-docsify serve build-docs
-```
+## 작성과 검토
 
-### 3. 브라우저에서 확인
+두 언어를 함께 수정하고 새 문서는 양쪽 사이드바에 등록하세요. 같은 디렉터리의 문서는 `./basic-usage.md`, 그림은 `./_images/name.svg`로 연결하세요. 실제 공개 API명, import한 Java 타입과 사용할 수 있는 의존성 좌표를 작성하세요. 부분 예제는 범위를 밝히고 애플리케이션에서 정의할 클래스를 설명하세요.
 
-```
-http://localhost:3000
-```
+문서 버전은 태그의 소스 버전과 일치해야 합니다. 과거 변경 이력은 당시 동작을 설명하므로 현재 동작으로 덮어쓰지 마세요. 설정 표는 starter 속성 클래스, 연산자 표는 `SearchOperator`, 예제는 파싱·직렬화 테스트와 일치해야 합니다.
 
-## 문서 작성 가이드
+커밋하기 전에 문서를 빌드하고 이동 기능을 검사하세요. 브라우저에서 두 언어를 확인하고 로컬 링크와 조회 전략 그림을 검토하세요. 검색 인덱스는 문서 버전과 언어별로 구분합니다. 코드 강조에는 Prism을 사용하며 SVG와 Mermaid 그림을 지원합니다. 별도 렌더러가 없는 GitHub 알림 표시는 일반 인용문으로 표시합니다.
 
-### 새 문서 추가
+## 버전별 배포
 
-1. `docs/ko/` 폴더(한국어)와 `docs/en/` 폴더(영어)에 마크다운 파일 생성
-2. `docs/ko/_sidebar.md`와 `docs/en/_sidebar.md`에 네비게이션 링크 추가
+`Deploy Documentation` GitHub Actions 워크플로는 `gh-pages`에 배포합니다. `master`의 문서가 변경되면 `snapshot/`을 갱신합니다. 수동 실행 시 `2.0.0` 같은 정식 버전을 입력하면 `v2.0.0` 태그의 문서를 빌드합니다. 최신 이동 기능은 별도로 가져오므로 이전 버전의 본문을 유지하면서 버전 선택 오류를 수정할 수 있습니다.
 
-```markdown
-* **카테고리명**
-  * [새 문서](/ko/new-doc.md)
-```
+`scripts/prepare-docs.mjs`는 기존 사이트와 새 빌드를 합칩니다. 선택한 버전 디렉터리만 교체하고 나머지 릴리스와 개발 문서를 보존합니다. 이전 HTML의 공통 버전 선택 파일을 갱신하고 `versions.json`을 생성합니다. 릴리스는 숫자 기준 내림차순으로 정렬합니다. 정식 버전을 배포해도 개발 문서는 삭제하지 않습니다.
 
-### 문서 간 링크
+사이트 루트는 가장 높은 정식 버전으로 이동하며 정식 버전이 없으면 개발 버전으로 이동합니다. URL의 쿼리와 해시는 유지합니다. 선택기는 같은 상위 경로의 버전 디렉터리로 이동하며 언어·페이지·제목 위치를 유지합니다. 이동 전에 페이지 존재 여부를 확인하고, 페이지가 없으면 해당 언어의 시작 페이지, 영어 시작 페이지 순서로 확인합니다. 네트워크 요청이 실패하면 현재 페이지를 유지합니다.
 
-같은 폴더 내 문서를 참조할 때:
+배포 주소는 [Searchable JPA 문서](https://simplecore-inc.github.io/searchable-jpa/)입니다. GitHub Pages에서 `gh-pages` 브랜치의 루트를 제공하도록 설정해야 합니다. 배포 워크플로에는 해당 브랜치의 쓰기 권한이 필요합니다.
 
-```markdown
-자세한 내용은 [기본 사용법](./basic-usage.md)을 참조하세요.
-```
+## 문제 해결
 
-### 지원되는 마크다운 기능
-
-**코드 블록 (구문 강조)**
-
-```java
-@Service
-public class PostService extends DefaultSearchableService<Post, Long> {
-    public PostService(PostRepository repository, EntityManager entityManager) {
-        super(repository, entityManager);
-    }
-}
-```
-
-지원 언어: `java`, `kotlin`, `yaml`, `bash`, `groovy`, `json`, `properties`, `sql`
-
-**표**
-
-| 열1 | 열2 |
-|-----|-----|
-| 값1 | 값2 |
-
-**인용구 표기 (GitHub 스타일)**
-
-```markdown
-> [!TIP]
-> 유용한 팁 내용
-
-> [!WARNING]
-> 주의사항 내용
-
-> [!IMPORTANT]
-> 중요한 내용
-
-> [!NOTE]
-> 참고 내용
-```
-
-`[!TIP]`, `[!WARNING]`, `[!IMPORTANT]`, `[!NOTE]` 같은 GitHub 스타일 표기는 별도의 알림 박스 플러그인 없이 일반 인용구로 렌더링됩니다. 강조할 내용은 굵게 표시하거나 별도 문단으로 작성합니다.
-
-**Mermaid 다이어그램**
-
-```markdown
-```mermaid
-graph LR
-    A[Controller] --> B[Service]
-    B --> C[Repository]
-```
-```
-
-## GitHub Pages 배포
-
-### 자동 배포
-
-`master` 브랜치에 문서 변경사항을 push하면 GitHub Actions가 자동으로 배포합니다.
-
-트리거 조건:
-- `docs/**` 파일 변경
-- `scripts/build-docs.sh` 변경
-- `.github/workflows/docs.yml` 변경
-
-### 수동 배포
-
-GitHub Actions 탭에서 "Deploy Documentation" 워크플로우를 수동 실행할 수 있습니다.
-
-**특정 릴리스 버전 배포:**
-1. GitHub > Actions > Deploy Documentation
-2. "Run workflow" 클릭
-3. version 입력란에 버전 번호 입력 (예: `1.0.3`)
-4. "Run workflow" 버튼 클릭
-
-### 버전 관리
-
-배포 시 버전별로 문서가 관리됩니다:
-- SNAPSHOT 버전: 매 배포마다 덮어씀 (최신 개발 버전)
-- 릴리스 버전: 영구 보존 (이전 버전 문서 유지)
-
-### 배포 URL
-
-```
-https://simplecore-inc.github.io/searchable-jpa/
-```
-
-### GitHub Pages 초기 설정
-
-처음 배포하려면 GitHub 저장소 설정이 필요합니다:
-
-1. GitHub 저장소 > Settings > Pages
-2. Source: `Deploy from a branch`
-3. Branch: `gh-pages` / `/ (root)`
-4. Save
-
-## 문서 기여
-
-### 오타/오류 수정
-
-1. 해당 문서 페이지에서 "GitHub에서 편집" 링크 클릭
-2. GitHub에서 직접 수정 후 PR 생성
-
-### 새 문서 추가
-
-1. 저장소 fork
-2. `docs/ko/` 폴더(한국어)와 `docs/en/` 폴더(영어)에 문서 작성
-3. `docs/ko/_sidebar.md`와 `docs/en/_sidebar.md`에 링크 추가
-4. 로컬에서 빌드 및 확인
-5. PR 생성
-
-### 작성 규칙
-
-- 파일명: kebab-case 사용 (예: `two-phase-query.md`)
-- 제목: 각 문서는 `# 제목`으로 시작
-- 언어: 영어 문서(기본)는 `docs/en/`, 한국어 문서(번역)는 `docs/ko/`
-
-## 트러블슈팅
-
-### 빌드 스크립트 실행 오류
-
-```bash
-# 실행 권한 부여
-chmod +x scripts/build-docs.sh
-```
-
-### 링크가 작동하지 않음
-
-- 빌드 후 `build-docs/` 폴더에서 확인해야 합니다
-- 원본 `docs/` 폴더에서 직접 열면 일부 링크가 작동하지 않습니다
-
-### 검색이 작동하지 않음
-
-- 검색 인덱스는 페이지 첫 로드 시 생성됩니다
-- 브라우저 캐시를 비우고 새로고침해보세요
-- 로컬 서버로 실행해야 검색이 작동합니다 (file:// 프로토콜 불가)
-
-### 버전 선택기가 보이지 않음
-
-- 버전 선택기는 GitHub Pages에 배포된 후에만 작동합니다
-- 로컬 미리보기에서는 `versions.json`이 없어 표시되지 않습니다
-
-## Docsify 주요 설정
-
-`docs/index.html`에서 주요 설정을 변경할 수 있습니다:
-
-| 설정 | 설명 | 기본값 |
-|------|------|--------|
-| `themeColor` | 테마 색상 | `#ea580c` |
-| `maxLevel` | 사이드바 최대 헤딩 레벨 | `4` |
-| `subMaxLevel` | 본문 내 헤딩 표시 레벨 | `3` |
-| `search.maxAge` | 검색 캐시 유효 시간 (ms) | `86400000` (1일) |
-
-## 관련 링크
-
-- [Docsify 공식 문서](https://docsify.js.org/)
-- [GitHub Pages 문서](https://docs.github.com/en/pages)
-- [Mermaid 다이어그램 문법](https://mermaid.js.org/)
+- 버전 디렉터리가 없는 로컬 미리보기에는 선택기를 표시하지 않습니다. `npm run test:docs:e2e` 또는 `node scripts/docs-test-server.mjs`로 버전별 경로를 확인하세요.
+- 버전 목록 조회가 실패하면 재시도 버튼과 상위 경로의 `versions.json` 응답을 확인하세요. 도메인 루트와 프로젝트 하위 경로를 모두 검사하세요.
+- 본문이나 검색 결과가 오래된 경우 선택한 버전과 언어를 확인하고 페이지를 다시 로드하세요. CDN·플러그인 요청도 확인하세요. Docsify 5 플러그인은 `dist/plugins/` 경로를 사용합니다.
+- 그림이 없으면 파일명 대소문자와 양쪽 언어 디렉터리의 SVG 파일을 확인하세요. 빌드 결과는 다시 생성하므로 `build-docs/` 대신 `docs/`를 수정하세요.
+- 특정 릴리스 배포가 실패하면 정확한 `vX.Y.Z` 태그가 있는지 확인하세요. 버전 입력에는 숫자 세 부분만 사용하세요.

@@ -19,3 +19,5 @@
   * [Changelog](/en/changelog.md)
   * [License](/en/license.md)
   * [Documentation Guide](/en/documentation-guide.md)
+
+  * [Security](/en/security.md)

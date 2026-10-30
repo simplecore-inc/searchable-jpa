@@ -8,7 +8,7 @@
 
 - Java 17+ / Spring Boot 3.2+
 - 18 Search Operators
-- High-Performance Two-Phase Query Pagination
+- Adaptive Query Strategy and Pagination
 - OpenAPI/Swagger Integration
 
 [Get Started](/en/installation.md)

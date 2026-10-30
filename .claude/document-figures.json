@@ -1,0 +1,19 @@
+{
+  "out": "docs",
+  "modules": ["scripts/figures/*.py"],
+  "helpers": [],
+  "boards": {"1000": 800},
+  "boardNames": {"FULL": 1000},
+  "placeScale": 1,
+  "margin": 24,
+  "sideMargin": 24,
+  "ladder": [18, 20, 22, 24, 26, 28, 30],
+  "names": {"MICRO": 18, "BODY": 20, "LEAD": 22, "CARD": 22, "SECTION": 24, "EMPH": 26, "DISPLAY": 30},
+  "steps": {"STEP": 26},
+  "strokes": {"HAIRLINE": 1.4, "STROKE": 1.9, "THICK": 2.8},
+  "theme": "paper",
+  "fontStack": "Arial, 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
+  "bullets": true,
+  "subBodyShareMax": 0.5,
+  "heightReview": 650
+}
