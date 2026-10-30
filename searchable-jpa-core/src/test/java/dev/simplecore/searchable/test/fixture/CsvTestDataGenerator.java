@@ -383,7 +383,7 @@ public class CsvTestDataGenerator {
      */
     public static void main(String[] args) {
         try {
-            String outputDir = "src/test/resources/test-data";
+            String outputDir = args.length > 1 ? args[1] : "src/test/resources/test-data";
             
             // Check for specific dataset request
             if (args.length > 0) {
@@ -396,7 +396,7 @@ public class CsvTestDataGenerator {
                 
                 if (datasetSizes.containsKey(requestedDataset)) {
                     String datasetName = requestedDataset;
-                    int recordCount = datasetSizes.get(requestedDataset);
+                    int recordCount = args.length > 2 ? Integer.parseInt(args[2]) : datasetSizes.get(requestedDataset);
                     
                     System.out.printf("========================================\n");
                     System.out.printf("Generating %s Dataset (%,d records)\n", 

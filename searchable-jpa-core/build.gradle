@@ -152,3 +152,17 @@ task generateSmallData(type: JavaExec) {
     mainClass = 'dev.simplecore.searchable.test.fixture.CsvTestDataGenerator'
     args = ['small']
 }
+// Generate deterministic fixtures even in a fresh checkout; never rely on ignored CSV files.
+def generatedFixtures = layout.buildDirectory.dir('generated-test-resources')
+sourceSets.test.resources.exclude('test-data/**')
+def generateTestFixtures = tasks.register('generateTestFixtures', JavaExec) {
+    dependsOn tasks.named('compileTestJava')
+    classpath = files(sourceSets.test.output.classesDirs, configurations.testRuntimeClasspath)
+    mainClass = 'dev.simplecore.searchable.test.fixture.CsvTestDataGenerator'
+    args 'small', generatedFixtures.get().dir('test-data').asFile.absolutePath, '1000'
+    outputs.dir generatedFixtures
+}
+tasks.named('processTestResources') {
+    dependsOn generateTestFixtures
+    from(generatedFixtures)
+}

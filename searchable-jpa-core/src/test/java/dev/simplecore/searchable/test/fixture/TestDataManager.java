@@ -176,8 +176,7 @@ public class TestDataManager {
         ClassPathResource resource = new ClassPathResource(SMALL_DATASET_PATH + "/" + csvFileName);
         
         if (!resource.exists()) {
-            log.warn("CSV file not found: {}", csvFileName);
-            return;
+            throw new IOException("Required test fixture is missing: " + csvFileName);
         }
         
         DatabaseType dbType = detectDatabaseType();
