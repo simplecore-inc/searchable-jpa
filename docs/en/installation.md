@@ -1,608 +1,112 @@
-# Installation Guide
+# Installation
 
-This document explains how to install and configure Searchable JPA in your project.
+This guide describes the `2.0.0-SNAPSHOT` source line. Dependency versions below were checked on 2026-10-30. A version ending in `-SNAPSHOT` is a development build, not a stable release.
 
-## Version Compatibility
+## Compatibility
 
-| Library Version | Spring Boot Version | Java Version | Jakarta EE | Status |
-|---------------|----------------|-----------|------------|------|
-| `2.x` | `4.1.x+` | `17+` | Jakarta EE 11 | Latest |
-| `1.x` | `3.2.x` ~ `3.5.x` | `17+` | Jakarta EE 9+ | Maintained |
-| `0.1.x` | `2.7.x` | `8+` | javax.* | Unmaintained |
+| Searchable JPA line | Spring Boot line | Java packages | Source branch |
+| --- | --- | --- | --- |
+| 2.x | 4.1.x and later 4.x | `jakarta.*` | `master` |
+| 1.x | 3.2.x–3.5.x | `jakarta.*` | `spring-boot-3x` |
+| 0.1.x | 2.7.x | `javax.*` | `spring-boot-2x` (unmaintained) |
 
-**Important**: Do not mix versions. Jakarta EE and javax.* packages apply differently depending on the version you use.
+The current build is tested with Java 17, Spring Boot 4.1.2 and Hibernate ORM 7.4.14.Final. Java 17 is the minimum source and bytecode level. Use one library line consistently across all three modules. A Boot 3 application stays on the 1.x line until the application itself migrates to Boot 4.
 
-## System Requirements
+Existing 2.x service subclasses, delegate construction, query parameter names and Jackson 2 public method signatures remain available. Jackson 3 supports typed HTTP search bodies. Corrected validation now rejects requests that exceed the documented limits; see [Auto Configuration](./auto-configuration.md).
 
-- **Java 17 or higher** (versions 2.x and 1.x)
-- **Java 8 or higher** (version 0.1.x)
-- **Spring Boot 4.1.x+** (version 2.x, Jakarta EE 11)
-- **Spring Boot 3.2.x - 3.5.x** (version 1.x, Jakarta EE 9+)
-- **Spring Boot 2.7.x** (version 0.1.x, javax.* packages)
-- Spring Data JPA
+## Modules
 
-## Adding the Dependency
+| Artifact | Contents |
+| --- | --- |
+| `searchable-jpa-core` | Conditions, DTO validation, JPA queries, services and time counts |
+| `searchable-jpa-openapi` | `@SearchableParams`, operation customization and examples; includes core |
+| `spring-boot-starter-searchable-jpa` | Both modules and Spring Boot auto-configuration |
 
-### Setting Up GitHub Packages Authentication
+Use the starter for a Spring MVC application. The application still supplies its datasource, entities, repositories, controllers and access-control rules. Repositories must implement both `JpaRepository` and `JpaSpecificationExecutor`.
 
-Searchable JPA is published only to GitHub Packages. Before you can resolve the dependency, register the repository and configure your credentials.
+## Local installation
 
-#### Gradle Repository Configuration
+Build with the committed Gradle wrapper and Java 17 or later:
 
-Add the following to `settings.gradle`:
+```bash
+./gradlew check performanceTest publishToMavenLocal
+```
 
-```gradle
-dependencyResolutionManagement {
-    repositories {
-        mavenCentral()
-        maven {
-            url = uri("https://maven.pkg.github.com/simplecore-inc/searchable-jpa")
-            credentials {
-                username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_USERNAME")
-                password = project.findProperty("gpr.token") ?: System.getenv("GITHUB_TOKEN")
-            }
-        }
-    }
+This installs all three modules under `~/.m2/repository/dev/simplecore/searchable/<artifact>/2.0.0-SNAPSHOT/`. The command performs no Git tagging or remote publication. Repeating it replaces the local snapshot.
+
+A Gradle consumer can resolve the local snapshot first:
+
+```groovy
+repositories {
+    mavenLocal()
+    mavenCentral()
 }
-```
 
-#### Maven Repository Configuration
-
-Register the repository in `pom.xml`:
-
-```xml
-<repositories>
-    <repository>
-        <id>github</id>
-        <url>https://maven.pkg.github.com/simplecore-inc/searchable-jpa</url>
-    </repository>
-</repositories>
-```
-
-Add your credentials to `~/.m2/settings.xml`:
-
-```xml
-<settings>
-    <servers>
-        <server>
-            <id>github</id>
-            <username>${env.GITHUB_USERNAME}</username>
-            <password>${env.GITHUB_TOKEN}</password>
-        </server>
-    </servers>
-</settings>
-```
-
-> **Important**: Your GitHub token needs the `read:packages` scope. Generate one at [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens).
-
-### Gradle
-
-```gradle
 dependencies {
-    // Searchable JPA starter
-    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:${version}'
-
-    // Spring Boot JPA starter (required)
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-
-    // Database driver (e.g., H2)
-    runtimeOnly 'com.h2database:h2'
-
-    // OpenAPI integration (optional) - SpringDoc 3.x for Spring Boot 4 (searchable-jpa 2.x),
-    // SpringDoc 2.x for Spring Boot 3 (searchable-jpa 1.x)
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0'
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:2.0.0-SNAPSHOT'
 }
 ```
 
-### Maven
+If repository declarations live in `settings.gradle`, add `mavenLocal()` there. Gradle consumers that cached an older snapshot can run their build with `--refresh-dependencies` after installation.
+
+A Maven consumer uses its local repository automatically:
 
 ```xml
-<dependencies>
-    <!-- Searchable JPA starter -->
-    <dependency>
-        <groupId>dev.simplecore.searchable</groupId>
-        <artifactId>spring-boot-starter-searchable-jpa</artifactId>
-        <version>${searchable-jpa.version}</version>
-    </dependency>
-
-    <!-- Spring Boot JPA starter (required) -->
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-data-jpa</artifactId>
-    </dependency>
-
-    <!-- Database driver (e.g., H2) -->
-    <dependency>
-        <groupId>com.h2database</groupId>
-        <artifactId>h2</artifactId>
-        <scope>runtime</scope>
-    </dependency>
-
-    <!-- OpenAPI integration (optional) - SpringDoc 3.x for Spring Boot 4, 2.x for Spring Boot 3 -->
-    <dependency>
-        <groupId>org.springdoc</groupId>
-        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-        <version>2.5.0</version>
-    </dependency>
-</dependencies>
+<dependency>
+  <groupId>dev.simplecore.searchable</groupId>
+  <artifactId>spring-boot-starter-searchable-jpa</artifactId>
+  <version>2.0.0-SNAPSHOT</version>
+</dependency>
 ```
 
-## Basic Configuration
+## GitHub Packages
 
-### application.yml
+For a remotely published version, configure `https://maven.pkg.github.com/simplecore-inc/searchable-jpa` and select a version that actually exists in that repository. Keep credentials outside committed files:
 
-```yaml
-spring:
-  # Datasource configuration
-  datasource:
-    url: jdbc:h2:mem:testdb
-    driverClassName: org.h2.Driver
-    username: sa
-    password: password
-  
-  # JPA configuration
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-
-# Searchable JPA configuration
-searchable:
-  # Swagger/OpenAPI integration
-  swagger:
-    enabled: true
-
-  # Hibernate optimizations (applied automatically)
-  hibernate:
-    auto-optimization: true          # Enable automatic optimization
-    default-batch-fetch-size: 100    # Batch size to prevent N+1 queries
-    jdbc-batch-size: 1000            # JDBC batch processing size
-    batch-versioned-data: true       # Batch processing for versioned entities
-    order-inserts: true              # Optimize INSERT ordering
-    order-updates: true              # Optimize UPDATE ordering
-    in-clause-parameter-padding: true # IN clause parameter padding
-```
-
-### application.properties
-
-```properties
-# Datasource configuration
-spring.datasource.url=jdbc:h2:mem:testdb
-spring.datasource.driverClassName=org.h2.Driver
-spring.datasource.username=sa
-spring.datasource.password=password
-
-# JPA configuration
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-spring.jpa.properties.hibernate.format_sql=true
-
-# Searchable JPA configuration
-searchable.swagger.enabled=true
-searchable.hibernate.auto-optimization=true
-searchable.hibernate.default-batch-fetch-size=100
-searchable.hibernate.jdbc-batch-size=1000
-searchable.hibernate.batch-versioned-data=true
-searchable.hibernate.order-inserts=true
-searchable.hibernate.order-updates=true
-searchable.hibernate.in-clause-parameter-padding=true
-```
-
-## Entity Configuration
-
-### Basic Entity Configuration
-
-> **Detailed entity configuration**: See [Basic Usage](basic-usage.md) for a complete entity configuration example.
-
-```java
-// See the basic usage guide for a complete entity configuration example
-// See the advanced features guide for composite key entity configuration examples
-```
-
-### Composite Key Entity Configuration
-
-#### The @IdClass Approach
-
-```java
-@Entity
-@Table(name = "multi_tenant_entities")
-@IdClass(MultiTenantEntity.CompositeKey.class)
-public class MultiTenantEntity {
-    @Id
-    @Column(name = "tenant_id")
-    private String tenantId;
-    
-    @Id
-    @Column(name = "entity_id")
-    private Long entityId;
-    
-    private String name;
-    private String description;
-    
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
-    
-    // Composite key class
-    public static class CompositeKey implements Serializable {
-        private String tenantId;
-        private Long entityId;
-        
-        // Default constructor
-        public CompositeKey() {}
-        
-        public CompositeKey(String tenantId, Long entityId) {
-            this.tenantId = tenantId;
-            this.entityId = entityId;
+```groovy
+repositories {
+    mavenCentral()
+    maven {
+        url = uri('https://maven.pkg.github.com/simplecore-inc/searchable-jpa')
+        credentials {
+            username = System.getenv('GITHUB_USERNAME')
+            password = System.getenv('GITHUB_TOKEN')
         }
-        
-        // equals, hashCode implementation (required)
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            CompositeKey that = (CompositeKey) o;
-            return Objects.equals(tenantId, that.tenantId) &&
-                   Objects.equals(entityId, that.entityId);
-        }
-        
-        @Override
-        public int hashCode() {
-            return Objects.hash(tenantId, entityId);
-        }
-        
-        // getters and setters
-    }
-    
-    // getters and setters
-}
-```
-
-#### The @EmbeddedId Approach
-
-```java
-@Entity
-@Table(name = "embedded_key_entities")
-public class EmbeddedKeyEntity {
-    @EmbeddedId
-    private CompositeKey id;
-    
-    private String name;
-    private String description;
-    
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
-    
-    // Embedded key class
-    @Embeddable
-    public static class CompositeKey implements Serializable {
-        @Column(name = "entity_id")
-        private Long entityId;
-        
-        @Column(name = "tenant_id")
-        private String tenantId;
-        
-        // Default constructor
-        public CompositeKey() {}
-        
-        public CompositeKey(Long entityId, String tenantId) {
-            this.entityId = entityId;
-            this.tenantId = tenantId;
-        }
-        
-        // equals, hashCode implementation (required)
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            CompositeKey that = (CompositeKey) o;
-            return Objects.equals(entityId, that.entityId) &&
-                   Objects.equals(tenantId, that.tenantId);
-        }
-        
-        @Override
-        public int hashCode() {
-            return Objects.hash(entityId, tenantId);
-        }
-        
-        // getters and setters
-    }
-    
-    // getters and setters
-}
-```
-
-## Repository Configuration
-
-### Basic Repository
-
-```java
-@Repository
-public interface PostRepository extends JpaRepository<Post, Long>, JpaSpecificationExecutor<Post> {
-    // Must extend JpaSpecificationExecutor
-}
-```
-
-### Composite Key Repository
-
-```java
-// @IdClass approach
-@Repository
-public interface MultiTenantEntityRepository 
-    extends JpaRepository<MultiTenantEntity, MultiTenantEntity.CompositeKey>, 
-            JpaSpecificationExecutor<MultiTenantEntity> {
-}
-
-// @EmbeddedId approach
-@Repository
-public interface EmbeddedKeyEntityRepository 
-    extends JpaRepository<EmbeddedKeyEntity, EmbeddedKeyEntity.CompositeKey>, 
-            JpaSpecificationExecutor<EmbeddedKeyEntity> {
-}
-```
-
-## Service Configuration
-
-### Implementing SearchableService
-
-> **Detailed service implementation**: See [Basic Usage](basic-usage.md) for a complete service implementation example.
-
-```java
-// See the basic usage guide for a service implementation example
-// See the advanced features guide for advanced service capabilities
-```
-
-### Defining the DTO Class
-
-> **Detailed DTO configuration**: See [Basic Usage](basic-usage.md) for a complete DTO configuration example.
-
-```java
-// See the basic usage guide for a DTO configuration example
-// See the advanced features guide for composite key DTO configuration
-```
-
-## Defining the Search DTO
-
-### Basic Search DTO
-
-```java
-public class PostSearchDTO {
-    @SearchableField(operators = {EQUALS, CONTAINS}, sortable = true)
-    private String title;
-    
-    @SearchableField(operators = {EQUALS, IN})
-    private PostStatus status;
-    
-    @SearchableField(operators = {GREATER_THAN, LESS_THAN, BETWEEN}, sortable = true)
-    private Integer viewCount;
-    
-    @SearchableField(entityField = "author.name", operators = {CONTAINS})
-    private String authorName;
-    
-    @SearchableField(operators = {GREATER_THAN, LESS_THAN, BETWEEN}, sortable = true)
-    private LocalDateTime createdAt;
-    
-    // getters and setters
-}
-```
-
-### Composite Key Search DTO
-
-```java
-// Search DTO for the @IdClass approach
-public class MultiTenantEntitySearchDTO {
-    @SearchableField(operators = {EQUALS, IN})
-    private String tenantId;
-    
-    @SearchableField(operators = {EQUALS, GREATER_THAN, LESS_THAN})
-    private Long entityId;
-    
-    @SearchableField(operators = {CONTAINS, STARTS_WITH})
-    private String name;
-    
-    @SearchableField(operators = {GREATER_THAN, LESS_THAN}, sortable = true)
-    private LocalDateTime createdAt;
-    
-    // getters and setters
-}
-
-// Search DTO for the @EmbeddedId approach
-public class EmbeddedKeyEntitySearchDTO {
-    @SearchableField(entityField = "id.entityId", operators = {EQUALS, GREATER_THAN, LESS_THAN})
-    private Long entityId;
-    
-    @SearchableField(entityField = "id.tenantId", operators = {EQUALS, IN})
-    private String tenantId;
-    
-    @SearchableField(operators = {CONTAINS, STARTS_WITH})
-    private String name;
-    
-    @SearchableField(operators = {GREATER_THAN, LESS_THAN}, sortable = true)
-    private LocalDateTime createdAt;
-    
-    // getters and setters
-}
-```
-
-## Controller Configuration
-
-### REST API Controller
-
-> **Detailed controller implementation**: See [Basic Usage](basic-usage.md) for a complete controller implementation example.
-
-```java
-// See the basic usage guide for a controller implementation example
-// See the OpenAPI integration guide for OpenAPI integration details
-```
-
-## Database-Specific Configuration
-
-Hibernate 6 automatically detects the database dialect from the JDBC URL and driver, so you do not need to set `database-platform` separately, as shown in the examples below.
-
-### MySQL
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/searchable_db?useSSL=false&allowPublicKeyRetrieval=true
-    username: your_username
-    password: your_password
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  
-  jpa:
-    hibernate:
-      ddl-auto: validate
-```
-
-### PostgreSQL
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/searchable_db
-    username: your_username
-    password: your_password
-    driver-class-name: org.postgresql.Driver
-  
-  jpa:
-    hibernate:
-      ddl-auto: validate
-```
-
-### SQL Server
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:sqlserver://localhost:1433;databaseName=searchable_db;trustServerCertificate=true
-    username: your_username
-    password: your_password
-    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
-  
-  jpa:
-    hibernate:
-      ddl-auto: validate
-```
-
-## Performance Optimization Settings
-
-### Creating Indexes
-
-```sql
--- Basic search indexes
-CREATE INDEX idx_posts_title ON posts(title);
-CREATE INDEX idx_posts_status ON posts(status);
-CREATE INDEX idx_posts_created_at ON posts(created_at DESC);
-
--- Composite index (search + sort)
-CREATE INDEX idx_posts_status_created_at ON posts(status, created_at DESC);
-
--- Association index
-CREATE INDEX idx_posts_author_id ON posts(author_id);
-
--- Composite key indexes
-CREATE INDEX idx_multi_tenant_composite ON multi_tenant_entities(tenant_id, entity_id);
-CREATE INDEX idx_embedded_key_composite ON embedded_key_entities(tenant_id, entity_id);
-
--- Partial search index
-CREATE INDEX idx_multi_tenant_name ON multi_tenant_entities(tenant_id, name);
-```
-
-### Hibernate Optimization
-
-```yaml
-searchable:
-  hibernate:
-    auto-optimization: true          # Enable automatic optimization
-    default-batch-fetch-size: 100    # Batch size to prevent N+1 queries
-    jdbc-batch-size: 1000            # JDBC batch processing size
-    batch-versioned-data: true       # Batch processing for versioned entities
-    order-inserts: true              # Optimize INSERT ordering
-    order-updates: true              # Optimize UPDATE ordering
-    in-clause-parameter-padding: true # IN clause parameter padding optimization
-```
-
-## Verifying the Installation
-
-### Test Controller
-
-```java
-@RestController
-@RequestMapping("/api/test")
-public class TestController {
-    
-    private final PostService postService;
-    
-    public TestController(PostService postService) {
-        this.postService = postService;
-    }
-    
-    @GetMapping("/health")
-    public ResponseEntity<String> healthCheck() {
-        return ResponseEntity.ok("Searchable JPA is working!");
-    }
-    
-    @GetMapping("/search-test")
-    public Page<Post> searchTest() {
-        SearchCondition<PostSearchDTO> condition = SearchConditionBuilder
-            .create(PostSearchDTO.class)
-            .where(w -> w
-                .equals("status", "PUBLISHED"))
-            .page(0)
-            .size(10)
-            .build();
-        return postService.findAllWithSearch(condition);
     }
 }
 ```
 
-### Confirming Application Startup
+The token needs package-read permission. The source build reads `gpr.user` and `gpr.token` from an ignored `gradle.properties`, or `GITHUB_USERNAME` and `GITHUB_TOKEN`. Remote publication uses separate publication credentials; local publication needs none.
 
-Searchable JPA logs its initialization at the TRACE level. Spring Boot's default log level (INFO) does not show TRACE output, so add the following configuration if you want to confirm the installation through logs.
+## Dependency baseline
 
-```yaml
-logging:
-  level:
-    dev.simplecore.searchable: TRACE
+| Component | Tested version |
+| --- | --- |
+| Gradle wrapper | 9.8.2 |
+| Spring Boot | 4.1.2 |
+| Spring dependency management plugin | 1.1.7 |
+| SpringDoc OpenAPI | 3.2.0 |
+| Hibernate ORM | 7.4.14.Final |
+| Jackson 2 databind / Java time | 2.22.4 |
+| Jackson 3 databind | 3.2.4 |
+| ModelMapper | 3.2.8 |
+| HikariCP | 7.1.0 |
+| H2 (tests) | 2.5.252 |
+| SQL Server JDBC (test profile) | 13.6.1.jre11 |
+| JUnit / Mockito | 6.1.3 / 5.24.0 |
+
+The root `build.gradle` contains the complete managed overrides. Hibernate, Jackson, logging and test dependencies are aligned and tested together. An application's own dependency management can override transitive versions: inspect its resolved runtime classpath when upgrading. Use its appropriate JDBC driver; the SQL Server test driver does not configure an application datasource.
+
+## Verification and database profiles
+
+```bash
+./gradlew test
+./gradlew performanceTest
+./gradlew build
 ```
 
-After adding this configuration, starting the application produces the following log output:
+Regular tests exclude the `performance` tag; `performanceTest` runs it separately with nonempty data assertions. The default integration tests use H2. SQL Server configuration is a separate test profile and requires a reachable database. Passing the H2 suite does not establish identical plans or timestamp precision on every database.
 
-```
-TRACE d.s.s.a.SearchableJpaConfiguration - SearchableJpaConfiguration is being initialized
-TRACE d.s.s.a.SearchableJpaConfiguration - Configuring automatic Hibernate optimizations for searchable-jpa...
-TRACE d.s.s.a.SearchableJpaConfiguration - Applied Hibernate optimizations:
-TRACE d.s.s.a.SearchableJpaConfiguration -   - default_batch_fetch_size: 100
-TRACE d.s.s.a.SearchableJpaConfiguration -   - jdbc.batch_size: 1000
-TRACE d.s.s.a.SearchableJpaConfiguration -   - order_inserts: true
-TRACE d.s.s.a.SearchableJpaConfiguration -   - order_updates: true
-TRACE d.s.s.a.SearchableJpaConfiguration -   - in_clause_parameter_padding: true
-TRACE d.s.s.a.SearchableJpaConfiguration - These settings help prevent N+1 problems and improve performance automatically.
-TRACE d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: searchable.hibernate.auto-optimization=false
-```
+Continue with [Basic Usage](./basic-usage.md) for complete application snippets and [FAQ](./faq.md) for resolution failures.
 
-Even without this log output, automatic optimization is already applied by default. The log is only a way to confirm that it ran.
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"Repository must implement JpaSpecificationExecutor" error**
-   - Add `JpaSpecificationExecutor<T>` to the repository's extends clause
-
-2. **"Could not determine primary key field for entity ..." warning**
-   - Check that the entity has an `@Id` annotation
-   - For composite keys, check the `@IdClass` or `@EmbeddedId` configuration
-   - This is a WARN-level log; it means pagination order may be inconsistent when the sorted results contain duplicate values
-
-3. **Auto-configuration does not work**
-   - Check the `spring-boot-starter-searchable-jpa` dependency
-   - Check Spring Boot version compatibility
-
-4. **Composite key errors**
-   - Check that the composite key class implements `equals()` and `hashCode()`
-   - Check that it implements the `Serializable` interface
-
-Searchable JPA is now installed. Continue to [Basic Usage](basic-usage.md) to implement your first search feature.
+See [Security and dependency scope](./security.md) for the Boot 3 advisories that require an enterprise Spring fix or a framework migration.

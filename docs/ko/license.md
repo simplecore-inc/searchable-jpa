@@ -1,35 +1,7 @@
 # 라이선스
 
-Searchable JPA는 [SimpleCORE License 1.0 (SCL-1.0)](https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE)을 따릅니다.
+Searchable JPA는 SimpleCORE License 1.0(SCL-1.0)으로 배포합니다. 적용 조건은 저장소의 [LICENSE](https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE)에 있으며 [한국어 문서](https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE_KO)도 제공합니다.
 
-## SimpleCORE License 1.0 (SCL-1.0)
+라이브러리, 파생 저작물, 라이브러리를 포함한 제품을 배포하거나 호스팅 서비스를 제공하기 전에 전문을 확인하세요. 사용 허가는 서면 동의와 별도 라이선스 요구 사항을 포함한 원문의 조건을 따릅니다. 이 페이지는 원문의 허가 범위를 대체하거나 확대하지 않습니다.
 
-Copyright (c) 2025 SimpleCORE
-
-### 허용 사항
-
-- **내부 사용**: 조직 내부에서 자유롭게 사용 가능
-- **제품 통합**: 자체 제품에 소프트웨어를 통합하여 사용 가능
-- **수정 및 커스터마이징**: 내부 용도로 소프트웨어 수정 가능
-- **비상업적 오픈소스**: 학술 연구, 비영리 프로젝트에서 사용 가능 (출처 명시 필요)
-
-### 제한 사항
-
-| 제한 항목 | 설명 |
-|-----------|------|
-| 상업적 재배포 | SimpleCORE의 서면 동의 없이 소프트웨어를 제3자에게 판매, 라이선스, 임대 또는 재배포 불가 |
-| 제3자 배포 | 소스, 바이너리, 컨테이너 이미지 등 어떤 형태로든 제3자에게 배포 불가 |
-| SaaS/호스팅 서비스 | 별도 상업 라이선스 없이 호스팅 서비스(SaaS, PaaS, API 기반 액세스) 제공 불가 |
-
-### 보증 면책
-
-이 소프트웨어는 "있는 그대로" 제공되며, 상품성, 특정 목적에의 적합성, 비침해를 포함해 명시적이든 묵시적이든 어떠한 보증도 하지 않습니다.
-
-## 문의
-
-라이선스 관련 문의: [license@simplecore.kr](mailto:license@simplecore.kr)
-
-## 관련 링크
-
-- [전체 라이선스 원문 (영문)](https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE)
-- [전체 라이선스 원문 (한글)](https://github.com/simplecore-inc/searchable-jpa/blob/master/LICENSE_KO)
+사용 허가와 라이선스 문의는 [license@simplecore.kr](mailto:license@simplecore.kr)로 보내세요. 외부 의존성에는 각각의 라이선스를 적용합니다.

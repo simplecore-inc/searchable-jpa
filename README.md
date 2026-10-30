@@ -1,173 +1,80 @@
 # Searchable JPA
 
-[![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1%2B-green.svg)](https://spring.io/projects/spring-boot)
-[![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-11-blue.svg)](https://jakarta.ee/)
-[![License](https://img.shields.io/badge/License-SimpleCORE%201.0-blue.svg)](LICENSE)
+DTO-controlled filtering, sorting, pagination and time counts for Spring Data JPA, with Spring Boot configuration and SpringDoc integration.
 
-Searchable JPA is a library that extends Spring Data JPA to provide dynamic search, sorting, and pagination functionality. It allows complex search conditions to be implemented using simple annotations and builder patterns, and provides high-performance pagination for large datasets through two-phase query optimization.
+[English documentation](https://simplecore-inc.github.io/searchable-jpa/#/en/) · [한국어 문서](https://simplecore-inc.github.io/searchable-jpa/#/ko/) · [Changes](docs/en/changelog.md)
 
-## Version Compatibility
+## Compatibility
 
-### Version-Specific Spring Boot Support
+| Library | Spring Boot | Branch |
+| --- | --- | --- |
+| 2.x | 4.1.x and later 4.x | `master` |
+| 1.x | 3.2.x–3.5.x | `spring-boot-3x` |
+| 0.1.x | 2.7.x | `spring-boot-2x` (unmaintained) |
 
-| Library Version | Spring Boot Version | Jakarta EE | Status |
-|----------------|---------------------|------------|--------|
-| `2.x` | `4.1.x+` | jakarta.* (Jakarta EE 11) | Latest |
-| `1.x` | `3.2.x` ~ `3.5.x` | jakarta.* (Jakarta EE 9+) | Maintained |
-| `0.1.x` | `2.7.x` | javax.* | Unmaintained |
+This tree builds **2.0.0-SNAPSHOT**, tested with Java 17, Spring Boot 4.1.2 and Hibernate 7.4.14.Final. Keep all three library modules on the same version. Boot 3 applications should use the maintained 1.x line; moving the application to Boot 4 is a separate migration.
 
-### Important: Version Compatibility Notice
+## Install and use
 
-- **2.x versions**: Only supports Spring Boot 4.1.x+ (Jakarta EE 11), built from `master`
-- **1.x versions**: Only supports Spring Boot 3.2.x - 3.5.x (Jakarta EE 9+), maintained on `spring-boot-3x`
-- **0.1.x versions**: Only supports Spring Boot 2.7.x (uses javax.* packages), no longer maintained
-- **No mixing with lower versions**: Using different versions simultaneously may cause classpath conflicts
-
-### Spring Boot 3.x → 4.x Migration
-
-Move to the 2.x line together with Spring Boot 4:
-
-```gradle
-// 1.x version (Spring Boot 3.x)
-implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.x'
-
-// 2.x version (Spring Boot 4.x)
-implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:2.x'
-```
-
-SpringDoc moves from 2.x to 3.x with Spring Boot 4.
-
-### Spring Boot 2.x → 3.x Migration
-
-When upgrading to Spring Boot 3.x, the following changes are required:
-
-1. **Dependency Version Changes**:
-   ```gradle
-   // 0.1.x version (Spring Boot 2.x)
-   implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:0.1.x'
-
-   // 1.0.0+ version (Spring Boot 3.x)
-   implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:1.0.0+'
-   ```
-
-2. **Jakarta EE Migration**:
-   - Change all `javax.*` imports to `jakarta.*`
-   - Update JPA-related imports in application code if they are used directly
-
-## System Requirements
-
-- **Java**: 17+
-- **Spring Boot**: 4.1.x+ (2.x versions)
-- **Spring Boot**: 3.2.x - 3.5.x (1.x versions)
-- **Spring Boot**: 2.7.x (0.1.x versions)
-- **Jakarta EE**: 11 (2.x versions), 9+ (1.x versions)
-- **javax.* support**: 2.7.x and below (0.1.x versions)
-
-## Key Features
-
-- **Dynamic Search**: Supports 18 search operators (EQUALS, CONTAINS, BETWEEN, etc.)
-- **Flexible Sorting**: Multi-field sorting and dynamic sort conditions
-- **High-Performance Pagination**: Two-phase query optimization for large dataset processing
-- **Type Safety**: Compile-time validation and type-safe builder patterns
-- **OpenAPI Integration**: Automatic Swagger documentation generation
-- **Multiple Data Types**: Support for strings, numbers, dates, enums, and nested objects
-- **Time Bucket Counting**: Counts rows per time bucket in the database, under the same search condition as the list
-
-## Quick Start
-
-### 1. Add Dependency
-
-```gradle
-implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:${version}'
-```
-
-### 2. Application Configuration (Optional)
-
-Configure `application.yml` for library usage:
-
-```yaml
-# Searchable JPA Configuration (All optional, defaults exist)
-searchable:
-  swagger:
-    enabled: true                    # Enable automatic OpenAPI documentation generation (default: true)
-  max-page-size: 1000               # Maximum page size (default: 1000)
-  default-page-size: 20             # Default page size (default: 20)
-```
-
-### 3. Define DTO Class
-
-```java
-public class PostSearchDTO {
-    @SearchableField(operators = {EQUALS, CONTAINS}, sortable = true)
-    private String title;
-
-    @SearchableField(operators = {EQUALS}, sortable = true)
-    private PostStatus status;
-
-    @SearchableField(operators = {GREATER_THAN, LESS_THAN}, sortable = true)
-    private LocalDateTime createdAt;
-}
-```
-
-### 4. Implement Service Class
-
-```java
-@Service
-public class PostService extends DefaultSearchableService<Post, Long> {
-    public PostService(PostRepository repository, EntityManager entityManager) {
-        super(repository, entityManager);
-    }
-}
-```
-
-### 5. Use in Controller
-
-```java
-@RestController
-public class PostController {
-    @GetMapping("/api/posts/search")
-    public Page<Post> searchPosts(
-        @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params
-    ) {
-        SearchCondition<PostSearchDTO> condition =
-            new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
-        return postService.findAllWithSearch(condition);
-    }
-}
-```
-
-### 6. API Call
+The starter includes core, OpenAPI support and automatic configuration. For local development:
 
 ```bash
-# Search posts containing "Spring" in title
-GET /api/posts/search?title.contains=Spring&sort=createdAt,desc&page=0&size=10
+./gradlew check performanceTest publishToMavenLocal
 ```
 
-## Documentation
+In the consuming project's `build.gradle`:
 
-### Korean Documentation
-- [Installation Guide](docs/ko/installation.md) - System requirements and installation instructions
-- [Basic Usage](docs/ko/basic-usage.md) - Basic usage methods and examples
-- [Search Operators](docs/ko/search-operators.md) - All supported search operators
-- [Advanced Features](docs/ko/advanced-features.md) - Complex search conditions and advanced features
-- [Two-Phase Query Optimization](docs/ko/two-phase-query-optimization.md) - High-performance pagination for large datasets
-- [Relational Data and Two-Phase Query](docs/ko/relationship-and-two-phase-query.md) - JPA relationship mapping and N+1 problem resolution
-- [Auto Configuration](docs/ko/auto-configuration.md) - Spring Boot auto-configuration settings
-- [OpenAPI Integration](docs/ko/openapi-integration.md) - Automatic Swagger documentation generation
-- [API Reference](docs/ko/api-reference.md) - Complete API documentation
-- [FAQ](docs/ko/faq.md) - Frequently asked questions and troubleshooting
+```groovy
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+dependencies {
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:2.0.0-SNAPSHOT'
+}
+```
 
-### English Documentation
-*Coming Soon* - English documentation is currently being prepared.
+Published versions are available from GitHub Packages; see [installation and credentials](docs/en/installation.md) ([한국어](docs/ko/installation.md)). The application supplies its datasource, entities, repositories and authorization rules.
 
+Use `@SearchableField` on a DTO, a repository implementing `JpaRepository` and `JpaSpecificationExecutor`, and `DefaultSearchableService` or `SearchableServiceDelegate`. The [complete example](docs/en/basic-usage.md) ([한국어](docs/ko/basic-usage.md)) connects all components.
 
+```http
+GET /api/posts?title.contains=Spring&sort=createdAt.desc&page=0&size=20
+```
 
+The 18 built-in operators support comparisons, literal string patterns, ranges, membership and null checks. Property names and values are validated at runtime. Existing Jackson 2 APIs remain available, with additional Jackson 3 support for typed JSON bodies.
+
+## Execution and configuration
+
+Simple single-key searches can query entities directly. Collection joins and composite keys use ID selection followed by hydration; independent collections are fetched separately. Count queries avoid duplicate root entities, and provably short pages can skip COUNT. Search-based writes use chunks of 200 while preserving entity callbacks and caller transactions.
+
+```yaml
+searchable:
+  default-page-size: 20
+  max-page-size: 1000
+  hibernate:
+    auto-optimization: true
+    auto-fetch-collections: true
+```
+
+See [all settings](docs/en/auto-configuration.md), [query strategy](docs/en/two-phase-query-optimization.md), [advanced features](docs/en/advanced-features.md), [API reference](docs/en/api-reference.md) and [troubleshooting](docs/en/faq.md). Indexes, data distribution and association size still determine database cost. Export requests need application-level limits.
+
+## Build and verify
+
+Use Java 17 or a supported newer JDK and the checked-in Gradle 9.8.2 wrapper:
+
+```bash
+./gradlew check performanceTest
+npm ci
+npm run test:docs
+npm run test:docs:e2e
+./scripts/build-docs.sh
+```
+
+Test CSV fixtures are generated deterministically during the build; a fresh checkout needs no manually generated dataset. Documentation checks require Node.js 22+ and the e2e browser runtime. See the [documentation guide](docs/en/documentation-guide.md) ([한국어](docs/ko/documentation-guide.md)) for local preview and versioned deployment.
+
+Patch changes must reach both maintained branches. Use `Backport: spring-boot-3x` / `Forwardport: master` commit trailers and `git cherry-pick -x`; run `scripts/branch-sync/check.sh --local` before pushing. The release workflow checks the build, publishes packages, creates a GitHub release and advances the development version.
 
 ## License
 
-This project is distributed under the [SimpleCORE License 1.0](LICENSE).
-
----
-
-Try implementing easier and faster search functionality with **Searchable JPA**! 
+[SimpleCORE License 1.0](LICENSE) applies. See the full terms before distributing or hosting the software. Licensing inquiries: [license@simplecore.kr](mailto:license@simplecore.kr).

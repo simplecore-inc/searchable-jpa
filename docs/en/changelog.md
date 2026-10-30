@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.0-SNAPSHOT (Unreleased)
+
+The same corrections are maintained on the Boot 4 and Boot 3 lines; each line retains its framework major version.
+
+- Preserve mixed AND/OR groups and singleton group connectors; support inherited DTO properties, aliases and property-level validation.
+- Retain Jackson 2 public APIs, add Jackson 3 typed-body support, preserve JSON round trips and classify malformed HTTP search bodies as client errors.
+- Apply page limits per persistence unit; bound condition depth, node count, sort count, IN values and JPA offsets.
+- Choose direct queries for simple single-key searches; retain two-phase loading for collection joins/composite keys, avoid duplicate counts and split independent collection fetches.
+- Traverse writes in chunks, preserve transactions and callbacks, and protect ID/version/audit/non-updatable properties and omitted primitive patch values.
+- Count each root once in precise half-open time buckets; retain datasource transaction guarantees.
+- Upgrade stable dependencies and Gradle, require normal and performance checks during release, and generate deterministic test fixtures on fresh checkouts.
+- Correct version navigation for project subpaths, retain language/page/heading, handle missing pages and failed requests, preserve snapshots on release deployment and refresh both documentation languages.
+
+Existing public service and Jackson 2 signatures remain available. Oversized requests that previously bypassed documented limits are now rejected. See [configuration](./auto-configuration.md), [query strategy](./two-phase-query-optimization.md) and [API behavior](./api-reference.md).
+
+
 This document records the notable changes to the searchable-jpa library.
 
 > See the linked GitHub commits for the full details of each change.
@@ -15,7 +31,7 @@ This document records the notable changes to the searchable-jpa library.
   - `TimeBucketCounter` takes the same `SearchCondition` the list is read with and counts rows per equal-width bucket of a period, in the database
   - The starter registers a `timeBucketCounter` bean automatically (`@ConditionalOnMissingBean`, so a bean you define yourself takes precedence)
   - `EpochMillisFunctionContributor` registers the `epoch_millis` function with a per-database expression; on databases it does not cover, counting falls back to one conditional sum per bucket
-  - [Detailed documentation](/en/advanced-features.md#counting-rows-per-time-bucket)
+  - [Detailed documentation](/en/advanced-features.md)
 
 ---
 

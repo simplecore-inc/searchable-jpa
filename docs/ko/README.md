@@ -1,181 +1,56 @@
-[English](/en/README.md) | 한국어
-
 # Searchable JPA
 
-[![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1%2B-green.svg)](https://spring.io/projects/spring-boot)
-[![Jakarta EE](https://img.shields.io/badge/Jakarta%20EE-11-blue.svg)](https://jakarta.ee/)
-[![License](https://img.shields.io/badge/License-SCL--1.0-blue.svg)](../../LICENSE)
+[English](/en/README.md) | 한국어
 
-Spring Data JPA를 확장하여 동적 검색, 정렬, 페이지네이션 기능을 제공하는 라이브러리입니다.
+Searchable JPA는 Spring Data JPA에 DTO 기반 검색, 정렬, 페이지 조회 기능을 추가합니다. 애플리케이션에서 `@SearchableField`로 검색 가능한 속성을 지정하고, 쿼리 파라미터나 JSON을 `SearchCondition`으로 변환한 후 서비스 또는 위임 객체로 조회합니다.
 
-> [!TIP]
-> `spring-boot-starter-searchable-jpa` 하나로 모든 기능을 사용할 수 있습니다!
+## 지원 계열
 
-## 주요 기능
+| 라이브러리 | Spring Boot | 브랜치 | 상태 |
+| --- | --- | --- | --- |
+| 2.x | 4.1.x 이상 4.x | `master` | 개발 중 |
+| 1.x | 3.2.x–3.5.x | `spring-boot-3x` | 유지보수 |
+| 0.1.x | 2.7.x | `spring-boot-2x` | 유지보수 종료 |
 
-| 기능 | 설명 |
-|------|------|
-| **동적 검색** | 18개 검색 연산자 지원 (EQUALS, CONTAINS, BETWEEN 등) |
-| **유연한 정렬** | 다중 필드 정렬 및 동적 정렬 조건 |
-| **고성능 페이지네이션** | 대용량 데이터셋을 위한 2단계 쿼리 최적화 페이지네이션 |
-| **타입 안전성** | 컴파일 타임 검증과 타입 안전 빌더 패턴 |
-| **OpenAPI 통합** | Swagger 문서 자동 생성 |
-| **다양한 데이터 타입** | 문자열, 숫자, 날짜, 열거형, 중첩 객체 지원 |
-| **시간 구간별 집계** | 목록과 같은 검색 조건으로 기간별 건수를 데이터베이스에서 집계 |
+현재 소스는 Java 17, Spring Boot 4.1.2, Hibernate 7.4.14.Final로 `2.0.0-SNAPSHOT`을 빌드합니다. 사용하는 의존성과 일치하는 문서 버전을 선택하세요. 개발 문서에는 이전 릴리스에 없는 수정 사항이 포함될 수 있습니다.
 
-## 빠른 시작
+## 주요 기능과 적용 범위
 
-### 1. 의존성 추가
+- 비교, 문자열 패턴, 범위, 목록, null 검사를 위한 18개 연산자와 실행 시 DTO 검증, 엔티티 경로 매핑을 제공합니다.
+- 단일 키의 단순 검색에서는 엔티티를 직접 조회합니다. 컬렉션 조인이나 복합 키가 있으면 ID를 선택한 후 엔티티를 조회하며, 독립된 컬렉션은 나누어 조회합니다.
+- 페이지, 첫 결과 조회, 인터페이스 프로젝션, 검색 조건에 따른 수정·삭제를 지원합니다.
+- 같은 폭의 시간 구간별 개수를 집계합니다. 데이터베이스 함수로 처리할 수 없으면 호환 가능한 집계 방식으로 전환합니다.
+- 기존 Jackson 2 공개 API와 타입이 지정된 검색 본문의 Jackson 3 역직렬화를 지원합니다.
+- Spring Boot 자동 설정과 DTO 어노테이션에 따른 SpringDoc 문서 생성을 제공합니다.
 
-```gradle
-dependencies {
-    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:${version}'
-}
+빌더의 필드명은 문자열이며 실행 시 검증합니다. 쿼리 성능은 인덱스, 검색 조건의 선택도, 연관 데이터 크기와 실행 계획에 따라 달라집니다. 접근 권한, 테넌트 격리, API 응답 DTO는 애플리케이션에서 구현해야 합니다.
+
+## 시작 순서
+
+1. [설치 가이드](./installation.md)에 따라 GitHub Packages 또는 Maven Local에서 맞는 계열을 설치하세요.
+2. [기본 사용법](./basic-usage.md)에 따라 엔티티, 저장소, DTO, 서비스, 컨트롤러를 정의하세요.
+3. [자동 설정](./auto-configuration.md)에서 페이지 제한, 시간대, Hibernate 기본값을 확인하세요.
+4. [검색 연산자](./search-operators.md)에서 값의 형식과 허용 연산자를 선택하세요.
+5. [조회 전략](./two-phase-query-optimization.md)에서 관계 매핑에 따른 비용을 확인하세요.
+
+문서의 DTO와 컨트롤러는 다음과 같은 요청을 처리합니다.
+
+```http
+GET /api/posts?title.contains=Spring&sort=createdAt.desc&page=0&size=20
 ```
 
-### 2. GitHub Packages 저장소 설정
+정렬 필드와 방향은 점으로 구분합니다. 여러 정렬 기준은 `createdAt.desc,title.asc`처럼 쉼표로 구분하세요.
 
-Searchable JPA는 GitHub Packages에 배포됩니다. `settings.gradle`에 다음을 추가하세요:
+## 모듈
 
-```gradle
-dependencyResolutionManagement {
-    repositories {
-        mavenCentral()
-        maven {
-            url = uri("https://maven.pkg.github.com/simplecore-inc/searchable-jpa")
-            credentials {
-                username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_USERNAME")
-                password = project.findProperty("gpr.token") ?: System.getenv("GITHUB_TOKEN")
-            }
-        }
-    }
-}
-```
+| 모듈 | 역할 |
+| --- | --- |
+| `searchable-jpa-core` | 조건, 검증, JPA 실행, 서비스 |
+| `searchable-jpa-openapi` | 검색 파라미터 문서 생성, core 의존 |
+| `spring-boot-starter-searchable-jpa` | 두 모듈과 Spring 자동 설정 |
 
-> [!IMPORTANT]
-> GitHub 토큰에 `read:packages` 권한이 필요합니다. [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)에서 생성하세요.
+[API 참조](./api-reference.md), [고급 기능](./advanced-features.md), [OpenAPI 연동](./openapi-integration.md), [문제 해결](./faq.md), [변경 이력](./changelog.md)을 확인하세요. 문서를 수정할 때는 [빌드·검증 가이드](./documentation-guide.md)를 참고하세요.
 
-### 3. 기본 설정 (선택사항)
+## 라이선스와 지원
 
-```yaml
-searchable:
-  swagger:
-    enabled: true                    # OpenAPI 문서 자동 생성 (기본값: true)
-  hibernate:
-    auto-optimization: true          # Hibernate 최적화 자동 설정 (기본값: true)
-    default-batch-fetch-size: 100    # 지연 로딩 배치 크기 (기본값: 100)
-```
-
-### 4. DTO 클래스 정의
-
-```java
-public class PostSearchDTO {
-    @SearchableField(operators = {EQUALS, CONTAINS}, sortable = true)
-    private String title;
-
-    @SearchableField(operators = {EQUALS}, sortable = true)
-    private PostStatus status;
-
-    @SearchableField(operators = {GREATER_THAN, LESS_THAN}, sortable = true)
-    private LocalDateTime createdAt;
-}
-```
-
-### 5. 서비스 클래스 구현
-
-```java
-@Service
-public class PostService extends DefaultSearchableService<Post, Long> {
-    public PostService(PostRepository repository, EntityManager entityManager) {
-        super(repository, entityManager);
-    }
-}
-```
-
-### 6. 컨트롤러에서 사용
-
-```java
-@RestController
-public class PostController {
-    @GetMapping("/api/posts/search")
-    public Page<Post> searchPosts(
-        @RequestParam @SearchableParams(PostSearchDTO.class) Map<String, String> params
-    ) {
-        SearchCondition<PostSearchDTO> condition =
-            new SearchableParamsParser<>(PostSearchDTO.class).convert(params);
-        return postService.findAllWithSearch(condition);
-    }
-}
-```
-
-### 7. API 호출
-
-```bash
-# 제목에 "Spring"이 포함된 게시물 검색
-GET /api/posts/search?title.contains=Spring&sort=createdAt.desc&page=0&size=10
-```
-
-## 모듈 아키텍처
-
-searchable-jpa-core, searchable-jpa-openapi, spring-boot-starter-searchable-jpa는 각각 독립된 최상위 Gradle 모듈이며, 아래는 모듈 간 의존 관계입니다.
-
-```
-spring-boot-starter-searchable-jpa   Spring Boot 자동 설정 스타터
-  +-- searchable-jpa-core            핵심 라이브러리
-  +-- searchable-jpa-openapi         OpenAPI/Swagger 지원
-        +-- searchable-jpa-core
-```
-
-## 지원하는 검색 연산자
-
-| 카테고리 | 연산자 |
-|----------|--------|
-| **비교** | equals, notEquals, greaterThan, greaterThanOrEqualTo, lessThan, lessThanOrEqualTo |
-| **문자열** | contains, notContains, startsWith, notStartsWith, endsWith, notEndsWith |
-| **범위** | between, notBetween |
-| **컬렉션** | in, notIn |
-| **NULL 체크** | isNull, isNotNull |
-
-상세한 연산자 목록과 사용법은 [검색 연산자](./search-operators.md) 문서를 참조하세요.
-
-## 버전 호환성
-
-| 라이브러리 버전 | Spring Boot 버전 | Jakarta EE | 상태 |
-|----------------|------------------|------------|------|
-| `2.x` | `4.1.x+` | jakarta.* (Jakarta EE 11) | 최신 |
-| `1.x` | `3.2.x` ~ `3.5.x` | jakarta.* (Jakarta EE 9+) | 유지보수 |
-| `0.1.x` | `2.7.x` | javax.* | 유지보수 종료 |
-
-## 튜토리얼
-
-| 가이드 | 설명 |
-|--------|------|
-| [설치 가이드](./installation.md) | 시스템 요구사항 및 설치 안내 |
-| [기본 사용법](./basic-usage.md) | 기본 사용법과 예제 |
-| [자동 설정](./auto-configuration.md) | Spring Boot 자동 설정과 Hibernate 최적화 옵션 |
-| [검색 연산자](./search-operators.md) | 지원하는 모든 검색 연산자 |
-| [2단계 쿼리 최적화](./two-phase-query-optimization.md) | 대용량 데이터를 위한 고성능 페이지네이션 |
-| [관계형 데이터와 2단계 쿼리](./relationship-and-two-phase-query.md) | JPA 관계 매핑과 N+1 문제 해결 |
-| [고급 기능](./advanced-features.md) | 복잡한 검색 조건과 고급 기능 |
-| [OpenAPI 통합](./openapi-integration.md) | Swagger 문서 자동 생성 |
-| [API 레퍼런스](./api-reference.md) | 전체 API 문서 |
-| [자주 묻는 질문](./faq.md) | FAQ 및 문제 해결 |
-
-## 요구 사항
-
-- Java 17+
-- Spring Boot 4.1.x+ (1.x 버전은 3.2.x+)
-- Gradle 8.14+ (1.x 버전은 8.5+)
-
-## 라이선스
-
-이 프로젝트는 [SimpleCORE License 1.0 (SCL-1.0)](./license.md)을 따릅니다.
-
-## 개발팀
-
-Searchable JPA는 [SimpleCORE Inc.](https://simplecore.kr)에서 개발하고 있습니다.
-
-- **Website**: [simplecore.kr](https://simplecore.kr)
-- **GitHub**: [github.com/simplecore-inc](https://github.com/simplecore-inc)
-- **Contact**: license@simplecore.kr
+[SimpleCORE License 1.0](./license.md)을 적용합니다. 재현 가능한 오류는 [GitHub Issues](https://github.com/simplecore-inc/searchable-jpa/issues)에 등록하세요. 라이브러리, Java, Spring Boot, 데이터베이스 버전과 최소 DTO·엔티티 매핑, 민감한 정보를 제거한 실패 요청을 함께 작성하세요.

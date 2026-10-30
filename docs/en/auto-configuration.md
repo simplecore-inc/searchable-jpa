@@ -1,440 +1,95 @@
-# Searchable JPA Auto-Configuration Guide
+# Auto Configuration
 
-## **Automatic Hibernate Optimization**
+The starter registers JPA defaults before Hibernate's auto-configuration and an OpenAPI operation customizer in a servlet application. All settings below are optional. This page describes `2.0.0-SNAPSHOT`.
 
-The searchable-jpa library **automatically configures Hibernate optimization settings** to prevent N+1 problems and improve performance.
-
-### **Optimizations Applied Automatically**
-
-Adding the library as a dependency **automatically applies** the following settings:
-
-```yaml
-spring:
-  jpa:
-    properties:
-      hibernate:
-        # Prevent N+1 problems
-        default_batch_fetch_size: 100
-        
-        # Batch processing optimization
-        jdbc:
-          batch_size: 1000
-          batch_versioned_data: true
-        
-        # Insert/update ordering optimization
-        order_inserts: true
-        order_updates: true
-        
-        # Query optimization
-        query:
-          in_clause_parameter_padding: true
-
-        # Connection optimization
-        connection:
-          provider_disables_autocommit: true
-```
-
-### **Customizing the Settings**
-
-You can override the defaults as needed:
+## Configuration example
 
 ```yaml
 searchable:
+  max-page-size: 1000
+  default-page-size: 20
+  swagger:
+    enabled: true
+  date-time:
+    default-timezone: Asia/Seoul
   hibernate:
-    # Enable/disable automatic optimization (default: true)
     auto-optimization: true
-
-    # Batch fetch size (default: 100)
-    default-batch-fetch-size: 150
-
-    # JDBC batch size (default: 1000)
-    jdbc-batch-size: 500
-
-    # Batch processing for versioned data (default: true)
+    auto-fetch-collections: true
+    default-batch-fetch-size: 100
+    jdbc-batch-size: 1000
     batch-versioned-data: true
-
-    # Insert ordering optimization (default: true)
     order-inserts: true
-
-    # Update ordering optimization (default: true)
     order-updates: true
-
-    # IN clause parameter padding (default: true)
     in-clause-parameter-padding: true
 ```
 
-### **Disabling Automatic Optimization**
-
-To disable automatic optimization entirely:
-
-```yaml
-searchable:
-  hibernate:
-    auto-optimization: false
-```
-
-Or specify only the individual settings you want to override:
-
-```yaml
-# Manual settings take precedence over auto-configuration
-spring:
-  jpa:
-    properties:
-      hibernate:
-        default_batch_fetch_size: 200  # This value is used instead of the auto-configured one
-```
-
-### **Performance Impact**
-
-#### **Before (no auto-configuration)**
-```sql
--- N+1 problem occurs
-SELECT * FROM user_account WHERE id = ?  -- 1 query
-SELECT * FROM position WHERE id = ?      -- N queries (one per user)
-SELECT * FROM organization WHERE id = ?  -- N queries (one per user)
-```
-
-#### **After (auto-configuration applied)**
-```sql
--- Optimized through batch loading
-SELECT * FROM user_account WHERE id IN (?, ?, ?, ...)     -- 1 query
-SELECT * FROM position WHERE id IN (?, ?, ?, ...)         -- 1 query (batched)
-SELECT * FROM organization WHERE id IN (?, ?, ?, ...)     -- 1 query (batched)
-```
-
-### **Key Benefits**
-
-#### 1. **Developer Convenience**
-- No separate configuration required
-- Optimization settings apply automatically
-- Prevents performance problems caused by oversight
-
-#### 2. **Immediate Performance Gains**
-- Automatically prevents N+1 problems
-- Optimized batch processing
-- Improved query plan caching
-
-#### 3. **Flexible Customization**
-- Override individual settings when needed
-- Tune optimizations per project
-- Supports selective, incremental disabling
-
-### **Usage Examples**
-
-#### **Basic Usage (Automatic Optimization)**
-```java
-// Optimization is applied automatically as soon as the dependency is added
-@Service
-public class UserService extends DefaultSearchableService<User, Long> {
-
-    public UserService(UserRepository repository, EntityManager entityManager) {
-        super(repository, entityManager);
-    }
-
-    public Page<User> searchUsers(SearchCondition<UserSearchDTO> condition) {
-        // Batch loading is applied automatically
-        return findAllWithSearch(condition);
-    }
-}
-```
-
-#### **Using Custom Settings**
-```yaml
-# application.yml
-searchable:
-  hibernate:
-    auto-optimization: true
-    default-batch-fetch-size: 200  # Larger batch size
-    jdbc-batch-size: 2000          # Larger JDBC batch
-```
-
-### **Checking the Applied Configuration**
-
-The process of applying automatic optimization is logged at the TRACE level. To see it, set `logging.level.dev.simplecore.searchable=TRACE`.
-
-```
-TRACE SearchableJpaConfiguration - Configuring automatic Hibernate optimizations for searchable-jpa...
-TRACE SearchableJpaConfiguration - Applied Hibernate optimizations:
-TRACE SearchableJpaConfiguration -   - default_batch_fetch_size: 100
-TRACE SearchableJpaConfiguration -   - jdbc.batch_size: 1000
-TRACE SearchableJpaConfiguration -   - order_inserts: true
-TRACE SearchableJpaConfiguration -   - order_updates: true
-TRACE SearchableJpaConfiguration -   - in_clause_parameter_padding: true
-TRACE SearchableJpaConfiguration - These settings help prevent N+1 problems and improve performance automatically.
-```
-
-When automatic optimization is disabled (`searchable.hibernate.auto-optimization=false`), the following log line appears at the INFO level.
+`Asia/Seoul` is an example, not the default timezone. Unset timezone settings resolve as described below.
 
-```
-INFO  SearchableJpaConfiguration - Searchable Hibernate auto-optimization is disabled
-```
-
-### **Notes**
+## Properties and boundaries
 
-1. **Conflicts with Existing Settings**
-   - If `spring.jpa.properties.hibernate.*` settings already exist, they take precedence.
-   - Auto-configuration only applies to settings that have not been explicitly configured.
+| Property under `searchable` | Default | Behavior |
+| --- | --- | --- |
+| `default-page-size` | 20 | Used when the condition omits size; positive and no greater than the maximum |
+| `max-page-size` | 1000 | Maximum executed page size; positive |
+| `swagger.enabled` | true | Enables this library's operation customizer, not access control for Swagger endpoints |
+| `date-time.default-timezone` | unset | First choice for interpreting timezone-less input |
+| `hibernate.auto-optimization` | true | Adds the six Hibernate defaults in the next table |
+| `hibernate.auto-fetch-collections` | true | Includes automatically detected to-one paths through direct collections; false disables that extra detection |
+| `hibernate.default-batch-fetch-size` | 100 | Positive Hibernate lazy-load batch size |
+| `hibernate.jdbc-batch-size` | 1000 | Positive Hibernate JDBC statement batch size |
+| `hibernate.batch-versioned-data` | true | Passes Hibernate's versioned-data batching setting |
+| `hibernate.order-inserts` | true | Orders inserts for JDBC batching |
+| `hibernate.order-updates` | true | Orders updates for JDBC batching |
+| `hibernate.in-clause-parameter-padding` | true | Pads eligible IN parameter lists to improve query plan reuse |
 
-2. **Memory Usage**
-   - A larger `default_batch_fetch_size` can increase memory usage.
-   - Tune it to match your application's characteristics.
-
-3. **Database Compatibility**
-   - Some settings are effective only on specific databases.
-   - Verify the impact with performance testing.
-
-## Default Auto-Configuration
-
-### What Gets Configured Automatically
-
-1. **Hibernate Optimization Settings**
-   - Batch fetch size configuration to prevent N+1 problems
-   - JDBC batch size optimization
-   - Query plan caching optimization
+The collection option preserves existing automatic loading by default. Explicit server-side `fetchFields` still work when it is false. It does not change JPA `EAGER` mappings or disable ordinary lazy loading.
 
-2. **OpenAPI/Swagger Integration**
-   - Automatic recognition of the SearchableParams annotation
-   - Automatic API documentation generation
+## Hibernate defaults and precedence
 
-3. **Time Bucket Counting**
-   - Registration of the `TimeBucketCounter` bean
-   - Registration of the Hibernate function the counting query uses
-
-![Auto-configuration bean wiring diagram](_images/auto-configuration-wiring.svg)
-
-*How `searchable.*` settings in application.yml bind to SearchableProperties, which SearchableJpaConfiguration and SearchableOpenApiConfiguration then read to conditionally register beans*
-
-## Configuration Properties
-
-### application.yml Configuration
+| Library property suffix | `spring.jpa.properties` key |
+| --- | --- |
+| `default-batch-fetch-size` | `hibernate.default_batch_fetch_size` |
+| `jdbc-batch-size` | `hibernate.jdbc.batch_size` |
+| `batch-versioned-data` | `hibernate.jdbc.batch_versioned_data` |
+| `order-inserts` | `hibernate.order_inserts` |
+| `order-updates` | `hibernate.order_updates` |
+| `in-clause-parameter-padding` | `hibernate.query.in_clause_parameter_padding` |
 
-```yaml
-searchable:
-  # Swagger/OpenAPI settings
-  swagger:
-    enabled: true  # Default: true, enables OpenAPI/Swagger integration
-
-  # Date/time settings
-  date-time:
-    default-timezone: UTC  # Timezone for interpreting timezone-less search values (IANA id, e.g. Asia/Seoul). Defaults to UTC when unset
-
-  # Hibernate optimization settings
-  hibernate:
-    auto-optimization: true  # Default: true, enables automatic Hibernate optimization
-    default-batch-fetch-size: 100  # Default: 100, batch fetch size
-    jdbc-batch-size: 1000  # Default: 1000, JDBC batch size
-    batch-versioned-data: true  # Default: true, batch processing for versioned data
-    order-inserts: true  # Default: true, insert ordering optimization
-    order-updates: true  # Default: true, update ordering optimization
-    in-clause-parameter-padding: true  # Default: true, IN clause parameter padding
-```
-
-### application.properties Configuration
+These values enter the environment at the lowest priority. Explicit application, system and environment settings take precedence. Setting `auto-optimization: false` disables these defaults; it leaves validation, page limits and timezone configuration active.
 
-```properties
-# Swagger/OpenAPI settings
-searchable.swagger.enabled=true
+The starter **does not set** `hibernate.connection.provider_disables_autocommit`. That property asserts a datasource guarantee. Incorrectly forcing it to true can commit writes that should roll back. Datasource auto-commit and transaction configuration remain the application's responsibility.
 
-# Date/time settings
-searchable.date-time.default-timezone=UTC
+JDBC statement batching and the service's 200-entity write chunks are different controls. Changing `jdbc-batch-size` does not change the service chunk size or the transaction boundary.
 
-# Hibernate optimization settings
-searchable.hibernate.auto-optimization=true
-searchable.hibernate.default-batch-fetch-size=100
-searchable.hibernate.jdbc-batch-size=1000
-searchable.hibernate.batch-versioned-data=true
-searchable.hibernate.order-inserts=true
-searchable.hibernate.order-updates=true
-searchable.hibernate.in-clause-parameter-padding=true
-```
+## Request limits
 
-## Detailed Settings Reference
+| Input | Limit |
+| --- | --- |
+| Page number | Zero or greater |
+| Page size | 1 through configured `max-page-size` |
+| Offset | `page * size <= 2,147,483,647` |
+| Condition/group nodes | 1,000 total |
+| Group depth | 32 nested levels below the root list |
+| Collection values, including IN | 1,000 per condition |
+| Sort fields | 16 |
 
-### Hibernate Optimization Settings
+Structural checks apply to parsed JSON, builders and conditions passed to query construction. DTO-aware entry points also validate field permissions, operators, sort permissions and values. A manually constructed `SearchCondition` is trusted server code; it is not a replacement for DTO validation on untrusted input. HTTP body size, string lengths, request rate and database query timeout remain application-level controls.
 
-#### auto-optimization
-- **Default**: `true`
-- **Description**: Enables automatic Hibernate optimization settings.
-- **Effect**: Applies a range of optimizations automatically to prevent N+1 problems.
+Page size defaults and maxima are evaluated against the active persistence unit. Without the starter, equivalent EntityManagerFactory properties are `searchable.default_page_size`, `searchable.max_page_size` and `searchable.auto_fetch_collections`. The starter exposes them via `spring.jpa.properties`. Configure custom persistence units explicitly. Keep their page settings positive and the default no greater than the maximum.
 
-#### default-batch-fetch-size
-- **Default**: `100`
-- **Description**: Batch fetch size for lazy loading.
-- **Effect**: Fetches associated entities in batches to prevent N+1 problems.
-- **Constraint**: Must be 1 or greater. Specifying a value below 1 causes application startup to fail.
+## Timezone resolution
 
-#### jdbc-batch-size
-- **Default**: `1000`
-- **Description**: JDBC batch size for bulk operations.
-- **Effect**: Improves the performance of bulk INSERT/UPDATE operations.
-- **Constraint**: Must be 1 or greater. Specifying a value below 1 causes application startup to fail.
+1. Valid `searchable.date-time.default-timezone`.
+2. A `ZoneId` bean named `applicationZoneId`.
+3. Valid `spring.jackson.time-zone`.
+4. UTC.
 
-#### batch-versioned-data
-- **Default**: `true`
-- **Description**: Enables batching of versioned data for optimistic locking.
-- **Effect**: Improves batch operation performance for entities with version management.
+Invalid explicit zone IDs are logged and fall through to the next choice. An offset supplied in a search value remains meaningful; timezone-less temporal values and date-only BETWEEN boundaries use the resolved application zone. The parser's zone holder is process-wide, so multiple application contexts in one JVM should use the same zone. Page limits are not global.
 
-#### order-inserts
-- **Default**: `true`
-- **Description**: Optimizes the ordering of INSERT statements.
-- **Effect**: Prevents foreign key constraint violations and improves performance.
+## Registered beans
 
-#### order-updates
-- **Default**: `true`
-- **Description**: Optimizes the ordering of UPDATE statements.
-- **Effect**: Reduces the likelihood of deadlocks and improves performance.
+`TimeBucketCounter` is registered when no application bean of that type exists. `searchConditionCustomizer` is registered by name when Swagger customization is enabled, Spring MVC has a `RequestMappingHandlerMapping`, the relevant SpringDoc classes exist and the application is servlet-based. An application bean with that name overrides it.
 
-#### in-clause-parameter-padding
-- **Default**: `true`
-- **Description**: Enables IN clause parameter padding.
-- **Effect**: Improves performance by making query plan caching more effective.
+![Auto-configuration](./_images/auto-configuration-wiring.svg)
 
-### Date/Time Settings
-
-Sets the application timezone used to interpret timezone-less date/time search values and to expand date-only BETWEEN boundaries. This timezone is independent of the deployment host's JVM default timezone, so search results stay consistent across different server environments.
-
-#### date-time.default-timezone
-- **Default**: unset
-- **Description**: The timezone used to interpret timezone-less search values. Uses an IANA timezone id (for example, `Asia/Seoul` or `UTC`).
-- **Effect**: Interprets timezone-less `LocalDateTime`, `Instant`, `OffsetDateTime`, `ZonedDateTime`, and `Date` search values -- and date-only BETWEEN boundaries -- in this timezone. Values with a `Z` suffix or an offset already denote an absolute instant and are unaffected.
-- **Resolution order**: When left unset, the timezone is resolved in the following order:
-  1. `searchable.date-time.default-timezone` (this setting)
-  2. An `applicationZoneId` bean (of type `ZoneId`) registered by the host application
-  3. `spring.jackson.time-zone`
-  4. UTC (final default)
-
-> ⚠ **Behavior change**: Previously, timezone-less search values were interpreted in the deployment host's JVM default timezone. They are now resolved in the order above, defaulting to UTC when nothing is set. If you need interpretation in the server's local timezone, specify it explicitly via `searchable.date-time.default-timezone`.
-
-### Swagger Settings
-
-#### swagger.enabled
-- **Default**: `true`
-- **Description**: Enables OpenAPI/Swagger integration.
-- **Effect**: Automatically generates documentation for APIs annotated with `@SearchableParams`.
-- **Conditions**:
-  - The web application type is SERVLET.
-  - The OpenAPI and OperationCustomizer classes are on the classpath.
-  - The `searchConditionCustomizer` bean is created only after the `RequestMappingHandlerMapping` bean is registered (it runs in the order defined by `@AutoConfigureAfter(WebMvcAutoConfiguration.class)`).
-
-## Time Bucket Counting
-
-Two things that `TimeBucketCounter` needs are prepared automatically. See [Advanced Features - Counting Rows per Time Bucket](advanced-features.md#counting-rows-per-time-bucket) for how to use it.
-
-### The timeBucketCounter Bean
-
-`SearchableJpaConfiguration` registers a `TimeBucketCounter` bean with the `EntityManager` injected. Inject it rather than constructing one per service.
-
-```java
-@Bean
-@ConditionalOnMissingBean
-public TimeBucketCounter timeBucketCounter(EntityManager entityManager)
-```
-
-Because of `@ConditionalOnMissingBean`, an application that defines its own bean of the same type keeps it.
-
-### The epoch_millis Function
-
-Dividing a period into buckets needs the stored instant as a number, and there is no portable way to ask for one. So `EpochMillisFunctionContributor` registers a per-database expression under the name `epoch_millis`. It works through Hibernate's `FunctionContributor` SPI (`META-INF/services`), so having the library on the classpath is enough — nothing needs to be configured.
-
-| Database | Registered Expression |
-|----------|----------------------|
-| SQLite | The stored column value as-is (the driver already stores it as an integer of milliseconds) |
-| PostgreSQL, CockroachDB | `extract(epoch from ...)` converted to milliseconds |
-| H2 | `datediff('MILLISECOND', ...)` |
-| MySQL, MariaDB | `unix_timestamp(...)` converted to milliseconds |
-| Oracle | The date difference from the epoch converted to milliseconds |
-| SQL Server | `datediff_big(millisecond, ...)` |
-
-On a database that is not listed, no function is registered and `TimeBucketCounter` counts with one conditional sum per bucket instead. The result is the same, but the statement carries one expression per bucket, so the listed databases scale better on large tables.
-
-> ⚠ **Function name collision**: `epoch_millis` is registered in the application-wide Hibernate function registry. If you already register a function under that name, the later registration wins — rename one of them so the names do not collide.
-
-## Disabling Auto-Configuration
-
-You can disable specific pieces of auto-configuration as follows:
-
-### Disabling Hibernate Optimization Auto-Configuration
-
-Excluding only `SearchableJpaConfiguration` turns off Hibernate optimization auto-configuration. `SearchableOpenApiConfiguration`, which handles OpenAPI integration, is a separate auto-configuration class and remains active.
-
-```java
-@SpringBootApplication(exclude = SearchableJpaConfiguration.class)
-public class Application {
-    public static void main(String[] args) {
-        SpringApplication.run(Application.class, args);
-    }
-}
-```
-
-To disable both auto-configurations, list them together in `exclude`.
-
-```java
-@SpringBootApplication(exclude = {SearchableJpaConfiguration.class, SearchableOpenApiConfiguration.class})
-public class Application {
-    public static void main(String[] args) {
-        SpringApplication.run(Application.class, args);
-    }
-}
-```
-
-### Disabling Only a Specific Feature
-
-```yaml
-searchable:
-  swagger:
-    enabled: false  # Disable Swagger integration
-  hibernate:
-    auto-optimization: false  # Disable Hibernate optimization
-```
-
-## Custom Configuration
-
-To replace the auto-registered OpenAPI customizer, define your own bean under the same name (`searchConditionCustomizer`). `SearchableOpenApiConfiguration` is annotated with `@ConditionalOnMissingBean(name = "searchConditionCustomizer")`, so when you define this bean yourself, it is registered instead of the default `OpenApiDocCustomiser`.
-
-```java
-@Configuration
-public class SearchableCustomConfiguration {
-
-    @Bean(name = "searchConditionCustomizer")
-    public OperationCustomizer searchConditionCustomizer() {
-        return new CustomSearchConditionCustomizer();
-    }
-}
-```
-
-Write `CustomSearchConditionCustomizer` either by implementing `OperationCustomizer` directly, or by wrapping `OpenApiDocCustomiser` and overriding only the parts you need.
-
-The `timeBucketCounter` bean is replaced the same way: define your own bean of type `TimeBucketCounter` and it is used instead of the auto-registered one (see [Time Bucket Counting](#time-bucket-counting)).
-
-## Verifying the Configuration
-
-To confirm that the settings were applied correctly at application startup, check the logs. The log lines below are at the TRACE level, so you must set `logging.level.dev.simplecore.searchable=TRACE` to see them.
-
-```
-TRACE d.s.s.a.SearchableJpaConfiguration - SearchableJpaConfiguration is being initialized
-TRACE d.s.s.a.SearchableJpaConfiguration - Configuring automatic Hibernate optimizations for searchable-jpa...
-TRACE d.s.s.a.SearchableJpaConfiguration - Applied Hibernate optimizations:
-TRACE d.s.s.a.SearchableJpaConfiguration -   - default_batch_fetch_size: 100
-TRACE d.s.s.a.SearchableJpaConfiguration -   - jdbc.batch_size: 1000
-TRACE d.s.s.a.SearchableJpaConfiguration -   - order_inserts: true
-TRACE d.s.s.a.SearchableJpaConfiguration -   - order_updates: true
-TRACE d.s.s.a.SearchableJpaConfiguration -   - in_clause_parameter_padding: true
-TRACE d.s.s.a.SearchableJpaConfiguration - These settings help prevent N+1 problems and improve performance automatically.
-TRACE d.s.s.a.SearchableJpaConfiguration - To disable auto-optimization, set: searchable.hibernate.auto-optimization=false
-```
-
-## Troubleshooting
-
-### Auto-Configuration Is Not Applied
-
-1. **Check the dependency**: Confirm that `spring-boot-starter-searchable-jpa` was added correctly.
-2. **Check auto-configuration registration**: Spring Boot 3.x and 4.x load auto-configurations through the SPI mechanism, reading them from `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` rather than through component scanning. As long as `spring-boot-starter-searchable-jpa` is on the classpath, it registers automatically regardless of where your `@SpringBootApplication` class's package is located.
-3. **Check the configuration file**: Verify that the settings in `application.yml` or `application.properties` are correct.
-
-### Performance Problems
-
-1. **Adjust batch sizes**: Tune `default-batch-fetch-size` and `jdbc-batch-size` for your environment.
-2. **Check the optimization setting**: Confirm that `auto-optimization` is enabled.
-3. **Apply database-specific optimizations**: Apply settings tailored to the database you use.
-
-For related topics, see [Two-Phase Query Optimization](./two-phase-query-optimization.md) and [OpenAPI Integration](./openapi-integration.md).
+See [OpenAPI Integration](./openapi-integration.md) for grouped APIs and [Relationships](./relationship-and-two-phase-query.md) for fetch behavior.
