@@ -28,7 +28,7 @@ spring:
         default_batch_fetch_size: 100
         # Connection pool settings
         connection:
-          provider_disables_autocommit: true
+          provider_disables_autocommit: false
         # Query optimization
         query:
           in_clause_parameter_padding: true
