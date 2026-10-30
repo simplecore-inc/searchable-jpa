@@ -5,6 +5,11 @@ import dev.simplecore.searchable.core.service.DefaultSearchableService;
 import dev.simplecore.searchable.test.config.BaseTestConfig;
 import dev.simplecore.searchable.test.config.TestConfig;
 import dev.simplecore.searchable.test.entity.TestPost;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -16,11 +21,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -88,12 +88,7 @@ class PaginationPerformanceTest {
         log.info("  - Total pages: {}", totalPages);
         log.info("  - Page size: {}", PAGE_SIZE);
         
-        if (totalElements < PAGE_SIZE * 5) {
-            log.warn("  ⚠ WARNING: Not enough data for meaningful performance test");
-            log.warn("  - Required: {} records", PAGE_SIZE * 5);
-            log.warn("  - Available: {} records", totalElements);
-            log.warn("  - Continuing with available data for testing");
-        }
+        assertThat(totalElements).as("Performance fixture must contain at least 100 rows").isGreaterThanOrEqualTo(PAGE_SIZE * 5);
 
         // Calculate test page positions - test more pages if available
         int[] testPages;
@@ -127,7 +122,7 @@ class PaginationPerformanceTest {
         }
         
         log.info("STEP 3: TEST CONFIGURATION");
-        log.info("  - Testing {} page positions: {}", testPages.length, java.util.Arrays.toString(testPages));
+        log.info("  - Testing {} page positions: {}", testPages.length, Arrays.toString(testPages));
         log.info("  - Warmup iterations: {}", WARMUP_ITERATIONS);
         log.info("  - Test iterations per position: {}", TEST_ITERATIONS);
 

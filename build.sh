@@ -177,11 +177,11 @@ execute_build() {
             echo -e "${GREEN}Starting clean + full build (including tests)...${NC}"
             ;;
         3)
-            build_args="$build_args publishToMavenLocal -x test"
+            build_args="$build_args check performanceTest publishToMavenLocal"
             echo -e "${GREEN}Starting clean + publishing to local Maven repository...${NC}"
             ;;
         4)
-            build_args="$build_args publish -x test"
+            build_args="$build_args check performanceTest publish"
             echo -e "${GREEN}Starting clean + publishing to GitHub Packages...${NC}"
             ;;
     esac

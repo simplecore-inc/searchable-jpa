@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,11 +48,18 @@ class TwoPhaseQueryPerformanceTest {
     private TestDataManager testDataManager;
 
     @BeforeAll
-    static void setUp(@Autowired TestDataManager testDataManager) {
+    static void setUp(@Autowired TestDataManager testDataManager, @Autowired JdbcTemplate jdbc) {
         log.info("=== STEP 1: SETTING UP PERFORMANCE TEST DATA ===");
         
         // Initialize test data for performance testing
         testDataManager.initializeTestData();
+        // Ensure the complex scenario exercises a real multi-join result rather than timing zero rows.
+        jdbc.update("UPDATE test_post SET title = ?, status = ?, view_count = ? WHERE post_id = (SELECT MIN(post_id) FROM test_post)",
+                "Test performance fixture", "PUBLISHED", 100L);
+        jdbc.update("UPDATE test_comment SET content = ? WHERE post_id = (SELECT MIN(post_id) FROM test_post)", "test performance comment");
+        jdbc.update("INSERT INTO test_post_tag(post_id, tag_id) SELECT p.post_id, t.tag_id FROM test_post p CROSS JOIN test_tag t "
+                + "WHERE p.post_id = (SELECT MIN(post_id) FROM test_post) AND t.name = ? "
+                + "AND NOT EXISTS (SELECT 1 FROM test_post_tag pt WHERE pt.post_id = p.post_id AND pt.tag_id = t.tag_id)", "Java");
         
         log.info("  ✔ Performance test data setup completed");
     }
@@ -91,7 +99,7 @@ class TwoPhaseQueryPerformanceTest {
         
         // Verify results
         assertNotNull(result);
-        assertTrue(result.getTotalElements() >= 0);
+        assertTrue(result.getTotalElements() > 0, "Performance scenario must match seeded data");
         
         // Performance assertion (should complete within reasonable time)
         assertTrue(duration < 3000, "Regular query should complete within 3 seconds, but took " + duration + " ms");
@@ -133,7 +141,7 @@ class TwoPhaseQueryPerformanceTest {
         
         // Verify results
         assertNotNull(result);
-        assertTrue(result.getTotalElements() >= 0);
+        assertTrue(result.getTotalElements() > 0, "Performance scenario must match seeded data");
         
         // Performance assertion (should complete within reasonable time)
         assertTrue(duration < 5000, "ManyToMany query should complete within 5 seconds, but took " + duration + " ms");
@@ -182,7 +190,7 @@ class TwoPhaseQueryPerformanceTest {
         
         // Verify results
         assertNotNull(result);
-        assertTrue(result.getTotalElements() >= 0);
+        assertTrue(result.getTotalElements() > 0, "Performance scenario must match seeded data");
         
         // Performance assertion (should complete within reasonable time)
         assertTrue(duration < 8000, "Complex query should complete within 8 seconds, but took " + duration + " ms");
@@ -226,7 +234,7 @@ class TwoPhaseQueryPerformanceTest {
         
         // Verify results
         assertNotNull(result);
-        assertTrue(result.getTotalElements() >= 0);
+        assertTrue(result.getTotalElements() > 0, "Performance scenario must match seeded data");
         
         // Performance assertion (should complete within reasonable time)
         assertTrue(duration < 10000, "Large page query should complete within 10 seconds, but took " + duration + " ms");
@@ -270,7 +278,7 @@ class TwoPhaseQueryPerformanceTest {
         
         // Verify results
         assertNotNull(result);
-        assertTrue(result.getTotalElements() >= 0);
+        assertTrue(result.getTotalElements() > 0, "Performance scenario must match seeded data");
         
         // Performance assertion (should complete within reasonable time)
         assertTrue(duration < 6000, "Deep pagination query should complete within 6 seconds, but took " + duration + " ms");
@@ -317,7 +325,7 @@ class TwoPhaseQueryPerformanceTest {
         
         // Verify results
         assertNotNull(result);
-        assertTrue(result.getTotalElements() >= 0);
+        assertTrue(result.getTotalElements() > 0, "Performance scenario must match seeded data");
         
         // Performance assertion (should complete within reasonable time even with potential batching)
         assertTrue(duration < 15000, "IN clause batching query should complete within 15 seconds, but took " + duration + " ms");
@@ -365,6 +373,7 @@ class TwoPhaseQueryPerformanceTest {
             
             // Verify consistency
             assertNotNull(result);
+            assertTrue(result.getTotalElements() > 0, "Performance scenario must match seeded data");
             if (lastResult != null) {
                 assertEquals(lastResult.getTotalElements(), result.getTotalElements(), 
                     "Results should be consistent across iterations");

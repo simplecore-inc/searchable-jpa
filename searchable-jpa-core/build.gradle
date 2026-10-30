@@ -4,8 +4,10 @@ apply plugin: 'io.spring.dependency-management'
 apply plugin: 'java-library'
 apply plugin: 'maven-publish'
 
-sourceCompatibility = JavaVersion.VERSION_17
-targetCompatibility = JavaVersion.VERSION_17
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
 
 sourceSets {
     main {
@@ -100,7 +102,10 @@ test {
 }
 
 // Performance test task - run separately
-task performanceTest(type: Test) {
+tasks.register('performanceTest', Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    shouldRunAfter tasks.named('test')
     group = 'verification'
     description = 'Run performance tests manually'
     
@@ -136,7 +141,7 @@ task generateLargeData(type: JavaExec) {
     group = 'data'
     description = 'Generate large test dataset (5M records)'
     classpath = sourceSets.test.runtimeClasspath
-    main = 'dev.simplecore.searchable.test.fixture.CsvTestDataGenerator'
+    mainClass = 'dev.simplecore.searchable.test.fixture.CsvTestDataGenerator'
     args = ['large']
 }
 
@@ -144,6 +149,6 @@ task generateSmallData(type: JavaExec) {
     group = 'data'
     description = 'Generate small test dataset (10K records)'
     classpath = sourceSets.test.runtimeClasspath
-    main = 'dev.simplecore.searchable.test.fixture.CsvTestDataGenerator'
+    mainClass = 'dev.simplecore.searchable.test.fixture.CsvTestDataGenerator'
     args = ['small']
 }
