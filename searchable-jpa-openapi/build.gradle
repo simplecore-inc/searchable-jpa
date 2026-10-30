@@ -20,33 +20,17 @@ sourceSets {
     }
 }
 
-// Version-specific configuration for Spring Boot 3.x vs 2.x compatibility
 configurations.all {
-    if (project.version.toString().startsWith('1.')) {
-        // 1.x versions: Spring Boot 3.x - exclude Javax dependencies
-        exclude group: 'javax.persistence', module: 'javax.persistence-api'
-        exclude group: 'javax.validation', module: 'validation-api'
-        exclude group: 'javax.annotation', module: 'javax.annotation-api'
-    } else if (project.version.toString().startsWith('0.1.')) {
-        // 0.1.x versions: Spring Boot 2.x - exclude Jakarta dependencies
-        exclude group: 'jakarta.persistence', module: 'jakarta.persistence-api'
-        exclude group: 'jakarta.validation', module: 'jakarta.validation-api'
-        exclude group: 'jakarta.annotation', module: 'jakarta.annotation-api'
-    }
+    exclude group: 'javax.persistence', module: 'javax.persistence-api'
+    exclude group: 'javax.validation', module: 'validation-api'
+    exclude group: 'javax.annotation', module: 'javax.annotation-api'
 }
 
 dependencies {
     api project(':searchable-jpa-core')
 
-    if (project.version.toString().startsWith('1.')) {
-        // 1.x versions: Spring Boot 3.5.x compatible OpenAPI
-        implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui'
-        implementation 'org.springdoc:springdoc-openapi-starter-webmvc-api'
-    } else if (project.version.toString().startsWith('0.1.')) {
-        // 0.1.x versions: Spring Boot 2.x compatible OpenAPI
-        implementation 'org.springdoc:springdoc-openapi-ui'
-        implementation 'org.springdoc:springdoc-openapi-webmvc-core'
-    }
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-api'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'

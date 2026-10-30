@@ -1,19 +1,18 @@
 plugins {
-    id 'org.springframework.boot' version '3.5.16' apply false
+    id 'org.springframework.boot' version '4.1.2' apply false
     id 'io.spring.dependency-management' version '1.1.7' apply false
     id 'java'
     id 'maven-publish'
 }
 
 ext {
-    springBootVersion = '3.5.16'
+    springBootVersion = '4.1.2'
     springDependencyManagementVersion = '1.1.7'
     
     // Dependency versions - only for dependencies not managed by Spring Boot
     versions = [
         // SpringDoc OpenAPI versions (not managed by Spring Boot)
-        springdocOpenapiStarter: '2.5.0',
-        springdocOpenapiLegacy: '1.7.0',
+        springdocOpenapiStarter: '3.2.0',
         
         // Other dependencies not managed by Spring Boot
         modelmapper: '3.2.0',
@@ -23,7 +22,7 @@ ext {
 
 allprojects {
     group = 'dev.simplecore.searchable'
-    version = '1.1.3-SNAPSHOT'
+    version = '2.0.0-SNAPSHOT'
 
     System.setProperty("spring.boot.version.check.enabled", "false")
 
@@ -31,16 +30,13 @@ allprojects {
     afterEvaluate {
         def versionStr = version.toString()
 
-        if (versionStr.startsWith('1.')) {
-            // 1.x versions: Spring Boot 3.2.x+ required
-            if (!springBootVersion.startsWith('3.')) {
-                throw new GradleException("Version ${version} requires Spring Boot 3.2.x+, but current version is ${springBootVersion}")
-            }
-        } else if (versionStr.startsWith('0.1.')) {
-            // 0.1.x versions: Spring Boot 2.7.x required
-            if (!springBootVersion.startsWith('2.7')) {
-                throw new GradleException("Version ${version} requires Spring Boot 2.7.x, but current version is ${springBootVersion}")
-            }
+        // Each release line is bound to one Spring Boot generation:
+        // 2.x -> Boot 4 (master), 1.x -> Boot 3 (spring-boot-3x), 0.1.x -> Boot 2.7 (spring-boot-2x)
+        if (!versionStr.startsWith('2.')) {
+            throw new GradleException("This branch builds the 2.x line only, but the version is ${version}")
+        }
+        if (!springBootVersion.startsWith('4.')) {
+            throw new GradleException("Version ${version} requires Spring Boot 4.x, but current version is ${springBootVersion}")
         }
     }
 }
@@ -59,8 +55,6 @@ subprojects {
             // SpringDoc OpenAPI versions (not managed by Spring Boot)
             dependency "org.springdoc:springdoc-openapi-starter-webmvc-ui:${versions.springdocOpenapiStarter}"
             dependency "org.springdoc:springdoc-openapi-starter-webmvc-api:${versions.springdocOpenapiStarter}"
-            dependency "org.springdoc:springdoc-openapi-ui:${versions.springdocOpenapiLegacy}"
-            dependency "org.springdoc:springdoc-openapi-webmvc-core:${versions.springdocOpenapiLegacy}"
             
             // Other dependencies not managed by Spring Boot
             dependency "org.modelmapper:modelmapper:${versions.modelmapper}"
@@ -135,15 +129,9 @@ subprojects {
                         }
 
                         // Spring Boot version compatibility information
-                        if (project.version.toString().startsWith('1.')) {
-                            properties.appendNode('spring-boot.version.required', '[3.2.0,4.0.0)')
-                            properties.appendNode('jakarta.version.required', '9+')
-                            properties.appendNode('javax.version.supported', 'false')
-                        } else if (project.version.toString().startsWith('0.1.')) {
-                            properties.appendNode('spring-boot.version.required', '[2.7.0,3.0.0)')
-                            properties.appendNode('jakarta.version.supported', 'false')
-                            properties.appendNode('javax.version.required', 'true')
-                        }
+                        properties.appendNode('spring-boot.version.required', '[4.0.0,5.0.0)')
+                        properties.appendNode('jakarta.version.required', '11+')
+                        properties.appendNode('javax.version.supported', 'false')
                     }
                 }
             }
@@ -185,6 +173,6 @@ subprojects {
 }
 
 wrapper {
-    gradleVersion = '8.5'
+    gradleVersion = '8.14.3'
     distributionType = Wrapper.DistributionType.BIN
 }
