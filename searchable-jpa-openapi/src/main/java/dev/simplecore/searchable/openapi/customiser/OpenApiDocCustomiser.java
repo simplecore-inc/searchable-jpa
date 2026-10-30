@@ -13,17 +13,17 @@ import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.RequestBody;
+import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.core.MethodParameter;
 import org.springframework.web.method.HandlerMethod;
-
-import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 public class OpenApiDocCustomiser implements OperationCustomizer {
     private static final Logger log = LoggerFactory.getLogger(OpenApiDocCustomiser.class);
@@ -90,19 +90,19 @@ public class OpenApiDocCustomiser implements OperationCustomizer {
 
             registerEnumsFromDto(dtoClass);
 
-            java.lang.reflect.Type parameterizedType = new ParameterizedType() {
+            Type parameterizedType = new ParameterizedType() {
                 @Override
-                public java.lang.reflect.Type[] getActualTypeArguments() {
-                    return new java.lang.reflect.Type[]{dtoClass};
+                public Type[] getActualTypeArguments() {
+                    return new Type[]{dtoClass};
                 }
 
                 @Override
-                public java.lang.reflect.Type getRawType() {
+                public Type getRawType() {
                     return SearchCondition.class;
                 }
 
                 @Override
-                public java.lang.reflect.Type getOwnerType() {
+                public Type getOwnerType() {
                     return null;
                 }
             };

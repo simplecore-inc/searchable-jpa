@@ -7,13 +7,23 @@ import dev.simplecore.searchable.core.condition.builder.FirstCondition;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.openapi.utils.OpenApiDocUtils;
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
 
 @RequiredArgsConstructor
 public class ExampleGenerator {
@@ -45,8 +55,8 @@ public class ExampleGenerator {
 
     private void processSearchableField(Field field, FirstCondition w) {
         SearchableField searchableField = field.getAnnotation(SearchableField.class);
-        if (searchableField != null && searchableField.operators().length > 0) {
-            applyOperator(searchableField.operators()[0], field, w);
+        if (searchableField != null) {
+            applyOperator(SearchableFieldUtils.getAllowedOperators(searchableField)[0], field, w);
         }
     }
 
@@ -175,10 +185,10 @@ public class ExampleGenerator {
                 return number.shortValue();
             } else if (fieldType == Byte.class || fieldType == byte.class) {
                 return number.byteValue();
-            } else if (fieldType == java.math.BigDecimal.class) {
-                return new java.math.BigDecimal(number.toString());
-            } else if (fieldType == java.math.BigInteger.class) {
-                return java.math.BigInteger.valueOf(number.longValue());
+            } else if (fieldType == BigDecimal.class) {
+                return new BigDecimal(number.toString());
+            } else if (fieldType == BigInteger.class) {
+                return BigInteger.valueOf(number.longValue());
             }
         }
         if (rawExampleValue instanceof String) {
@@ -195,34 +205,34 @@ public class ExampleGenerator {
                 return Short.parseShort(strValue);
             } else if (fieldType == Byte.class || fieldType == byte.class) {
                 return Byte.parseByte(strValue);
-            } else if (fieldType == java.math.BigDecimal.class) {
-                return new java.math.BigDecimal(strValue);
-            } else if (fieldType == java.math.BigInteger.class) {
-                return new java.math.BigInteger(strValue);
+            } else if (fieldType == BigDecimal.class) {
+                return new BigDecimal(strValue);
+            } else if (fieldType == BigInteger.class) {
+                return new BigInteger(strValue);
             } else if (fieldType == Boolean.class || fieldType == boolean.class) {
                 return Boolean.parseBoolean(strValue);
             } else if (fieldType == Character.class || fieldType == char.class) {
                 return !strValue.isEmpty() ? strValue.charAt(0) : '\0';
-            } else if (fieldType == java.time.LocalDateTime.class) {
-                return java.time.LocalDateTime.parse(strValue);
-            } else if (fieldType == java.time.LocalDate.class) {
-                return java.time.LocalDate.parse(strValue);
-            } else if (fieldType == java.time.LocalTime.class) {
-                return java.time.LocalTime.parse(strValue);
-            } else if (fieldType == java.time.ZonedDateTime.class) {
-                return java.time.ZonedDateTime.parse(strValue);
-            } else if (fieldType == java.time.OffsetDateTime.class) {
-                return java.time.OffsetDateTime.parse(strValue);
-            } else if (fieldType == java.time.Instant.class) {
-                return java.time.Instant.parse(strValue);
-            } else if (fieldType == java.util.Date.class) {
-                return java.util.Date.from(java.time.Instant.parse(strValue));
-            } else if (fieldType == java.sql.Date.class) {
-                return java.sql.Date.valueOf(java.time.LocalDate.parse(strValue));
-            } else if (fieldType == java.sql.Timestamp.class) {
-                return java.sql.Timestamp.valueOf(java.time.LocalDateTime.parse(strValue));
-            } else if (fieldType == java.util.UUID.class) {
-                return java.util.UUID.fromString(strValue);
+            } else if (fieldType == LocalDateTime.class) {
+                return LocalDateTime.parse(strValue);
+            } else if (fieldType == LocalDate.class) {
+                return LocalDate.parse(strValue);
+            } else if (fieldType == LocalTime.class) {
+                return LocalTime.parse(strValue);
+            } else if (fieldType == ZonedDateTime.class) {
+                return ZonedDateTime.parse(strValue);
+            } else if (fieldType == OffsetDateTime.class) {
+                return OffsetDateTime.parse(strValue);
+            } else if (fieldType == Instant.class) {
+                return Instant.parse(strValue);
+            } else if (fieldType == Date.class) {
+                return Date.from(Instant.parse(strValue));
+            } else if (SqlDateExample.supports(fieldType)) {
+                return SqlDateExample.parse(strValue);
+            } else if (fieldType == Timestamp.class) {
+                return Timestamp.valueOf(LocalDateTime.parse(strValue));
+            } else if (fieldType == UUID.class) {
+                return UUID.fromString(strValue);
             } else if (fieldType.isEnum()) {
                 return Enum.valueOf((Class) fieldType, strValue);
             }

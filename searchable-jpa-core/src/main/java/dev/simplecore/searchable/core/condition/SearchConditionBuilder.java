@@ -184,10 +184,8 @@ public class SearchConditionBuilder<D> {
     }
 
     /**
-     * Combines a sub-builder's ordered nodes into the top-level condition. A flat set of conditions
-     * (no nested groups) is inlined with the given operator applied to the first (operator-less) node,
-     * preserving any {@code orXXX()} operators; otherwise the whole set is wrapped in a single group so
-     * its internal order is preserved.
+     * Combines a sub-builder's ordered nodes into the top-level condition. A flat set is inlined only when every connector agrees with the outer operator.
+     * Mixed connectors and nested groups retain an explicit group boundary.
      */
     private void combineGroup(List<SearchCondition.Node> subNodes, LogicalOperator operator) {
         if (subNodes.isEmpty()) {

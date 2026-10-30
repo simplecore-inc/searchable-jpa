@@ -7,7 +7,6 @@ import dev.simplecore.searchable.openapi.utils.OpenApiDocUtils;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
-
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +41,7 @@ public class ParameterGenerator {
             String fieldName = field.getName();
             String fieldDescription = getFieldDescription(field);
 
-            for (SearchOperator operator : searchableField.operators()) {
+            for (SearchOperator operator : SearchableFieldUtils.getAllowedOperators(searchableField)) {
                 String paramName = String.format("%s.%s",
                         fieldName,
                         OpenApiDocUtils.toCamelCase(operator.name().toLowerCase()));
@@ -98,9 +97,7 @@ public class ParameterGenerator {
     }
 
     private String getFieldDescription(Field field) {
-        io.swagger.v3.oas.annotations.media.Schema schema = field
-                .getAnnotation(io.swagger.v3.oas.annotations.media.Schema.class);
-        return schema != null && !schema.description().isEmpty() ? schema.description() : field.getName();
+        return OpenApiDocUtils.getFieldDescription(field);
     }
 
     private String getOperatorDescription(String fieldDescription, SearchOperator operator) {

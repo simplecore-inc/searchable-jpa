@@ -1,5 +1,6 @@
 package dev.simplecore.searchable.openapi.generator;
 
+import dev.simplecore.searchable.core.annotation.SearchableField;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.openapi.OpenApiTestFixtures.ArrayHolderDTO;
 import dev.simplecore.searchable.openapi.OpenApiTestFixtures.BetweenFirstDTO;
@@ -8,12 +9,11 @@ import dev.simplecore.searchable.openapi.OpenApiTestFixtures.EnumHolderDTO;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -104,5 +104,19 @@ class OpenApiGeneratorIssuesTest {
 
         assertThat(description).contains("inheritedField");
         assertThat(description).contains("ownField");
+    }
+    static class DefaultOperatorsDto {
+        @SearchableField private String name;
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+    }
+
+    @Test
+    void defaultOperatorsAppearInParametersAndDescriptions() {
+        Operation operation = new Operation();
+        new ParameterGenerator().customizeParameters(operation, DefaultOperatorsDto.class);
+        assertThat(operation.getParameters()).extracting(Parameter::getName).contains("name.equals", "name.contains");
+        assertThat(DescriptionGenerator.generateDescription(DefaultOperatorsDto.class)).contains("equals", "contains");
+        assertThat(new ExampleGenerator().generateSimpleExample(DefaultOperatorsDto.class)).contains("name");
     }
 }

@@ -2,6 +2,7 @@ package dev.simplecore.searchable.core.exception;
 
 import dev.simplecore.searchable.test.config.BaseTestConfig;
 import dev.simplecore.searchable.test.config.TestConfig;
+import java.io.Serializable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -308,7 +309,7 @@ class SearchableExceptionTest {
         SearchableException exception = new SearchableException(message, cause);
         
         // Then - should implement Serializable through RuntimeException
-        assertThat(exception).isInstanceOf(java.io.Serializable.class);
+        assertThat(exception).isInstanceOf(Serializable.class);
         assertThat(exception.getMessage()).isEqualTo(message);
         assertThat(exception.getCause()).isEqualTo(cause);
     }

@@ -2,7 +2,6 @@ package dev.simplecore.searchable.openapi.utils;
 
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import io.swagger.v3.oas.annotations.media.Schema;
-
 import jakarta.validation.constraints.Pattern;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
@@ -11,6 +10,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -20,10 +21,19 @@ public class OpenApiDocUtils {
     private static final LocalDateTime FIXED_DATE_TIME = LocalDateTime.of(2025, 5, 1, 0, 0, 0);
     private static final LocalDate FIXED_DATE = LocalDate.of(2025, 5, 1);
     private static final LocalTime FIXED_TIME = LocalTime.of(0, 0, 0);
-    private static final Instant FIXED_INSTANT = FIXED_DATE_TIME.toInstant(java.time.ZoneOffset.UTC);
+    private static final Instant FIXED_INSTANT = FIXED_DATE_TIME.toInstant(ZoneOffset.UTC);
 
     private OpenApiDocUtils() {
         throw new IllegalStateException("Utility class");
+    }
+
+    public static Schema getSchemaAnnotation(Field field) {
+        return field.getAnnotation(Schema.class);
+    }
+
+    public static String getFieldDescription(Field field) {
+        Schema schema = field.getAnnotation(Schema.class);
+        return schema != null && !schema.description().isEmpty() ? schema.description() : field.getName();
     }
 
     public static Object getExampleValue(Field field) {
@@ -49,13 +59,13 @@ public class OpenApiDocUtils {
 
     private static Object getBetweenExampleValue(Field field) {
         if (field.getType() == LocalDateTime.class) {
-            List<Object> objects = new java.util.ArrayList<>();
+            List<Object> objects = new ArrayList<>();
             // Two distinct bounds so the range example is meaningful (start != end).
             objects.add(FIXED_DATE_TIME);
             objects.add(FIXED_DATE_TIME.plusDays(7));
             return objects;
         }
-        List<Integer> integers = new java.util.ArrayList<>();
+        List<Integer> integers = new ArrayList<>();
         integers.add(1);
         integers.add(100);
         return integers;
@@ -65,13 +75,13 @@ public class OpenApiDocUtils {
         if (field.isAnnotationPresent(Pattern.class)) {
             Pattern patternAnnotation = field.getAnnotation(Pattern.class);
             if ("^[YN]$".equals(patternAnnotation.regexp())) {
-                List<String> strings = new java.util.ArrayList<>();
+                List<String> strings = new ArrayList<>();
                 strings.add("Y");
                 strings.add("N");
                 return strings;
             }
         }
-        List<Object> objects = new java.util.ArrayList<>();
+        List<Object> objects = new ArrayList<>();
         objects.add(getExampleValue(field));
         return objects;
     }
