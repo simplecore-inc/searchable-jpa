@@ -3,10 +3,10 @@ package dev.simplecore.searchable.core.condition;
 import dev.simplecore.searchable.core.condition.builder.*;
 import dev.simplecore.searchable.core.condition.operator.LogicalOperator;
 import dev.simplecore.searchable.core.condition.validator.SearchConditionValidator;
+import dev.simplecore.searchable.core.condition.validator.SearchRequestLimits;
 import dev.simplecore.searchable.core.condition.validator.SearchableFieldValidator;
 import dev.simplecore.searchable.core.exception.SearchableValidationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -299,6 +299,7 @@ public class SearchConditionBuilder<D> {
      * @throws javax.validation.ValidationException if validation fails
      */
     public SearchCondition<D> build() {
+        SearchRequestLimits.validateStructure(condition);
         if (dtoClass != null) {
             // First validate @SearchableField annotations
             new SearchableFieldValidator<>(dtoClass, condition).validate();

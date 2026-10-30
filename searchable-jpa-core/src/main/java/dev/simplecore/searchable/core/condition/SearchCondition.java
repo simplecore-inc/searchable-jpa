@@ -2,8 +2,10 @@ package dev.simplecore.searchable.core.condition;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonValue;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -11,14 +13,13 @@ import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import dev.simplecore.searchable.core.condition.jackson.SearchConditionDeserializer;
 import dev.simplecore.searchable.core.condition.jackson.NodeDeserializer;
+import dev.simplecore.searchable.core.condition.jackson.SearchConditionDeserializer;
+import dev.simplecore.searchable.core.condition.jackson.SearchConditionJson;
 import dev.simplecore.searchable.core.condition.operator.LogicalOperator;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.*;
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -29,6 +30,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import lombok.*;
 
 /**
  * Core class representing a complete search condition with filtering, sorting, and pagination capabilities.
@@ -80,7 +82,7 @@ import java.util.Set;
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @Schema(description = "Search condition for filtering and pagination")
 @JsonDeserialize(using = SearchConditionDeserializer.class)
-@tools.jackson.databind.annotation.JsonDeserialize(using = dev.simplecore.searchable.core.condition.jackson.SearchConditionJackson3Deserializer.class)
+@SearchConditionJson
 public class SearchCondition<D> {
 
     /**
@@ -197,7 +199,7 @@ public class SearchCondition<D> {
          */
         DESC("desc");
 
-        @com.fasterxml.jackson.annotation.JsonValue
+        @JsonValue
         private final String name;
 
         Direction(String name) {
@@ -439,6 +441,7 @@ public class SearchCondition<D> {
     @Getter
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     @AllArgsConstructor
+    @JsonIgnoreProperties(value = "ascending", allowGetters = true)
     public static class Order {
         @JsonProperty("field")
         @NotBlank(message = "{validator.sort.field.required}")

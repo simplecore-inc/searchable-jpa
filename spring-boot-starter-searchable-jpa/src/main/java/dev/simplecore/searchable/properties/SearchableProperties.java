@@ -1,16 +1,24 @@
 package dev.simplecore.searchable.properties;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
-
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
 
 @Data
 @Validated
 @ConfigurationProperties(prefix = "searchable")
 public class SearchableProperties {
+    @Min(1)
+    private int maxPageSize = 1000;
+    @Min(1)
+    private int defaultPageSize = 20;
+
+    @AssertTrue(message = "defaultPageSize must not exceed maxPageSize")
+    public boolean isPageSizeRangeValid() { return defaultPageSize <= maxPageSize; }
+
     private SwaggerProperties swagger = new SwaggerProperties();
 
     @Valid
@@ -37,6 +45,9 @@ public class SearchableProperties {
 
     @Data
     public static class HibernateProperties {
+        /** Preserve automatic collection loading; disable to load only explicitly requested collections. */
+        private boolean autoFetchCollections = true;
+
         /**
          * Enable automatic Hibernate optimization configuration.
          * When enabled, the library will automatically configure optimal settings for N+1 prevention.

@@ -5,18 +5,18 @@ import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.core.exception.SearchableValidationException;
 import dev.simplecore.searchable.core.i18n.MessageUtils;
-import dev.simplecore.searchable.core.utils.SearchableValueParser;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
-import java.lang.reflect.Field;
-import org.springframework.util.ClassUtils;
-
+import dev.simplecore.searchable.core.utils.SearchableValueParser;
 import jakarta.validation.*;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import org.springframework.util.ClassUtils;
 
 /**
  * Validator for search conditions that ensures all search criteria are valid and consistent.
@@ -180,9 +180,9 @@ public class SearchConditionValidator<D> {
      */
     private boolean isJsonTypedFieldInDto(String fieldName) {
         try {
-            java.lang.reflect.Field field = requireField(fieldName);
+            Field field = requireField(fieldName);
             Class<?> fieldType = field.getType();
-            return java.util.Map.class.isAssignableFrom(fieldType) ||
+            return Map.class.isAssignableFrom(fieldType) ||
                    Collection.class.isAssignableFrom(fieldType) ||
                    fieldType.isArray();
         } catch (NoSuchFieldException e) {
@@ -217,7 +217,7 @@ public class SearchConditionValidator<D> {
      */
     private void validateField(PropertyDescriptor pd, String fieldName) {
         if (pd == null) {
-            throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.found", new Object[]{fieldName}));
+            throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.found", new Object[]{fieldName, dtoClass.getSimpleName()}));
         }
 
         try {
@@ -226,7 +226,7 @@ public class SearchConditionValidator<D> {
                 throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.searchable", new Object[]{fieldName}));
             }
         } catch (NoSuchFieldException e) {
-            throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.found", new Object[]{fieldName}));
+            throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.found", new Object[]{fieldName, dtoClass.getSimpleName()}));
         }
     }
 
@@ -250,7 +250,7 @@ public class SearchConditionValidator<D> {
                 );
             }
         } catch (NoSuchFieldException e) {
-            throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.found", new Object[]{fieldName}));
+            throw new SearchableValidationException(MessageUtils.getMessage("validator.field.not.found", new Object[]{fieldName, dtoClass.getSimpleName()}));
         }
     }
 
