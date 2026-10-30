@@ -95,6 +95,7 @@ jobs:
           npm run test:docs
           ./scripts/build-docs.sh
           ./gradlew clean check performanceTest publish --stacktrace
+          sha256sum searchable-jpa-core/build/libs/*.jar searchable-jpa-openapi/build/libs/*.jar spring-boot-starter-searchable-jpa/build/libs/*.jar > SHA256SUMS
         env:
           USERNAME: ${{ github.actor }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -128,6 +129,12 @@ jobs:
           tag_name: v${{ steps.version.outputs.release }}
           name: Release v${{ steps.version.outputs.release }}
           body_path: release-notes.md
+          files: |
+            searchable-jpa-core/build/libs/*.jar
+            searchable-jpa-openapi/build/libs/*.jar
+            spring-boot-starter-searchable-jpa/build/libs/*.jar
+            SHA256SUMS
+          fail_on_unmatched_files: true
           make_latest: ${{ github.event.inputs.branch == 'master' && 'true' || 'false' }}
           draft: false
           prerelease: false 
