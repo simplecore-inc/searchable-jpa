@@ -10,15 +10,17 @@ import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Selection;
+import jakarta.persistence.criteria.Subquery;
+import java.math.BigInteger;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.query.sqm.function.SqmFunctionDescriptor;
 import org.hibernate.query.sqm.function.SqmFunctionRegistry;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Counts rows per slice of a time window, under the same conditions the list beside them is
@@ -91,7 +93,7 @@ public class TimeBucketCounter {
                                 Instant from, Instant to, int buckets) {
         requireWindow(from, to, buckets);
 
-        return canReadInstantAsNumber()
+        return canUseGrouping(from, to, buckets) && canReadInstantAsNumber()
                 ? countByGrouping(entityType, repository, condition, timeAxisField, from, to, buckets)
                 : countByConditionalSums(entityType, repository, condition, timeAxisField, from, to, buckets);
     }
@@ -119,7 +121,7 @@ public class TimeBucketCounter {
         Expression<Long> millis = cb.function(
                 EpochMillisFunctionContributor.FUNCTION_NAME, Long.class, axis);
         Expression<Number> scaled = cb.prod(cb.diff(millis, start), (long) buckets);
-        Expression<Long> bucket = cb.quot(scaled, span).as(Long.class);
+        Expression<Number> bucket = cb.floor(cb.quot(scaled, span));
 
         query.multiselect(bucket.alias("bucket"), cb.count(root).alias("total"))
                 .where(window(cb, query, root, axis, repository, entityType, condition, from, to))
@@ -196,9 +198,13 @@ public class TimeBucketCounter {
                 .of(condition, entityManager, entityType, repository)
                 .buildSpecificationOnly()
                 .getSpecification();
-        Predicate filterPredicate = filter == null ? null : filter.toPredicate(root, query, cb);
+        // Apply relationship filters in EXISTS, so the outer aggregate sees each entity once.
+        Subquery<Integer> matching = query.subquery(Integer.class);
+        Root<T> filtered = matching.from(entityType);
+        Predicate filterPredicate = filter.toPredicate(filtered, cb.createQuery(Object.class), cb);
         if (filterPredicate != null) {
-            conditions.add(filterPredicate);
+            matching.select(cb.literal(1)).where(cb.equal(filtered, root), filterPredicate);
+            conditions.add(cb.exists(matching));
         }
         return cb.and(conditions.toArray(new Predicate[0]));
     }
@@ -224,15 +230,32 @@ public class TimeBucketCounter {
      * letting the last one absorb it. The final edge is the window's own end exactly.
      */
     private Instant[] edges(Instant from, Instant to, int buckets) {
-        long start = from.toEpochMilli();
-        long span = to.toEpochMilli() - start;
-
+        BigInteger span = nanosBetween(from, to);
+        BigInteger divisor = BigInteger.valueOf(buckets);
         Instant[] edges = new Instant[buckets + 1];
         for (int i = 0; i < buckets; i++) {
-            edges[i] = Instant.ofEpochMilli(start + Math.floorDiv(span * i, buckets));
+            BigInteger offset = span.multiply(BigInteger.valueOf(i))
+                    .add(divisor.subtract(BigInteger.ONE)).divide(divisor);
+            BigInteger[] parts = offset.divideAndRemainder(BigInteger.valueOf(1_000_000_000L));
+            edges[i] = from.plusSeconds(parts[0].longValueExact()).plusNanos(parts[1].longValueExact());
         }
         edges[buckets] = to;
         return edges;
+    }
+
+    private BigInteger nanosBetween(Instant from, Instant to) {
+        Duration duration = Duration.between(from, to);
+        return BigInteger.valueOf(duration.getSeconds()).multiply(BigInteger.valueOf(1_000_000_000L))
+                .add(BigInteger.valueOf(duration.getNano()));
+    }
+
+    private boolean canUseGrouping(Instant from, Instant to, int buckets) {
+        // Arithmetic milliseconds are exact only at millisecond-aligned bucket edges.
+        // The conditional path retains Instant precision for all other windows.
+        if (from.getNano() % 1_000_000 != 0 || to.getNano() % 1_000_000 != 0) return false;
+        BigInteger span = nanosBetween(from, to).divide(BigInteger.valueOf(1_000_000));
+        return span.signum() > 0 && span.mod(BigInteger.valueOf(buckets)).signum() == 0
+                && span.multiply(BigInteger.valueOf(buckets)).compareTo(BigInteger.valueOf(Long.MAX_VALUE)) <= 0;
     }
 
     private static List<Long> boxed(long[] counts) {
