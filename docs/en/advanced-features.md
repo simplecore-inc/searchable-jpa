@@ -1,6 +1,6 @@
 # Advanced Features
 
-This page describes service composition, projections, scoped conditions, writes and time counts in `1.1.3-SNAPSHOT`. Examples use the entity and repository from [Basic Usage](./basic-usage.md).
+This page describes service composition, projections, scoped conditions, writes and time counts in `1.1.3`. Examples use the entity and repository from [Basic Usage](./basic-usage.md).
 
 ## Service composition
 

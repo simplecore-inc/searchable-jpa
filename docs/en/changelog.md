@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.3-SNAPSHOT (Unreleased)
+## 1.1.3
 
 The same corrections are maintained on the Boot 4 and Boot 3 lines; each line retains its framework major version.
 
