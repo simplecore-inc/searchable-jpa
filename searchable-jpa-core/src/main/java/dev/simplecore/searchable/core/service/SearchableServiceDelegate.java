@@ -5,24 +5,43 @@ import dev.simplecore.searchable.core.exception.SearchableConfigurationException
 import dev.simplecore.searchable.core.exception.SearchableOperationException;
 import dev.simplecore.searchable.core.service.specification.SearchableSpecificationBuilder;
 import dev.simplecore.searchable.core.service.specification.SpecificationWithPageable;
-
+import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
+import jakarta.persistence.Column;
+import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Id;
+import jakarta.persistence.Version;
+import jakarta.persistence.metamodel.SingularAttribute;
+import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.Field;
+import java.lang.reflect.Member;
+import java.lang.reflect.Modifier;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 import org.modelmapper.ModelMapper;
+import org.modelmapper.config.Configuration;
 import org.modelmapper.convention.MatchingStrategies;
-
+import org.springframework.beans.BeanWrapperImpl;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.projection.ProjectionFactory;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
 import org.springframework.lang.NonNull;
-
-import jakarta.persistence.EntityManager;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.util.Collection;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.ReflectionUtils;
 
 /**
  * Standalone delegate that encapsulates all SearchableService implementation logic.
@@ -47,7 +66,7 @@ public class SearchableServiceDelegate<T, ID> implements SearchableService<T> {
         MODEL_MAPPER.getConfiguration()
                 .setSkipNullEnabled(true)
                 .setFieldMatchingEnabled(true)
-                .setFieldAccessLevel(org.modelmapper.config.Configuration.AccessLevel.PRIVATE)
+                .setFieldAccessLevel(Configuration.AccessLevel.PRIVATE)
                 .setPropertyCondition(ctx -> ctx.getSource() != null)
                 .setMatchingStrategy(MatchingStrategies.STRICT);
     }
@@ -84,7 +103,7 @@ public class SearchableServiceDelegate<T, ID> implements SearchableService<T> {
     @NonNull
     public Page<T> findAllWithSearch(@NonNull SearchCondition<?> searchCondition) {
         SearchableSpecificationBuilder<T> builder = createSpecificationBuilder(searchCondition);
-        return builder.buildAndExecuteWithTwoPhaseOptimization();
+        return readInTransaction(builder::buildAndExecuteWithTwoPhaseOptimization);
     }
 
     @Override
@@ -95,7 +114,7 @@ public class SearchableServiceDelegate<T, ID> implements SearchableService<T> {
         }
 
         SearchableSpecificationBuilder<T> builder = createSpecificationBuilder(searchCondition);
-        Page<T> entityPage = builder.buildAndExecuteWithTwoPhaseOptimization();
+        Page<T> entityPage = readInTransaction(builder::buildAndExecuteWithTwoPhaseOptimization);
 
         return entityPage.map(entity -> projectionFactory.createProjection(projectionClass, entity));
     }
@@ -110,17 +129,17 @@ public class SearchableServiceDelegate<T, ID> implements SearchableService<T> {
     @Override
     @NonNull
     public Optional<T> findFirstWithSearch(@NonNull SearchCondition<?> searchCondition) {
-        SearchableSpecificationBuilder<T> builder = createSpecificationBuilder(searchCondition);
-        Page<T> firstPage = builder.buildAndExecuteWithTwoPhaseOptimization();
-        return firstPage.getContent().stream().findFirst();
+        SearchCondition<?> firstCondition = new SearchCondition<>(searchCondition.getNodes(), 0, 1);
+        firstCondition.setSort(searchCondition.getSort());
+        firstCondition.setFetchFields(searchCondition.getFetchFields());
+        SearchableSpecificationBuilder<T> builder = createSpecificationBuilder(firstCondition);
+        return readInTransaction(builder::buildAndExecuteFirst);
     }
 
     @Override
     public long deleteWithSearch(@NonNull SearchCondition<?> searchCondition) {
-        SpecificationWithPageable<T> spec = createSpecification(searchCondition);
-        List<T> toDelete = specificationExecutor.findAll(spec.getSpecification());
-        repository.deleteAll(toDelete);
-        return toDelete.size();
+        return writeInTransaction(owned -> new WriteQueryExecutor<>(entityManager, entityClass, specificationExecutor)
+                .execute(searchCondition, repository::delete, owned));
     }
 
     @Override
@@ -137,34 +156,39 @@ public class SearchableServiceDelegate<T, ID> implements SearchableService<T> {
 
     @Override
     public long updateWithSearch(@NonNull SearchCondition<?> searchCondition, @NonNull Object updateData) {
-        // Map the update payload to an entity instance when a different type is supplied.
-        Object mappedData = (updateData.getClass() != entityClass)
-                ? MODEL_MAPPER.map(updateData, entityClass)
-                : updateData;
+        // Retain ModelMapper conversion, but copy only properties present in the original
+        // payload. Mapping a narrow DTO must not reset unrelated primitive entity fields.
+        Object mappedData = entityClass.isInstance(updateData) ? updateData : MODEL_MAPPER.map(updateData, entityClass);
+        return writeInTransaction(owned -> new WriteQueryExecutor<>(entityManager, entityClass, specificationExecutor)
+                .execute(searchCondition, entity -> copyNonNullProperties(mappedData, updateData, entity), owned));
+    }
 
-        // The entities returned by findAll are already managed within the current transaction, so
-        // there is no need to look them up again by id (which also avoids assuming a getId() method).
-        SpecificationWithPageable<T> specification = createSpecification(searchCondition);
-        List<T> entitiesToUpdate = specificationExecutor.findAll(specification.getSpecification());
+    private <R> R readInTransaction(Supplier<R> work) {
+        if (entityManager.isJoinedToTransaction()) return work.get();
+        var transaction = new TransactionTemplate(new JpaTransactionManager(entityManager.getEntityManagerFactory()));
+        transaction.setReadOnly(true);
+        return transaction.execute(status -> work.get());
+    }
 
-        for (T entity : entitiesToUpdate) {
-            copyNonNullProperties(mappedData, entity);
-            repository.save(entity);
-        }
-
-        return entitiesToUpdate.size();
+    private long writeInTransaction(Function<Boolean, Long> work) {
+        if (entityManager.isJoinedToTransaction()) return work.apply(false);
+        var manager = new JpaTransactionManager(entityManager.getEntityManagerFactory());
+        Long result = new TransactionTemplate(manager)
+                .execute(status -> work.apply(true));
+        return result == null ? 0 : result;
     }
 
     /**
-     * Copies non-null, non-collection properties from source to target, including fields declared in
-     * {@code @MappedSuperclass} ancestors (e.g. auditing fields), by walking the class hierarchy.
+     * Copies supplied, non-null mutable properties through the entity hierarchy.
+     * IDs, versions, audit-managed fields, non-updatable fields and collections are excluded.
      */
-    private void copyNonNullProperties(Object source, T target) {
+    private void copyNonNullProperties(Object source, Object payload, T target) {
         for (Class<?> current = entityClass; current != null && current != Object.class; current = current.getSuperclass()) {
             for (Field field : current.getDeclaredFields()) {
                 if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
                     continue;
                 }
+                if (isProtectedField(field) || !isProvided(payload, field.getName())) continue;
                 if (Collection.class.isAssignableFrom(field.getType())) {
                     continue;
                 }
@@ -180,5 +204,43 @@ public class SearchableServiceDelegate<T, ID> implements SearchableService<T> {
                 }
             }
         }
+    }
+    private boolean isProvided(Object payload, String name) {
+        if (payload instanceof Map<?, ?> map) return map.containsKey(name) && map.get(name) != null;
+        var field = SearchableFieldUtils.findFieldInHierarchy(payload.getClass(), name);
+        if (field != null) {
+            ReflectionUtils.makeAccessible(field);
+            return ReflectionUtils.getField(field, payload) != null;
+        }
+        var wrapper = new BeanWrapperImpl(payload);
+        return wrapper.isReadableProperty(name) && wrapper.getPropertyValue(name) != null;
+    }
+
+    private boolean isProtectedField(Field field) {
+        if (Modifier.isFinal(field.getModifiers())) return true;
+        try {
+            var attribute = entityManager.getMetamodel().entity(entityClass).getAttribute(field.getName());
+            if (attribute instanceof SingularAttribute<?, ?> singular &&
+                    (singular.isId() || singular.isVersion())) return true;
+            if (protectedMember(attribute.getJavaMember())) return true;
+        } catch (IllegalArgumentException e) {
+            return true; // Not a persistent field.
+        }
+        return protectedMember(field);
+    }
+
+    private boolean protectedMember(Member member) {
+        if (!(member instanceof AnnotatedElement element)) return false;
+        Column column = element.getAnnotation(Column.class);
+        if (column != null && !column.updatable()) return true;
+        return element.isAnnotationPresent(Id.class)
+                || element.isAnnotationPresent(EmbeddedId.class)
+                || element.isAnnotationPresent(Version.class)
+                || element.isAnnotationPresent(CreatedDate.class)
+                || element.isAnnotationPresent(CreatedBy.class)
+                || element.isAnnotationPresent(LastModifiedDate.class)
+                || element.isAnnotationPresent(LastModifiedBy.class)
+                || element.isAnnotationPresent(CreationTimestamp.class)
+                || element.isAnnotationPresent(UpdateTimestamp.class);
     }
 }

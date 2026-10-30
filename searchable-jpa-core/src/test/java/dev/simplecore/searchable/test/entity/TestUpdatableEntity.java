@@ -1,9 +1,8 @@
 package dev.simplecore.searchable.test.entity;
 
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-
-import jakarta.persistence.*;
 
 /**
  * Simple single primary-key entity extending {@link UpdatableBaseEntity}, used to verify
@@ -24,4 +23,9 @@ public class TestUpdatableEntity extends UpdatableBaseEntity {
 
     @Column
     private String status;
+
+    private int quantity;
+
+    @Version
+    private Long revision;
 }
