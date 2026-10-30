@@ -12,7 +12,7 @@ DTO-controlled filtering, sorting, pagination and time counts for Spring Data JP
 | 1.x | 3.2.x–3.5.x | `spring-boot-3x` |
 | 0.1.x | 2.7.x | `spring-boot-2x` (unmaintained) |
 
-This tree builds **2.0.0**, tested with Java 17, Spring Boot 4.1.2 and Hibernate 7.4.14.Final. Keep all three library modules on the same version. Boot 3 applications should use the maintained 1.x line; moving the application to Boot 4 is a separate migration.
+This tree builds **2.0.1-SNAPSHOT**, tested with Java 17, Spring Boot 4.1.2 and Hibernate 7.4.14.Final. Keep all three library modules on the same version. Boot 3 applications should use the maintained 1.x line; moving the application to Boot 4 is a separate migration.
 
 ## Install and use
 
@@ -30,7 +30,7 @@ repositories {
     mavenCentral()
 }
 dependencies {
-    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:2.0.0'
+    implementation 'dev.simplecore.searchable:spring-boot-starter-searchable-jpa:2.0.1-SNAPSHOT'
 }
 ```
 

@@ -31,7 +31,7 @@ Before committing, build the docs, run navigation checks, inspect both languages
 
 ## Versioned deployment
 
-The `Deploy Documentation` GitHub Actions workflow publishes `gh-pages`. A documentation change on `master` refreshes the `snapshot/` folder. Manual dispatch with a stable version such as `2.0.0` checks out `v2.0.0` and builds its content. The workflow obtains current navigation tooling separately so archived text can retain its original content while sharing repaired navigation.
+The `Deploy Documentation` GitHub Actions workflow publishes `gh-pages`. A documentation change on `master` refreshes the `snapshot/` folder. Manual dispatch with a stable version such as `2.0.1-SNAPSHOT` checks out `v2.0.1-SNAPSHOT` and builds its content. The workflow obtains current navigation tooling separately so archived text can retain its original content while sharing repaired navigation.
 
 `scripts/prepare-docs.mjs` combines the previous site with the new build. It replaces the selected version directory, preserves other releases and the snapshot, updates shared navigation assets in archived HTML and generates `versions.json`. Releases use numeric descending order. Publishing a release does not delete the development docs.
 
