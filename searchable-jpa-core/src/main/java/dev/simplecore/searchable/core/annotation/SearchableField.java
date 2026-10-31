@@ -92,4 +92,20 @@ public @interface SearchableField {
      * @return the field name to use for sorting, or empty string to use the default field
      */
     String sortField() default "";
-} 
+
+    /**
+     * Includes this field in the keyword search: the reserved {@code keyword} parameter matches a
+     * record when any keyword field contains the text. Only {@code String} fields may opt in, and
+     * the field's {@link #operators()} must allow {@code CONTAINS} (or be empty).
+     *
+     * <p>Example:
+     * <pre>
+     * // keyword=kim matches a username or a display name containing "kim"
+     * {@literal @}SearchableField(operators = {SearchOperator.CONTAINS}, keyword = true)
+     * private String username;
+     * </pre>
+     *
+     * @return true if the keyword search matches against this field
+     */
+    boolean keyword() default false;
+}

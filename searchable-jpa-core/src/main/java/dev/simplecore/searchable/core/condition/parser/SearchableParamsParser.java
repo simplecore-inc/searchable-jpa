@@ -1,7 +1,9 @@
 package dev.simplecore.searchable.core.condition.parser;
 
+import dev.simplecore.searchable.core.annotation.SearchableField;
 import dev.simplecore.searchable.core.condition.SearchCondition;
 import dev.simplecore.searchable.core.condition.SearchConditionBuilder;
+import dev.simplecore.searchable.core.condition.builder.ChainedCondition;
 import dev.simplecore.searchable.core.condition.builder.FirstCondition;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
 import dev.simplecore.searchable.core.exception.SearchableException;
@@ -11,6 +13,7 @@ import dev.simplecore.searchable.core.i18n.MessageUtils;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.core.utils.SearchableValueParser;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +31,8 @@ import org.springframework.util.StringUtils;
  * - Field conditions: field.operator=value or field.operator=value1,value2
  * - Sort: sort=field.asc,field.desc
  * - Pagination: page=0&size=10
+ * - Keyword: keyword=text, matched by CONTAINS against every field marked
+ *   {@code @SearchableField(keyword = true)}, OR-combined, and AND-combined with the other conditions
  *
  * <p>Example:
  * name.equals=John&age.greaterThan=20&sort=name.asc,age.desc&page=0&size=10
@@ -39,6 +44,9 @@ public class SearchableParamsParser<D> {
     private static final String SORT_DIRECTION_PATTERN = "^([^.]+(?:\\.[^.]+)*?)\\.(asc|desc)$";
     private static final Pattern fieldOperatorPattern = Pattern.compile(FIELD_OPERATOR_PATTERN);
     private static final Pattern sortDirectionPattern = Pattern.compile(SORT_DIRECTION_PATTERN);
+
+    /** The reserved parameter carrying the keyword search; it has no operator suffix. */
+    public static final String KEYWORD_PARAM = "keyword";
 
     private final Class<D> dtoClass;
 
@@ -59,6 +67,7 @@ public class SearchableParamsParser<D> {
 
             // Parse conditions
             Map<String, String> conditions = new HashMap<>();
+            String[] keyword = new String[1];
 
             params.forEach((key, value) -> {
                 switch (key) {
@@ -73,17 +82,31 @@ public class SearchableParamsParser<D> {
                         validateNumeric(value, "size");
                         builder.size(Integer.parseInt(value));
                         break;
+                    case KEYWORD_PARAM:
+                        keyword[0] = value;
+                        break;
                     default:
                         conditions.put(key, value);
                         break;
                 }
             });
 
-            // Parse conditions (AND)
-            if (!conditions.isEmpty()) {
-                builder.where(whereBuilder ->
-                        conditions.forEach((key, value) ->
-                                parseCondition(whereBuilder, key, value)));
+            List<String> keywordFields = StringUtils.hasText(keyword[0]) ? keywordFields() : List.of();
+
+            // Parse conditions (AND), with the keyword's OR group as one more AND-ed member
+            if (!conditions.isEmpty() || !keywordFields.isEmpty()) {
+                String text = StringUtils.hasText(keyword[0]) ? keyword[0].trim() : null;
+                builder.where(whereBuilder -> {
+                    conditions.forEach((key, value) -> parseCondition(whereBuilder, key, value));
+                    if (!keywordFields.isEmpty()) {
+                        whereBuilder.where(group -> {
+                            ChainedCondition chain = group.contains(keywordFields.get(0), text);
+                            for (int i = 1; i < keywordFields.size(); i++) {
+                                chain = chain.orContains(keywordFields.get(i), text);
+                            }
+                        });
+                    }
+                });
             }
 
             return builder.build();
@@ -93,6 +116,36 @@ public class SearchableParamsParser<D> {
         } catch (Exception e) {
             throw new SearchableParseException(MessageUtils.getMessage("parser.parse.error"), e);
         }
+    }
+
+    /**
+     * The fields the keyword search matches against, in declaration order.
+     *
+     * @throws SearchableParseException when the DTO marks no field, since a keyword that matched
+     *         nothing would silently return every record
+     */
+    private List<String> keywordFields() {
+        List<String> fields = new ArrayList<>();
+        for (Class<?> type = dtoClass; type != null && type != Object.class; type = type.getSuperclass()) {
+            for (Field field : type.getDeclaredFields()) {
+                SearchableField annotation = field.getAnnotation(SearchableField.class);
+                if (annotation == null || !annotation.keyword()) {
+                    continue;
+                }
+                boolean containsAllowed = annotation.operators().length == 0
+                        || Arrays.asList(annotation.operators()).contains(SearchOperator.CONTAINS);
+                if (field.getType() != String.class || !containsAllowed) {
+                    throw new SearchableParseException(MessageUtils.getMessage(
+                            "parser.keyword.field.invalid", new Object[]{field.getName()}));
+                }
+                fields.add(field.getName());
+            }
+        }
+        if (fields.isEmpty()) {
+            throw new SearchableParseException(MessageUtils.getMessage(
+                    "parser.keyword.unsupported", new Object[]{dtoClass.getSimpleName()}));
+        }
+        return fields;
     }
 
     private void validateNumeric(String value, String field) {

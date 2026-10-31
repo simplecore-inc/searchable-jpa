@@ -3,6 +3,7 @@
 ## 2.0.1
 
 - Add `searchable.pattern-matching.case-insensitive` so CONTAINS, STARTS_WITH and ENDS_WITH can ignore case. Off by default.
+- Add `@SearchableField(keyword = true)` and the reserved `keyword` query parameter: the text matches a record when any keyword field contains it, AND-combined with the other conditions. A DTO with no keyword field refuses the parameter.
 
 ## 2.0.0
 

@@ -3,6 +3,7 @@
 ## 2.0.1
 
 - CONTAINS · STARTS_WITH · ENDS_WITH가 대소문자를 구분하지 않게 하는 `searchable.pattern-matching.case-insensitive` 설정을 추가했습니다. 기본값은 꺼져 있습니다.
+- `@SearchableField(keyword = true)`와 예약 매개변수 `keyword`를 추가했습니다. 키워드 필드 가운데 하나라도 입력한 문구를 포함하면 해당 레코드를 찾고, 다른 조건과는 AND로 결합합니다. 키워드 필드가 없는 DTO는 이 매개변수를 거부합니다.
 
 ## 2.0.0
 

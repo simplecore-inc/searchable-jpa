@@ -2,10 +2,12 @@ package dev.simplecore.searchable.openapi.generator;
 
 import dev.simplecore.searchable.core.annotation.SearchableField;
 import dev.simplecore.searchable.core.condition.operator.SearchOperator;
+import dev.simplecore.searchable.core.condition.parser.SearchableParamsParser;
 import dev.simplecore.searchable.core.utils.SearchableFieldUtils;
 import dev.simplecore.searchable.openapi.utils.OpenApiDocUtils;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -26,6 +28,9 @@ public class ParameterGenerator {
 
         // Add search field parameters
         addSearchFieldParameters(operation, dtoClass);
+
+        // Add the keyword parameter when the DTO opts fields into it
+        addKeywordParameter(operation, dtoClass);
 
         // Add pagination parameters
         addPaginationParameters(operation);
@@ -57,6 +62,23 @@ public class ParameterGenerator {
 
                 operation.getParameters().add(parameter);
             }
+        }
+    }
+
+    private void addKeywordParameter(Operation operation, Class<?> dtoClass) {
+        List<String> keywordFields = SearchableFieldUtils.getSearchableFields(dtoClass).stream()
+                .filter(field -> field.getAnnotation(SearchableField.class).keyword())
+                .map(Field::getName)
+                .collect(Collectors.toList());
+
+        if (!keywordFields.isEmpty()) {
+            operation.getParameters().add(new Parameter()
+                    .name(SearchableParamsParser.KEYWORD_PARAM)
+                    .in("query")
+                    .description("Matches a record when any of these fields contains the text: " +
+                            String.join(", ", keywordFields))
+                    .schema(new StringSchema())
+                    .required(false));
         }
     }
 
