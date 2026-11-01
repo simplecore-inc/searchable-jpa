@@ -7,5 +7,8 @@ import java.util.List;
 public class AuditEvent {
     @Id @GeneratedValue public Long id;
     public Instant occurredAt;
+    public enum Level { LOW, MID, HIGH }
+    @Enumerated(EnumType.STRING) public Level level;
+    public Long amount;
     @OneToMany(mappedBy="event",cascade=CascadeType.ALL) public List<AuditLabel> labels=new ArrayList<>();
 }

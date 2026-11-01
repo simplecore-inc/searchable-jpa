@@ -1,7 +1,7 @@
 package dev.simplecore.searchable.core.service.bucket;
 
 import dev.simplecore.searchable.core.condition.SearchCondition;
-import dev.simplecore.searchable.core.service.specification.SearchableSpecificationBuilder;
+import dev.simplecore.searchable.core.service.specification.MatchingRows;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -10,7 +10,6 @@ import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Selection;
-import jakarta.persistence.criteria.Subquery;
 import java.math.BigInteger;
 import java.time.Duration;
 import java.time.Instant;
@@ -19,7 +18,6 @@ import java.util.List;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.query.sqm.function.SqmFunctionDescriptor;
 import org.hibernate.query.sqm.function.SqmFunctionRegistry;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 /**
@@ -194,18 +192,8 @@ public class TimeBucketCounter {
         conditions.add(cb.greaterThanOrEqualTo(axis, from));
         conditions.add(cb.lessThan(axis, to));
 
-        Specification<T> filter = SearchableSpecificationBuilder
-                .of(condition, entityManager, entityType, repository)
-                .buildSpecificationOnly()
-                .getSpecification();
-        // Apply relationship filters in EXISTS, so the outer aggregate sees each entity once.
-        Subquery<Integer> matching = query.subquery(Integer.class);
-        Root<T> filtered = matching.from(entityType);
-        Predicate filterPredicate = filter.toPredicate(filtered, cb.createQuery(Object.class), cb);
-        if (filterPredicate != null) {
-            matching.select(cb.literal(1)).where(cb.equal(filtered, root), filterPredicate);
-            conditions.add(cb.exists(matching));
-        }
+        MatchingRows.of(cb, query, root, entityType, repository, entityManager, condition)
+                .ifPresent(conditions::add);
         return cb.and(conditions.toArray(new Predicate[0]));
     }
 

@@ -1,5 +1,6 @@
 package dev.simplecore.searchable.autoconfigure;
 
+import dev.simplecore.searchable.core.service.aggregate.SearchAggregator;
 import dev.simplecore.searchable.core.service.bucket.TimeBucketCounter;
 import dev.simplecore.searchable.core.utils.SearchablePatternMatchingHolder;
 import dev.simplecore.searchable.core.utils.SearchableTimeZoneHolder;
@@ -174,5 +175,11 @@ public class SearchableJpaConfiguration {
     @ConditionalOnMissingBean
     public TimeBucketCounter timeBucketCounter(EntityManager entityManager) {
         return new TimeBucketCounter(entityManager);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public SearchAggregator searchAggregator(EntityManager entityManager) {
+        return new SearchAggregator(entityManager);
     }
 }
