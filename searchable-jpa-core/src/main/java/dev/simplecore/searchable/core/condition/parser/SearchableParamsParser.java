@@ -99,7 +99,10 @@ public class SearchableParamsParser<D> {
                 builder.where(whereBuilder -> {
                     conditions.forEach((key, value) -> parseCondition(whereBuilder, key, value));
                     if (!keywordFields.isEmpty()) {
-                        whereBuilder.where(group -> {
+                        // A nested group, never inlined: inlined, the OR chain folds left to right
+                        // into "(conditions AND first) OR second OR ...", and every condition
+                        // before it, a caller's range included, stops narrowing the result.
+                        whereBuilder.and(group -> {
                             ChainedCondition chain = group.contains(keywordFields.get(0), text);
                             for (int i = 1; i < keywordFields.size(); i++) {
                                 chain = chain.orContains(keywordFields.get(i), text);

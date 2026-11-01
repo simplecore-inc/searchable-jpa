@@ -61,6 +61,9 @@ class KeywordSearchTest {
     void the_keyword_is_and_combined_with_the_other_conditions() {
         assertThat(names(Map.of("keyword", "plan", "quantity.equals", "2"))).containsExactly("Beta plan");
         assertThat(names(Map.of("keyword", "Gamma", "quantity.equals", "1"))).isEmpty();
+        // A match on a later keyword field is narrowed by the other conditions too.
+        assertThat(names(Map.of("keyword", "ARCHIVED", "quantity.equals", "1"))).isEmpty();
+        assertThat(names(Map.of("keyword", "ALPHA", "status.equals", "ACTIVE"))).isEmpty();
     }
 
     @Test
