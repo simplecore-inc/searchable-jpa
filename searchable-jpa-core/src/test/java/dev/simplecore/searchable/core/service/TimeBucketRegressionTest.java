@@ -8,6 +8,12 @@ import dev.simplecore.searchable.test.entity.AuditEvent;
 import dev.simplecore.searchable.test.entity.AuditLabel;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Arrays;
+import java.time.ZoneId;
+import java.util.Map;
+import dev.simplecore.searchable.core.service.bucket.TimeWindowParams;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,5 +51,32 @@ public class TimeBucketRegressionTest {
         var repo = new SimpleJpaRepository<AuditEvent, Long>(AuditEvent.class, em);
         assertThat(new TimeBucketCounter(em).count(AuditEvent.class, repo, new SearchCondition<>(),
                 "occurredAt", start, start.plusMillis(10), 3)).containsExactly(2L, 2L, 2L);
+    }
+    /**
+     * A day in the app's time zone sliced by the hour, as the strip asks for it: each row lands in
+     * the slice whose local hour holds it, and the next local midnight belongs to the next day.
+     */
+    @Test void aLocalDaySlicedByTheHourPutsEachRowInItsLocalHour() {
+        ZoneId zone = ZoneId.of("Asia/Seoul");
+        Instant from = LocalDate.of(2026, 11, 1).atStartOfDay(zone).toInstant();
+        Instant to = LocalDate.of(2026, 11, 2).atStartOfDay(zone).toInstant();
+        for (String local : List.of("00:00:00", "00:59:59.999", "01:00:00", "13:30:00", "13:31:00", "23:59:59")) {
+            AuditEvent event = new AuditEvent();
+            event.occurredAt = LocalDate.of(2026, 11, 1).atTime(LocalTime.parse(local)).atZone(zone).toInstant();
+            em.persist(event);
+        }
+        AuditEvent nextDay = new AuditEvent(); nextDay.occurredAt = to; em.persist(nextDay);
+        em.flush();
+        var repo = new SimpleJpaRepository<AuditEvent, Long>(AuditEvent.class, em);
+        List<Long> counts = new TimeBucketCounter(em).count(AuditEvent.class, repo, new SearchCondition<>(), "occurredAt", from, to, 24);
+        Long[] expected = new Long[24];
+        Arrays.fill(expected, 0L);
+        expected[0] = 2L; expected[1] = 1L; expected[13] = 2L; expected[23] = 1L;
+        assertThat(counts).containsExactly(expected);
+    }
+    @Test void theWindowParametersAreStrippedAndTheFiltersKept() {
+        assertThat(TimeWindowParams.strip(Map.of("from", "a", "to", "b", "buckets", "24", "status.equals", "FAILED")))
+                .containsExactly(Map.entry("status.equals", "FAILED"));
+        assertThat(TimeWindowParams.strip(null)).isEmpty();
     }
 }
